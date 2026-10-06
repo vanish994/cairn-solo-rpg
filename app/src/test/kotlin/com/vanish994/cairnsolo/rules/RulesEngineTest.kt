@@ -3,6 +3,7 @@ package com.vanish994.cairnsolo.rules
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class RulesEngineTest {
@@ -153,7 +154,7 @@ class RulesEngineTest {
     @Test
     fun scarImmediateEffectsAreAppliedToAuthoritativeState() {
         val walloped = RulesEngine(FixedRandomSource(1)).applyDamage(state(hp = 3), 3)
-        assertEquals(Scar.WALLOPED, walloped.newState.scar)
+        assertEquals(Scar.WALLOPPED, walloped.newState.scar)
         assertTrue(walloped.newState.deprived)
 
         val hamstrung = RulesEngine(FixedRandomSource(1)).applyDamage(state(hp = 7, maxHp = 7), 7)
