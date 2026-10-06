@@ -87,8 +87,9 @@ class RulesEngineTest {
         assertEquals("arm", damaged.newState.brokenLimb)
         assertEquals(ScarRecovery.BROKEN_LIMB, damaged.newState.scarRecovery)
         val recovered = engine.recoverScar(damaged.newState)
-        assertEquals(4, recovered.newState.hp)
-        assertEquals(4, recovered.newState.maxHp)
+        assertEquals(8, recovered.newState.hp)
+        assertEquals(8, recovered.newState.maxHp)
+        assertEquals(null, recovered.newState.brokenLimb)
         assertEquals(null, recovered.newState.scarRecovery)
     }
 
