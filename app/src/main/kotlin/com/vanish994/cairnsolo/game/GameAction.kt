@@ -1,5 +1,8 @@
 package com.vanish994.cairnsolo.game
 
+import com.vanish994.cairnsolo.rules.RuleEvent
+import com.vanish994.cairnsolo.rules.RulesEngine
+
 /**
  * Player intent is deliberately independent from UI and AI.
  * The MJ may propose an intent later, but only the game layer resolves it.
@@ -22,37 +25,59 @@ data class GameResult(
 sealed interface GameEvent {
     data class SceneAdvanced(val sceneId: String) : GameEvent
     data class SceneInvestigated(val detail: String) : GameEvent
-    data object RestRequested : GameEvent
+    data class RestCompleted(val hpRecovered: Int, val fatigueRecovered: Int) : GameEvent
 }
 
 /**
  * Single entry point for campaign actions.
  */
 class GameActionResolver(
-    private val exploration: ExplorationEngine
+    private val exploration: ExplorationEngine,
+    private val rules: RulesEngine
 ) {
     fun resolve(state: GameState, action: GameAction): GameResult {
-        val result = when (action) {
+        return when (action) {
             GameAction.ExploreContinue ->
-                exploration.resolve(state, ExplorationAction.CONTINUE)
-            GameAction.ExploreInvestigate ->
-                exploration.resolve(state, ExplorationAction.INVESTIGATE)
-            GameAction.ExploreRest ->
-                exploration.resolve(state, ExplorationAction.REST)
-        }
+                exploration.resolve(state, ExplorationAction.CONTINUE).toGameResult()
 
-        return GameResult(
-            state = result.state,
-            events = result.events.map { event ->
+            GameAction.ExploreInvestigate ->
+                exploration.resolve(state, ExplorationAction.INVESTIGATE).toGameResult()
+
+            GameAction.ExploreRest -> {
+                val result = rules.safeRest(state.campaign.rules)
+                val nextState = state.withRules(result.newState)
+                val hpRecovered = result.events
+                    .filterIsInstance<RuleEvent.HpRecovered>()
+                    .sumOf { it.amount }
+                val fatigueRecovered = result.events
+                    .filterIsInstance<RuleEvent.FatigueRecovered>()
+                    .sumOf { it.amount }
+
+                GameResult(
+                    state = nextState,
+                    events = listOf(
+                        GameEvent.RestCompleted(
+                            hpRecovered = hpRecovered,
+                            fatigueRecovered = fatigueRecovered
+                        )
+                    )
+                )
+            }
+        }
+    }
+
+    private fun ExplorationResult.toGameResult(): GameResult =
+        GameResult(
+            state = state,
+            events = events.map { event ->
                 when (event) {
                     is ExplorationEvent.Advanced ->
                         GameEvent.SceneAdvanced(event.destination)
                     is ExplorationEvent.Investigated ->
                         GameEvent.SceneInvestigated(event.detail)
                     ExplorationEvent.RestRequested ->
-                        GameEvent.RestRequested
+                        error("Exploration REST must be resolved by RulesEngine")
                 }
             }
         )
-    }
 }
