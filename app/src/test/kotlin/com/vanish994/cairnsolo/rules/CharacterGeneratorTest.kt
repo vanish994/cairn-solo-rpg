@@ -2,6 +2,7 @@ package com.vanish994.cairnsolo.rules
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import com.vanish994.cairnsolo.game.MJContext
@@ -42,10 +43,34 @@ class CharacterGeneratorTest {
         assertEquals(5, state.campaign.rules.hp)
         assertEquals(5, state.campaign.rules.maxHp)
         assertEquals("Aran", state.campaign.character.name)
-        assertEquals(3, state.campaign.rules.inventory.size)
-        assertEquals(1, state.campaign.rules.inventory.count { it.id == "mochila" })
-        assertEquals(1, state.campaign.rules.inventory.count { it.id == "racoes-3-dias" })
-        assertEquals(1, state.campaign.rules.inventory.count { it.id == "tocha" })
+        assertEquals(0, state.campaign.rules.inventory.size)
+    }
+
+
+    @Test
+    fun aurifexUsesOfficialStartingGear() {
+        val state = createCharacter("Jazia", RolledCharacter(9, 11, 13, 5, Background.AURIFEX))
+        assertEquals(0, state.campaign.rules.armor)
+        assertEquals(
+            listOf("rations-3-uses", "lantern", "oil-can-6-uses", "needle-knife", "protective-gloves"),
+            state.campaign.rules.inventory.map { it.id }
+        )
+    }
+
+    @Test
+    fun cutpurseUsesOfficialGearAndOneArmor() {
+        val state = createCharacter("Patch", RolledCharacter(9, 11, 13, 5, Background.CUTPURSE))
+        assertEquals(1, state.campaign.rules.armor)
+        assertEquals(2, state.campaign.rules.inventory.first { it.id == "twin-daggers" }.slots)
+        assertEquals(0, state.campaign.rules.inventory.first { it.id == "black-outfit" }.slotCost)
+    }
+
+    @Test
+    fun everyBackgroundFitsTheTenSlotStartingInventory() {
+        for (background in Background.entries) {
+            val state = createCharacter("Tester", RolledCharacter(9, 11, 13, 5, background))
+            assertTrue(state.campaign.rules.usedSlots <= 10, background.displayName)
+        }
     }
 
     @Test
