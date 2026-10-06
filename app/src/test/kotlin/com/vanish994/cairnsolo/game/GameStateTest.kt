@@ -41,7 +41,7 @@ class GameStateTest {
                 rules = CharacterState(
                     str = 7, dex = 12, wil = 9, hp = 0, maxHp = 8, armor = 3,
                     inventory = listOf(InventoryItem("torch", 1), InventoryItem("coin", 0, petty = true)),
-                    fatigue = 1, critical = true, scar = Scar.BROKEN_LIMB,
+                    fatigue = 1, critical = true, scar = Scar.BROKEN_LIMB, scarRecovery = com.vanish994.cairnsolo.rules.ScarRecovery.BROKEN_LIMB, scarAttribute = com.vanish994.cairnsolo.rules.Attribute.DEX,
                     maxStr = 10, maxDex = 14, maxWil = 11,
                     lastingScar = "old wound", brokenLimb = "left arm",
                     sundered = true, deafened = true, diseased = true, hamstrung = true
@@ -81,6 +81,8 @@ class GameStateTest {
         assertEquals(10, restored.campaign.rules.maxWil)
         assertEquals(null, restored.campaign.rules.lastingScar)
         assertEquals(false, restored.campaign.rules.sundered)
+        assertEquals(com.vanish994.cairnsolo.rules.ScarRecovery.BROKEN_LIMB, restored.campaign.rules.scarRecovery)
+        assertEquals(com.vanish994.cairnsolo.rules.Attribute.DEX, restored.campaign.rules.scarAttribute)
         assertEquals(null, restored.campaign.profile.age)
         assertEquals(null, restored.campaign.profile.background)
         assertEquals(null, restored.campaign.profile.traits)
