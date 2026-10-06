@@ -130,7 +130,7 @@ class GameActionResolverTest {
             resolver(FixedRandomSource(d20Value = 10, d6Value = 2)).resolve(it, GameAction.ApplyDamage(3))
         }
         assertEquals(Scar.WALLOPED, damaged.state.campaign.rules.scar)
-        assertEquals(ScarRecovery.WALLOPPED, damaged.state.campaign.rules.scarRecovery)
+        assertEquals(ScarRecovery.WALLOPED, damaged.state.campaign.rules.scarRecovery)
 
         val recovered = resolver(FixedRandomSource(d20Value = 10, d6Value = 2))
             .resolve(damaged.state, GameAction.RecoverScar)
