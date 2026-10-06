@@ -27,6 +27,16 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
+    }
+
+    buildTypes {
+        debug {
+            buildConfigField("String", "GUARDIAN_API_URL", "\"${project.findProperty("guardianApiUrl") ?: ""}\"")
+        }
+        release {
+            buildConfigField("String", "GUARDIAN_API_URL", "\"${project.findProperty("guardianApiUrl") ?: ""}\"")
+        }
     }
 
     packaging {
@@ -45,6 +55,7 @@ dependencies {
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.activity:activity-compose:1.10.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
