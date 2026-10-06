@@ -6,6 +6,7 @@ import com.vanish994.cairnsolo.rules.RuleEvent
 import com.vanish994.cairnsolo.rules.RulesEngine
 
 sealed interface GameAction {
+    data class CreateCharacter(val name: String, val rolled: RolledCharacter) : GameAction
     data object ExploreContinue : GameAction
     data object ExploreInvestigate : GameAction
     data object ExploreRest : GameAction
@@ -25,6 +26,7 @@ data class GameResult(
 )
 
 sealed interface GameEvent {
+    data class CharacterCreated(val characterId: String) : GameEvent
     data class SceneAdvanced(val sceneId: String) : GameEvent
     data class SceneInvestigated(val detail: String) : GameEvent
     data class RestCompleted(val hpRecovered: Int, val fatigueRecovered: Int) : GameEvent
@@ -49,6 +51,10 @@ class GameActionResolver(
     private val rules: RulesEngine
 ) {
     fun resolve(state: GameState, action: GameAction): GameResult = when (action) {
+        is GameAction.CreateCharacter -> {
+            val created = com.vanish994.cairnsolo.rules.createCharacter(action.name, action.rolled)
+            GameResult(created, listOf(GameEvent.CharacterCreated(created.campaign.character.id)))
+        }
         GameAction.ExploreContinue -> exploration.resolve(state, ExplorationAction.CONTINUE).toGameResult()
         GameAction.ExploreInvestigate -> exploration.resolve(state, ExplorationAction.INVESTIGATE).toGameResult()
         GameAction.ExploreRest, GameAction.Rest -> resolveRest(state)
