@@ -113,6 +113,31 @@ class CharacterGeneratorTest {
     }
 
     @Test
+    fun backgroundTableRollsResolveToStableMechanicalKeys() {
+        val state = createCharacter(
+            "Aran",
+            RolledCharacter(
+                9, 11, 13, 5,
+                background = Background.AURIFEX,
+                backgroundRolls = BackgroundRolls(1, 6)
+            )
+        )
+        assertEquals(listOf("gold_scent", "homunculus"), state.campaign.profile.backgroundFeatures)
+    }
+
+    @Test
+    fun everyBackgroundHasTwelveCataloguedOutcomes() {
+        for (background in Background.entries) {
+            val outcomes = BACKGROUND_OUTCOME_KEYS[background]
+            assertEquals(12, outcomes?.size, background.displayName)
+            for (roll in 1..6) {
+                assertNotNull(backgroundOutcomes(background, BackgroundRolls(roll, roll)).first())
+                assertNotNull(backgroundOutcomes(background, BackgroundRolls(roll, roll)).second())
+            }
+        }
+    }
+
+    @Test
     fun backgroundUsesD20Range() {
         assertEquals(Background.AURIFEX, Background.fromD20(1))
         assertEquals(Background.SCRIVENER, Background.fromD20(20))
