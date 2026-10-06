@@ -43,9 +43,9 @@ class MainActivity : ComponentActivity() {
                             name = name,
                             onNameChange = { name = it },
                             rolled = rolled,
-                            onRoll = { rolled = rollCharacter(KotlinRandomSource()) },
+                            onRoll = { rolled = rollPlayableCharacter() },
                             onCreate = {
-                                val r = rolled ?: rollCharacter(KotlinRandomSource())
+                                val r = rolled ?: rollPlayableCharacter()
                                 val created = createCharacter(name.trim(), r)
                                 repository.save(created)
                                 state = created
@@ -130,9 +130,7 @@ private fun ExplorationScreen(
             Spacer(Modifier.height(8.dp))
             Button(onClick = { onAction(GameAction.ExploreInvestigate) }) { Text("Investigar") }
             Spacer(Modifier.height(8.dp))
-            OutlinedButton(onClick = { onAction(GameAction.ExploreRest) }) {
-                Text("Descansar")
-            }
+            OutlinedButton(onClick = { onAction(GameAction.ExploreRest) }) { Text("Descansar") }
             Spacer(Modifier.height(16.dp))
             OutlinedButton(onClick = onBack) { Text("Voltar à ficha") }
             Spacer(Modifier.height(16.dp))
@@ -162,18 +160,36 @@ private fun CharacterCreation(
         Spacer(Modifier.height(16.dp))
         OutlinedTextField(name, onNameChange, label = { Text("Nome") }, singleLine = true)
         Spacer(Modifier.height(12.dp))
+
         if (rolled != null) {
             Text("FOR " + rolled.str + "   DES " + rolled.dex + "   VON " + rolled.wil)
             Text("Pontos de vida: " + rolled.hp)
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(12.dp))
+            HorizontalDivider()
+            Spacer(Modifier.height(12.dp))
+            Text("Perfil", style = MaterialTheme.typography.titleMedium)
+            rolled.age?.let { Text("Idade: $it anos") }
+            rolled.background?.let { Text("Background: " + backgroundLabel(it)) }
+            rolled.traits?.let { traits ->
+                Spacer(Modifier.height(8.dp))
+                Text("Características", style = MaterialTheme.typography.titleSmall)
+                Text("Físico: " + traitLabel(traits.physique))
+                Text("Pele: " + traitLabel(traits.skin))
+                Text("Cabelo: " + traitLabel(traits.hair))
+                Text("Rosto: " + traitLabel(traits.face))
+                Text("Fala: " + traitLabel(traits.speech))
+                Text("Vestuário: " + traitLabel(traits.clothing))
+                Text("Virtude: " + traitLabel(traits.virtue))
+                Text("Vício: " + traitLabel(traits.vice))
+            }
+            Spacer(Modifier.height(12.dp))
         }
+
         OutlinedButton(onClick = onRoll) {
             Text(if (rolled == null) "Rolar personagem" else "Rolar novamente")
         }
         Spacer(Modifier.height(8.dp))
-        Button(onClick = onCreate, enabled = name.isNotBlank()) {
-            Text("Começar aventura")
-        }
+        Button(onClick = onCreate, enabled = name.isNotBlank()) { Text("Começar aventura") }
         Text("3d6 para cada atributo e 1d6 para os pontos de vida.", style = MaterialTheme.typography.bodySmall)
     }
 }
@@ -208,6 +224,20 @@ private fun CharacterSheet(
             if (r.deprived) Text("Privado")
             if (r.critical) Text("Dano crítico")
             if (r.scar != null) Text("Cicatriz: " + scarLabel(r.scar))
+            c.profile.age?.let { Text("Idade: $it anos") }
+            c.profile.background?.let { Text("Background: " + backgroundLabel(it)) }
+            c.profile.traits?.let { traits ->
+                Spacer(Modifier.height(8.dp))
+                Text("Características", style = MaterialTheme.typography.titleMedium)
+                Text("Físico: " + traitLabel(traits.physique))
+                Text("Pele: " + traitLabel(traits.skin))
+                Text("Cabelo: " + traitLabel(traits.hair))
+                Text("Rosto: " + traitLabel(traits.face))
+                Text("Fala: " + traitLabel(traits.speech))
+                Text("Vestuário: " + traitLabel(traits.clothing))
+                Text("Virtude: " + traitLabel(traits.virtue))
+                Text("Vício: " + traitLabel(traits.vice))
+            }
             Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = onExplore) { Text("Explorar") }
@@ -226,9 +256,7 @@ private fun CharacterSheet(
             ListItem(
                 headlineContent = { Text(item.id) },
                 supportingContent = { Text(item.slotCost.toString() + if (item.slotCost == 1) " espaço" else " espaços") },
-                trailingContent = {
-                    TextButton(onClick = { onRemoveItem(item.id) }) { Text("Remover") }
-                }
+                trailingContent = { TextButton(onClick = { onRemoveItem(item.id) }) { Text("Remover") } }
             )
         }
 
@@ -239,6 +267,125 @@ private fun CharacterSheet(
     }
 }
 
+private fun rollPlayableCharacter(): RolledCharacter {
+    val random = KotlinRandomSource()
+    return RolledCharacter(
+        str = random.d6() + random.d6() + random.d6(),
+        dex = random.d6() + random.d6() + random.d6(),
+        wil = random.d6() + random.d6() + random.d6(),
+        hp = random.d6(),
+        background = Background.entries[random.d20() - 1],
+        traits = rollTraits(random),
+        age = rollAge(random).years
+    )
+}
+
+private fun backgroundLabel(background: Background): String =
+    when (background) {
+        Background.AURIFEX -> "Aurífice"
+        Background.BARBER_SURGEON -> "Barbeiro-Cirurgião"
+        Background.BEAST_HANDLER -> "Tratador de Feras"
+        Background.BONEKEEPER -> "Guardião de Ossos"
+        Background.CUTPURSE -> "Batedor de Carteiras"
+        Background.FIELDWARDEN -> "Guardião dos Campos"
+        Background.FLETCHWIND -> "Fletchwind"
+        Background.FOUNDLING -> "Enjeitado"
+        Background.FUNGAL_FORAGER -> "Coletor de Fungos"
+        Background.GREENWISE -> "Erveiro"
+        Background.HALF_WITCH -> "Meio-Bruxo"
+        Background.HEXENBANE -> "Hexenbane"
+        Background.JONGLEUR -> "Saltimbanco"
+        Background.KETTLEWRIGHT -> "Caldeireiro"
+        Background.MARCHGUARD -> "Guarda da Fronteira"
+        Background.MOUNTEBANK -> "Charlatão"
+        Background.OUTRIDER -> "Batedor Montado"
+        Background.PROWLER -> "Espreitador"
+        Background.RILL_RUNNER -> "Corredor de Riacho"
+        Background.SCRIVENER -> "Escrivão"
+    }
+
+private fun traitLabel(value: String): String =
+    when (value) {
+        "Athletic" -> "Atlético"
+        "Brawny" -> "Musculoso"
+        "Flabby" -> "Flácido"
+        "Lanky" -> "Esbelto"
+        "Rugged" -> "Robusto"
+        "Scrawny" -> "Magricela"
+        "Short" -> "Baixo"
+        "Statuesque" -> "Imponente"
+        "Stout" -> "Atarracado"
+        "Towering" -> "Muito alto"
+        "Birthmarked" -> "Com marca de nascença"
+        "Marked" -> "Marcado"
+        "Oily" -> "Oleoso"
+        "Rosy" -> "Rosado"
+        "Scarred" -> "Marcado por cicatrizes"
+        "Soft" -> "Suave"
+        "Tanned" -> "Bronzeado"
+        "Tattooed" -> "Tatuado"
+        "Weathered" -> "Envelhecido pelo tempo"
+        "Webbed" -> "Com membranas"
+        "Bald" -> "Careca"
+        "Braided" -> "Trançado"
+        "Curly" -> "Cacheado"
+        "Filthy" -> "Sujo"
+        "Frizzy" -> "Arrepiado"
+        "Long" -> "Longo"
+        "Luxurious" -> "Luxuoso"
+        "Wavy" -> "Ondulado"
+        "Wispy" -> "Fino e ralo"
+        "Bony" -> "Ossudo"
+        "Broken" -> "Quebrado"
+        "Chiseled" -> "Talhado"
+        "Elongated" -> "Alongado"
+        "Pale" -> "Pálido"
+        "Perfect" -> "Perfeito"
+        "Rakish" -> "Arrojado"
+        "Sharp" -> "Afiado"
+        "Square" -> "Quadrado"
+        "Sunken" -> "Encovado"
+        "Blunt" -> "Direto"
+        "Booming" -> "Retumbante"
+        "Cryptic" -> "Enigmático"
+        "Droning" -> "Monótono"
+        "Formal" -> "Formal"
+        "Gravelly" -> "Áspero"
+        "Precise" -> "Preciso"
+        "Squeaky" -> "Estridente"
+        "Stuttering" -> "Gaguejante"
+        "Whispery" -> "Sussurrante"
+        "Antique" -> "Antigo"
+        "Bloody" -> "Manchado de sangue"
+        "Elegant" -> "Elegante"
+        "Foreign" -> "Estrangeiro"
+        "Frayed" -> "Desgastado"
+        "Frumpy" -> "Desajeitado"
+        "Livery" -> "Uniformizado"
+        "Rancid" -> "Ranço"
+        "Soiled" -> "Manchado"
+        "Ambitious" -> "Ambicioso"
+        "Cautious" -> "Cauteloso"
+        "Courageous" -> "Corajoso"
+        "Disciplined" -> "Disciplinado"
+        "Gregarious" -> "Sociável"
+        "Honorable" -> "Honrado"
+        "Humble" -> "Humilde"
+        "Merciful" -> "Misericordioso"
+        "Serene" -> "Sereno"
+        "Tolerant" -> "Tolerante"
+        "Aggressive" -> "Agressivo"
+        "Bitter" -> "Amargurado"
+        "Craven" -> "Covarde"
+        "Deceitful" -> "Enganador"
+        "Greedy" -> "Ganancioso"
+        "Lazy" -> "Preguiçoso"
+        "Nervous" -> "Nervoso"
+        "Rude" -> "Grosseiro"
+        "Vain" -> "Vaidoso"
+        "Vengeful" -> "Vingativo"
+        else -> value
+    }
 
 private fun sceneTypeLabel(type: com.vanish994.cairnsolo.game.SceneType): String =
     when (type) {
