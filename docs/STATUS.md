@@ -112,3 +112,7 @@ Base normativa fixada em Cairn 2e e registrada no ADR-006. Gate 1 pronto para im
 - [x] Descanso não remove automaticamente o estado crítico; estabilização é operação separada.
 
 A criação de personagem ainda será expandida com Antecedente/Traços e tabelas oficiais antes de ser considerada completa.
+
+## Revisão normativa — Gate 1
+
+A implementação foi revisada contra o Core Rules e Character Creation oficiais da Cairn 2e. O motor agora possui RNG d20/d6 isolável, geração 3d6/1d6, estado crítico/morte, resultado tipado de Cicatriz e persistência da Cicatriz. A cobertura de testes foi ampliada para esses casos. A tabela completa de efeitos de cada Cicatriz e regras avançadas de magia/recuperação ainda serão implementadas como operações de domínio antes do fechamento definitivo do Gate 1.
