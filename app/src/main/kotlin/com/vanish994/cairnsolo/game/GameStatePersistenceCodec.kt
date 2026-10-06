@@ -16,6 +16,7 @@ object GameStatePersistenceCodec {
         return buildMap {
             put("campaignId", c.campaignId); put("characterId", c.character.id); put("characterName", c.character.name)
             put("profileAge", p.age?.toString() ?: ""); put("profileBackground", p.background?.name ?: "")
+            put("profileGold", p.gold.toString()); put("profileBondRoll", p.bondRoll?.toString() ?: "")
             p.traits?.let { t -> put("traitPhysique", t.physique); put("traitSkin", t.skin); put("traitHair", t.hair); put("traitFace", t.face); put("traitSpeech", t.speech); put("traitClothing", t.clothing); put("traitVirtue", t.virtue); put("traitVice", t.vice) }
             put("sceneId", c.sceneId); put("sceneType", c.sceneType.name); put("sceneTitle", c.sceneTitle)
             put("sceneDescription", c.sceneDescription); put("exits", c.exits.joinToString(SEPARATOR))
@@ -58,7 +59,13 @@ object GameStatePersistenceCodec {
         )
         val traits = if (values.containsKey("traitPhysique")) CharacterTraits(string("traitPhysique"), string("traitSkin"), string("traitHair"), string("traitFace"), string("traitSpeech"), string("traitClothing"), string("traitVirtue"), string("traitVice")) else null
         val background = values["profileBackground"]?.takeIf { it.isNotEmpty() }?.let { runCatching { Background.valueOf(it) }.getOrNull() }
-        val profile = CharacterProfile(values["profileAge"]?.toIntOrNull(), background, traits)
+        val profile = CharacterProfile(
+            age = values["profileAge"]?.toIntOrNull(),
+            background = background,
+            traits = traits,
+            gold = int("profileGold", 0),
+            bondRoll = values["profileBondRoll"]?.toIntOrNull()
+        )
         val exits = string("exits").split(SEPARATOR).filter { it.isNotBlank() }
         val log = string("log").split(SEPARATOR).filter { it.isNotBlank() }
         val sceneType = runCatching { SceneType.valueOf(string("sceneType", SceneType.EXPLORATION.name)) }.getOrDefault(SceneType.EXPLORATION)
