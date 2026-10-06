@@ -169,7 +169,7 @@ private fun ExplorationScreen(
                 painter = painterResource(sceneImageResource(c.sceneTitle)),
                 contentDescription = "Estrada antiga em pixel art",
                 modifier = Modifier.fillMaxWidth().aspectRatio(1.45f).clip(RoundedCornerShape(14.dp)),
-                contentScale = ContentScale.Crop
+                contentScale = ContentScale.Fit
             )
             Spacer(Modifier.height(14.dp))
             Surface(
@@ -336,7 +336,7 @@ private fun CharacterSheet(
         item {
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Image(
-                    painter = painterResource(R.drawable.cairn_jurandir_pixel),
+                    painter = painterResource(R.drawable.cairn_jurandir_portrait),
                     contentDescription = "Retrato pixel art do personagem",
                     modifier = Modifier.size(88.dp).clip(RoundedCornerShape(12.dp)),
                     contentScale = ContentScale.Crop
@@ -661,11 +661,9 @@ private fun FeedbackCard(entry: FeedbackEntry) {
 
 private fun sceneImageResource(title: String): Int =
     when (title.lowercase()) {
-        "old road" -> R.drawable.cairn_old_road_pixel
-        "ruined shrine" -> R.drawable.cairn_ruined_shrine_pixel
-        "woodland edge" -> R.drawable.cairn_woodland_edge_pixel
-        "watchtower" -> R.drawable.cairn_watchtower_pixel
-        else -> R.drawable.cairn_old_road_pixel
+        "old road" -> R.drawable.cairn_old_road
+        "ruined shrine", "woodland edge", "watchtower" -> R.drawable.cairn_old_road
+        else -> R.drawable.cairn_old_road
     }
 
 private fun itemIconResource(id: String): Int {
