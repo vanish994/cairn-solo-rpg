@@ -156,6 +156,17 @@ class GameActionResolverTest {
     }
 
     @Test
+    fun guardianIntentIsRecordedWithoutChangingRules() {
+        val before = state(hp = 6, maxHp = 6)
+        val result = resolver().resolve(before, GameAction.GuardianIntent("seguir em direção à luz"))
+        assertEquals(6, result.state.campaign.rules.hp)
+        assertEquals(1L, result.state.campaign.turn)
+        assertTrue(result.state.campaign.guardianMessage.contains("seguir em direção à luz"))
+        assertTrue(result.state.campaign.log.last().contains("seguir em direção à luz"))
+        assertTrue(result.events.isEmpty())
+    }
+
+    @Test
     fun deprivedRestDoesNotRecoverHpOrFatigue() {
         val result = resolver().resolve(
             state(hp = 2, maxHp = 6, fatigue = 2, deprived = true),
