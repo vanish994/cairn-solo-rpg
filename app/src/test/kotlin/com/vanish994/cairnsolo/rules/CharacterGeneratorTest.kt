@@ -16,6 +16,26 @@ class CharacterGeneratorTest {
         assertEquals(4, result.hp)
     }
 
+
+    @Test
+    fun fullCharacterRollIncludesBackgroundTraitsAndAge() {
+        val result = rollCharacter(FixedRandomSource(4))
+        assertNotNull(result.background)
+        assertNotNull(result.traits)
+        assertNotNull(result.age)
+        assertEquals(18, result.age)
+    }
+
+    @Test
+    fun attributesCanBeSwappedAfterRolling() {
+        val result = RolledCharacter(8, 12, 15, 4)
+            .swapAttributes(AttributeSlot.STR, AttributeSlot.WIL)
+        assertEquals(15, result.str)
+        assertEquals(12, result.dex)
+        assertEquals(8, result.wil)
+        assertEquals(4, result.hp)
+    }
+
     @Test
     fun createdCharacterUsesRolledHpAsMaxHp() {
         val state = createCharacter("Aran", RolledCharacter(9, 11, 13, 5))
