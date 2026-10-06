@@ -37,6 +37,10 @@ Criar um APK Android jogável em que:
 - Gemini Flash-Lite para narrativa
 - Git + GitHub
 
+## Direção artística
+
+A apresentação oficial do jogo seguirá **pixel art de fantasia sombria**, conforme ADR-007. A direção visual é independente do motor de regras.
+
 ## Arquitetura inicial
 
 ```text
