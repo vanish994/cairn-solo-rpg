@@ -24,7 +24,7 @@ object GameStatePersistenceCodec {
             put("maxStr", r.maxStr.toString()); put("maxDex", r.maxDex.toString()); put("maxWil", r.maxWil.toString())
             put("hp", r.hp.toString()); put("maxHp", r.maxHp.toString()); put("armor", r.armor.toString()); put("fatigue", r.fatigue.toString())
             put("deprived", r.deprived.toString()); put("critical", r.critical.toString()); put("dead", r.dead.toString())
-            put("scar", r.scar?.name ?: ""); put("lastingScar", r.lastingScar ?: ""); put("brokenLimb", r.brokenLimb ?: "")
+            put("scar", r.scar?.name ?: ""); put("lastingScar", r.lastingScar ?: ""); put("brokenLimb", r.brokenLimb ?: ""); put("scarRecovery", r.scarRecovery?.name ?: ""); put("scarAttribute", r.scarAttribute?.name ?: "")
             put("sundered", r.sundered.toString()); put("deafened", r.deafened.toString()); put("diseased", r.diseased.toString())
             put("hamstrung", r.hamstrung.toString()); put("doomed", r.doomed.toString()); put("inventoryCount", r.inventory.size.toString())
             r.inventory.forEachIndexed { index, item ->
@@ -52,7 +52,7 @@ object GameStatePersistenceCodec {
             critical = bool("critical", false), dead = bool("dead", false),
             scar = nullableString("scar")?.let { runCatching { Scar.valueOf(it) }.getOrNull() },
             maxStr = int("maxStr", int("str", 10)), maxDex = int("maxDex", int("dex", 10)), maxWil = int("maxWil", int("wil", 10)),
-            lastingScar = nullableString("lastingScar"), brokenLimb = nullableString("brokenLimb"),
+            lastingScar = nullableString("lastingScar"), brokenLimb = nullableString("brokenLimb"), scarRecovery = nullableString("scarRecovery")?.let { runCatching { com.vanish994.cairnsolo.rules.ScarRecovery.valueOf(it) }.getOrNull() }, scarAttribute = nullableString("scarAttribute")?.let { runCatching { com.vanish994.cairnsolo.rules.Attribute.valueOf(it) }.getOrNull() },
             sundered = bool("sundered", false), deafened = bool("deafened", false), diseased = bool("diseased", false),
             hamstrung = bool("hamstrung", false), doomed = bool("doomed", false)
         )
