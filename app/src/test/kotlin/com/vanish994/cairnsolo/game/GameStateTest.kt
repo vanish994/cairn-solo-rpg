@@ -1,6 +1,8 @@
 package com.vanish994.cairnsolo.game
 
 import com.vanish994.cairnsolo.rules.CharacterState
+import com.vanish994.cairnsolo.rules.Background
+import com.vanish994.cairnsolo.rules.CharacterTraits
 import com.vanish994.cairnsolo.rules.InventoryItem
 import com.vanish994.cairnsolo.rules.Scar
 import kotlin.test.Test
@@ -44,6 +46,11 @@ class GameStateTest {
                     lastingScar = "old wound", brokenLimb = "left arm",
                     sundered = true, deafened = true, diseased = true, hamstrung = true
                 ),
+                profile = CharacterProfile(
+                    age = 34,
+                    background = Background.PROWLER,
+                    traits = CharacterTraits("Rugged", "Tanned", "Braided", "Sharp", "Blunt", "Frayed", "Cautious", "Greedy")
+                ),
                 sceneId = "ruined_shrine", turn = 42L,
                 sceneType = SceneType.EXPLORATION, sceneTitle = "Ruined Shrine",
                 sceneDescription = "Uma capela em ruínas.",
@@ -74,5 +81,8 @@ class GameStateTest {
         assertEquals(10, restored.campaign.rules.maxWil)
         assertEquals(null, restored.campaign.rules.lastingScar)
         assertEquals(false, restored.campaign.rules.sundered)
+        assertEquals(null, restored.campaign.profile.age)
+        assertEquals(null, restored.campaign.profile.background)
+        assertEquals(null, restored.campaign.profile.traits)
     }
 }
