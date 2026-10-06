@@ -143,7 +143,7 @@ class RulesEngineTest {
         assertEquals(12, survived.newState.maxHp)
 
         val fatal = RulesEngine(FixedRandomSource(20, 2)).applyDamage(
-            state(hp = 1, maxHp = 12).copy(doomed = true, str = 1), 2
+            state(hp = 1, maxHp = 12).copy(doomed = true, str = 5), 2
         )
         assertTrue(fatal.newState.dead)
         assertTrue(fatal.newState.doomed)
@@ -173,6 +173,14 @@ class RulesEngineTest {
         val result = RulesEngine(FixedRandomSource(20)).applyDamage(state(hp = 1, str = 1), 2)
         assertTrue(result.newState.dead)
         assertTrue(result.newState.critical)
+    }
+
+    @Test
+    fun failedCriticalSaveLeavesCharacterCriticalButNotDead() {
+        val result = RulesEngine(FixedRandomSource(20)).applyDamage(state(hp = 1, str = 5), 2)
+        assertFalse(result.newState.dead)
+        assertTrue(result.newState.critical)
+        assertEquals(4, result.newState.str)
     }
 
     @Test
