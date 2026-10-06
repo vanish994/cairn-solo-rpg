@@ -97,6 +97,13 @@ data class CharacterTraits(
 
 
 /** Mechanical keys for the two official Background tables. */
+data class BackgroundRolls(val first: Int, val second: Int) {
+    init {
+        require(first in 1..6)
+        require(second in 1..6)
+    }
+}
+
 data class BackgroundOutcome(val table: Int, val roll: Int, val key: String)
 
 private val BACKGROUND_OUTCOME_KEYS: Map<Background, List<String>> = mapOf(
