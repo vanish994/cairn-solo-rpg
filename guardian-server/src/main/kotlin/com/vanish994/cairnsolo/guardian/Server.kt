@@ -106,6 +106,9 @@ use null.
     val requestBody = JsonObject().apply {
         addProperty("model", MODEL)
         addProperty("input", input)
+        game.get("campaign")?.asJsonObject?.get("guardianInteractionId")?.asString?.takeIf { it.isNotBlank() }?.let {
+            addProperty("previous_interaction_id", it)
+        }
         addProperty("system_instruction", SYSTEM_PROMPT)
         add("generation_config", JsonParser.parseString(
             """{"max_output_tokens":700,"thinking_level":"low"}"""
@@ -140,7 +143,9 @@ use null.
             for (j in content.size() - 1 downTo 0) {
                 val block = content[j].asJsonObject
                 if (block.get("type")?.asString == "text") {
-                    return JsonParser.parseString(block.get("text").asString).asJsonObject
+                    val narrative = JsonParser.parseString(block.get("text").asString).asJsonObject
+                    narrative.addProperty("interactionId", root.get("id").asString)
+                    return narrative
                 }
             }
         }
