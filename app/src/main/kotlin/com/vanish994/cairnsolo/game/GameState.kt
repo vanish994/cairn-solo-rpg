@@ -14,7 +14,8 @@ data class CharacterProfile(
     val background: Background? = null,
     val traits: CharacterTraits? = null,
     val gold: Int = 0,
-    val bondRoll: Int? = null
+    val bondRoll: Int? = null,
+    val backgroundRolls: com.vanish994.cairnsolo.rules.BackgroundRolls? = null
 ) {
     init {
         require(age == null || age >= 1)
