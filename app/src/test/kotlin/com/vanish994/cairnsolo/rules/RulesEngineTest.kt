@@ -63,6 +63,35 @@ class RulesEngineTest {
     }
 
     @Test
+    fun exactZeroHpCreatesScarResult() {
+        val result = RulesEngine(FixedRandomSource(1)).applyDamage(state(hp = 2), 2)
+        assertEquals(Scar.RATTLING, result.newState.scar)
+        assertEquals(Scar.RATTLING, (result.events.last() as RuleEvent.ScarTriggered).scar)
+    }
+
+    @Test
+    fun fillingAllInventorySlotsDropsHpToZero() {
+        val full = state(inventory = List(9) { InventoryItem("item-$it") })
+        val result = RulesEngine(FixedRandomSource(1)).addItem(full, InventoryItem("last"))
+        assertEquals(0, result.newState.hp)
+        assertEquals(10, result.newState.usedSlots)
+    }
+
+    @Test
+    fun criticalFailureMarksCharacterDead() {
+        val result = RulesEngine(FixedRandomSource(20)).applyDamage(state(hp = 1, str = 1), 2)
+        assertTrue(result.newState.dead)
+        assertTrue(result.newState.critical)
+    }
+
+    @Test
+    fun criticalSuccessKeepsCharacterAlive() {
+        val result = RulesEngine(FixedRandomSource(1)).applyDamage(state(hp = 1, str = 5), 2)
+        assertFalse(result.newState.dead)
+        assertTrue(result.newState.critical)
+    }
+
+    @Test
     fun armorCannotExceedThree() {
         val result = RulesEngine(FixedRandomSource(1)).setArmor(state(), 3)
         assertEquals(3, result.newState.armor)
