@@ -193,6 +193,21 @@ class CharacterGeneratorTest {
     }
 
     @Test
+    fun backgroundCompanionsBecomeStructuredState() {
+        val state = createCharacter(
+            "Fletch",
+            RolledCharacter(9, 11, 13, 5, background = Background.FLETCHWIND, backgroundRolls = BackgroundRolls(2, 1))
+        )
+        assertEquals("falcon", state.campaign.profile.companions.single().id)
+
+        val rider = createCharacter(
+            "Rider",
+            RolledCharacter(9, 11, 13, 5, background = Background.OUTRIDER, backgroundRolls = BackgroundRolls(1, 1))
+        )
+        assertEquals(emptyList(), rider.campaign.profile.companions)
+    }
+
+    @Test
     fun backgroundUsesD20Range() {
         assertEquals(Background.AURIFEX, Background.fromD20(1))
         assertEquals(Background.SCRIVENER, Background.fromD20(20))
