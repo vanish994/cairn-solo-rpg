@@ -1,8 +1,12 @@
 package com.vanish994.cairnsolo.game
 
+import com.vanish994.cairnsolo.rules.CharacterState
+import com.vanish994.cairnsolo.rules.InventoryItem
+import com.vanish994.cairnsolo.rules.Scar
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
+import kotlin.test.assertNotNull
 
 class GameStateTest {
     @Test
@@ -24,5 +28,51 @@ class GameStateTest {
         assertEquals(4, next.campaign.rules.hp)
         assertEquals(1, next.campaign.turn)
         assertNotEquals(state.updatedAtEpochMs, -1L)
+    }
+
+    @Test
+    fun persistenceCodecRoundTripPreservesFullCharacterState() {
+        val original = GameState(
+            campaign = CampaignState(
+                campaignId = "campaign-1",
+                character = CharacterIdentity(id = "character-1", name = "Mara"),
+                rules = CharacterState(
+                    str = 7, dex = 12, wil = 9, hp = 0, maxHp = 8, armor = 3,
+                    inventory = listOf(InventoryItem("torch", 1), InventoryItem("coin", 0, petty = true)),
+                    fatigue = 1, critical = true, scar = Scar.BROKEN_LIMB,
+                    maxStr = 10, maxDex = 14, maxWil = 11,
+                    lastingScar = "old wound", brokenLimb = "left arm",
+                    sundered = true, deafened = true, diseased = true, hamstrung = true
+                ),
+                sceneId = "ruined_shrine", turn = 42L,
+                sceneType = SceneType.EXPLORATION, sceneTitle = "Ruined Shrine",
+                sceneDescription = "Uma capela em ruínas.",
+                exits = listOf("continuar", "investigar"),
+                log = listOf("Chegou ao santuário.", "Encontrou uma pista.")
+            ),
+            updatedAtEpochMs = 123456789L
+        )
+
+        val restored = assertNotNull(GameStatePersistenceCodec.decode(GameStatePersistenceCodec.encode(original)))
+        assertEquals(original, restored)
+    }
+
+    @Test
+    fun legacyPersistenceDefaultsNewFieldsSafely() {
+        val restored = assertNotNull(
+            GameStatePersistenceCodec.decode(
+                mapOf(
+                    "campaignId" to "legacy", "characterId" to "char", "characterName" to "Legacy",
+                    "str" to "10", "dex" to "10", "wil" to "10", "hp" to "6", "maxHp" to "6",
+                    "armor" to "0", "inventoryCount" to "0"
+                )
+            )
+        )
+
+        assertEquals(10, restored.campaign.rules.maxStr)
+        assertEquals(10, restored.campaign.rules.maxDex)
+        assertEquals(10, restored.campaign.rules.maxWil)
+        assertEquals(null, restored.campaign.rules.lastingScar)
+        assertEquals(false, restored.campaign.rules.sundered)
     }
 }
