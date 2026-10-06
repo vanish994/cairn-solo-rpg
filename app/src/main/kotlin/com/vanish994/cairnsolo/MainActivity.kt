@@ -263,9 +263,9 @@ private fun PortraitPlaceholder() {
 }
 
 @Composable
-private fun StatTile(label: String, value: Int) {
+private fun StatTile(label: String, value: Int, modifier: Modifier = Modifier) {
     Column(
-        modifier = Modifier.weight(1f).clip(RoundedCornerShape(14.dp)).background(CairnSurfaceRaised).padding(vertical = 12.dp),
+        modifier = modifier.clip(RoundedCornerShape(14.dp)).background(CairnSurfaceRaised).padding(vertical = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(label, color = CairnMuted, style = MaterialTheme.typography.labelMedium)
@@ -421,9 +421,9 @@ private fun CharacterCreation(
                     Text("FICHA RÁPIDA", color = CairnAccent, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(10.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                        StatTile("FOR", rolled.str)
-                        StatTile("DES", rolled.dex)
-                        StatTile("VON", rolled.wil)
+                        StatTile("FOR", rolled.str, Modifier.weight(1f))
+                        StatTile("DES", rolled.dex, Modifier.weight(1f))
+                        StatTile("VON", rolled.wil, Modifier.weight(1f))
                     }
                     Spacer(Modifier.height(10.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
