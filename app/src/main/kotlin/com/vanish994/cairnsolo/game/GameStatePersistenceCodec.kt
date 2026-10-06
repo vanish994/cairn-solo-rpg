@@ -19,7 +19,8 @@ object GameStatePersistenceCodec {
             put("profileGold", p.gold.toString()); put("profileBondRoll", p.bondRoll?.toString() ?: "")
             put("profileSecondBondRoll", p.secondBondRoll?.toString() ?: ""); put("profileOmenRoll", p.omenRoll?.toString() ?: "")
             p.backgroundRolls?.let { put("profileBackgroundRoll1", it.first.toString()); put("profileBackgroundRoll2", it.second.toString()) }
-            put("profileBackgroundFeatures", p.backgroundFeatures.joinToString(SEPARATOR))
+            put("profileBackgroundFeatures", p.backgroundFeatures.joinToString(SEPARATOR)); put("companionCount", p.companions.size.toString())
+            p.companions.forEachIndexed { i, x -> put("comp_${i}_id", x.id); put("comp_${i}_hp", x.hp.toString()); put("comp_${i}_maxHp", x.maxHp.toString()); put("comp_${i}_armor", x.armor.toString()); put("comp_${i}_str", x.str.toString()); put("comp_${i}_dex", x.dex.toString()); put("comp_${i}_wil", x.wil.toString()); put("comp_${i}_slots", x.slots.toString()); put("comp_${i}_tags", x.tags.joinToString(SEPARATOR)) }
             p.traits?.let { t -> put("traitPhysique", t.physique); put("traitSkin", t.skin); put("traitHair", t.hair); put("traitFace", t.face); put("traitSpeech", t.speech); put("traitClothing", t.clothing); put("traitVirtue", t.virtue); put("traitVice", t.vice) }
             put("sceneId", c.sceneId); put("sceneType", c.sceneType.name); put("sceneTitle", c.sceneTitle)
             put("sceneDescription", c.sceneDescription); put("exits", c.exits.joinToString(SEPARATOR))
@@ -72,6 +73,8 @@ object GameStatePersistenceCodec {
         )
         val traits = if (values.containsKey("traitPhysique")) CharacterTraits(string("traitPhysique"), string("traitSkin"), string("traitHair"), string("traitFace"), string("traitSpeech"), string("traitClothing"), string("traitVirtue"), string("traitVice")) else null
         val background = values["profileBackground"]?.takeIf { it.isNotEmpty() }?.let { runCatching { Background.valueOf(it) }.getOrNull() }
+        val companionCount = int("companionCount", 0)
+        val companions = (0 until companionCount).map { i -> CompanionState(string("comp_${i}_id", "companion-$i"), int("comp_${i}_hp", 1), int("comp_${i}_maxHp", 1), int("comp_${i}_armor", 0), int("comp_${i}_str", 0), int("comp_${i}_dex", 0), int("comp_${i}_wil", 0), int("comp_${i}_slots", 0), string("comp_${i}_tags").split(SEPARATOR).filter { it.isNotBlank() }.toSet()) }
         val profile = CharacterProfile(
             age = values["profileAge"]?.toIntOrNull(),
             background = background,
@@ -81,7 +84,8 @@ object GameStatePersistenceCodec {
             secondBondRoll = values["profileSecondBondRoll"]?.toIntOrNull(),
             omenRoll = values["profileOmenRoll"]?.toIntOrNull(),
             backgroundRolls = values["profileBackgroundRoll1"]?.toIntOrNull()?.let { first -> values["profileBackgroundRoll2"]?.toIntOrNull()?.let { second -> runCatching { com.vanish994.cairnsolo.rules.BackgroundRolls(first, second) }.getOrNull() } },
-            backgroundFeatures = string("profileBackgroundFeatures").split(SEPARATOR).filter { it.isNotBlank() }
+            backgroundFeatures = string("profileBackgroundFeatures").split(SEPARATOR).filter { it.isNotBlank() },
+            companions = companions
         )
         val exits = string("exits").split(SEPARATOR).filter { it.isNotBlank() }
         val log = string("log").split(SEPARATOR).filter { it.isNotBlank() }
