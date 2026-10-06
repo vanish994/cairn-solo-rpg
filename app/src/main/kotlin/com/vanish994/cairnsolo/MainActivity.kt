@@ -29,6 +29,7 @@ class MainActivity : ComponentActivity() {
                 var state by remember { mutableStateOf(repository.load()) }
                 var name by remember { mutableStateOf("") }
                 var rolled by remember { mutableStateOf<RolledCharacter?>(null) }
+                var selectedBackground by remember { mutableStateOf<Background?>(null) }
                 val actionResolver = remember {
                     GameActionResolver(
                         exploration = ExplorationEngine(KotlinRandomSource()),
@@ -39,18 +40,36 @@ class MainActivity : ComponentActivity() {
 
                 Surface(Modifier.fillMaxSize()) {
                     if (state == null) {
-                        CharacterCreation(
-                            name = name,
-                            onNameChange = { name = it },
-                            rolled = rolled,
-                            onRoll = { rolled = rollPlayableCharacter() },
-                            onCreate = {
-                                val r = rolled ?: rollPlayableCharacter()
-                                val created = createCharacter(name.trim(), r)
-                                repository.save(created)
-                                state = created
-                            }
-                        )
+                        if (screen == AppScreen.RULES) {
+                            RulesScreen(onBack = { screen = AppScreen.CHARACTER })
+                        } else {
+                            CharacterCreation(
+                                name = name,
+                                onNameChange = { name = it },
+                                rolled = rolled,
+                                selectedBackground = selectedBackground,
+                                onRoll = {
+                                    val next = rollCharacter(KotlinRandomSource())
+                                    rolled = next
+                                    selectedBackground = next.background
+                                },
+                                onBackgroundChange = { background ->
+                                    selectedBackground = background
+                                    rolled = rolled?.copy(background = background)
+                                },
+                                onSwap = { first, second ->
+                                    rolled = rolled?.swapAttributes(first, second)
+                                },
+                                onRules = { screen = AppScreen.RULES },
+                                onCreate = {
+                                    val r = rolled ?: rollCharacter(KotlinRandomSource())
+                                    val finalRolled = r.copy(background = selectedBackground ?: r.background)
+                                    val created = createCharacter(name.trim(), finalRolled)
+                                    repository.save(created)
+                                    state = created
+                                }
+                            )
+                        }
                     } else {
                         val current = state!!
                         when (screen) {
