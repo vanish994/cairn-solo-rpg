@@ -3,6 +3,7 @@ package com.vanish994.cairnsolo.game
 import com.vanish994.cairnsolo.rules.Attribute
 import com.vanish994.cairnsolo.rules.InventoryItem
 import com.vanish994.cairnsolo.rules.RuleEvent
+import com.vanish994.cairnsolo.rules.RolledCharacter
 import com.vanish994.cairnsolo.rules.RulesEngine
 
 sealed interface GameAction {
