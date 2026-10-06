@@ -2,9 +2,12 @@ name: Android Build
 
 on:
   push:
-    branches: ["main", "feat/cairn-visual-guardian-v1"]
-  pull_request:
+    branches: ["feat/cairn-visual-guardian-v1"]
   workflow_dispatch:
+
+concurrency:
+  group: android-build-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
