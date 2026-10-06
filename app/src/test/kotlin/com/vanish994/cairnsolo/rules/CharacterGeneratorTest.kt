@@ -175,6 +175,23 @@ class CharacterGeneratorTest {
         assertEquals(9, state.campaign.profile.omenRoll)
     }
 
+
+    @Test
+    fun startingGearCarriesMechanicalMetadata() {
+        val cutpurse = createCharacter("Patch", RolledCharacter(9, 11, 13, 5, Background.CUTPURSE))
+        val daggers = cutpurse.campaign.rules.inventory.first { it.id == "twin-daggers" }
+        assertEquals("d6+d6", daggers.damage)
+        assertEquals(setOf("paired"), daggers.tags)
+        assertEquals(1, cutpurse.campaign.rules.inventory.first { it.id == "padded-leather" }.armor)
+
+        val outrider = createCharacter("Rider", RolledCharacter(9, 11, 13, 5, Background.OUTRIDER))
+        assertEquals("d10", outrider.campaign.rules.inventory.first { it.id == "long-sword" }.damage)
+        assertEquals("d8", outrider.campaign.rules.inventory.first { it.id == "crossbow" }.damage)
+
+        val mountaineer = createCharacter("Bank", RolledCharacter(9, 11, 13, 5, Background.MOUNTEBANK))
+        assertEquals(setOf("capacity:+4", "bulky-when-pulled"), mountaineer.campaign.rules.inventory.first { it.id == "cart" }.tags)
+    }
+
     @Test
     fun backgroundUsesD20Range() {
         assertEquals(Background.AURIFEX, Background.fromD20(1))
