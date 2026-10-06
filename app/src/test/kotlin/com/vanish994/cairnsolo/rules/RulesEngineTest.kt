@@ -11,7 +11,8 @@ class RulesEngineTest {
     fun saveSucceedsWhenRollIsAtOrBelowAttribute() {
         val rng = FixedRandomSource(12)
 
-        val result = RulesEngine(rng).save(Attribute.STR, 12)
+        val state = CharacterState(12, 10, 10, 6, 6, 0)
+        val result = RulesEngine(rng).save(state, Attribute.STR)
 
         assertTrue(result.success)
         assertEquals(12, result.roll)
@@ -19,16 +20,16 @@ class RulesEngineTest {
 
     @Test
     fun saveOneAlwaysSucceeds() {
-        val rng = FixedRandomSource(20)
-
-        val result = RulesEngine(rng).save(Attribute.DEX, 1, forcedRoll = 1)
+        val state = CharacterState(1, 10, 10, 6, 6, 0)
+        val result = RulesEngine(FixedRandomSource(1)).save(state, Attribute.DEX)
 
         assertTrue(result.success)
     }
 
     @Test
     fun saveTwentyAlwaysFails() {
-        val result = RulesEngine(FixedRandomSource(20)).save(Attribute.WIL, 20)
+        val state = CharacterState(10, 10, 20, 6, 6, 0)
+        val result = RulesEngine(FixedRandomSource(20)).save(state, Attribute.WIL)
 
         assertFalse(result.success)
     }
