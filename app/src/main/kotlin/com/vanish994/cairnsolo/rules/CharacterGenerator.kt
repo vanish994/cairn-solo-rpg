@@ -82,4 +82,4 @@ fun RandomSource.d10(): Int = roll(10)
 data class CharacterAge(val years: Int)
 
 fun rollAge(random: RandomSource): CharacterAge =
-    CharacterAge(random.d6() + random.d6() + 8 + random.d6() + random.d6() + 2)
+    CharacterAge(random.d20() + random.d20() + 10)
