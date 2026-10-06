@@ -9,6 +9,7 @@ class RulesEngineTest {
 
     private fun state(
         hp: Int = 6,
+        maxHp: Int = 6,
         str: Int = 10,
         armor: Int = 0,
         inventory: List<InventoryItem> = emptyList(),
@@ -19,7 +20,7 @@ class RulesEngineTest {
         dex = 10,
         wil = 10,
         hp = hp,
-        maxHp = 6,
+        maxHp = maxHp,
         armor = armor,
         inventory = inventory,
         fatigue = fatigue,
@@ -76,7 +77,7 @@ class RulesEngineTest {
         assertEquals(Scar.WALLOPED, walloped.newState.scar)
         assertTrue(walloped.newState.deprived)
 
-        val hamstrung = RulesEngine(FixedRandomSource(1)).applyDamage(state(hp = 7), 7)
+        val hamstrung = RulesEngine(FixedRandomSource(1)).applyDamage(state(hp = 7, maxHp = 7), 7)
         assertEquals(Scar.HAMSTRUNG, hamstrung.newState.scar)
         assertTrue(hamstrung.newState.hamstrung)
     }
