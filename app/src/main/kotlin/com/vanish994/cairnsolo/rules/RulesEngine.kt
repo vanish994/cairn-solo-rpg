@@ -105,9 +105,9 @@ class RulesEngine(private val random: RandomSource) {
                     val attribute = when (random.d6()) { in 1..2 -> Attribute.STR; in 3..4 -> Attribute.DEX; else -> Attribute.WIL }
                     val roll = random.d6() + random.d6() + random.d6()
                     val updated = when (attribute) {
-                        Attribute.STR -> state.copy(str = maxOf(state.str, roll))
-                        Attribute.DEX -> state.copy(dex = maxOf(state.dex, roll))
-                        Attribute.WIL -> state.copy(wil = maxOf(state.wil, roll))
+                        Attribute.STR -> state.copy(str = maxOf(state.str, roll), maxStr = maxOf(state.maxStr, roll))
+                        Attribute.DEX -> state.copy(dex = maxOf(state.dex, roll), maxDex = maxOf(state.maxDex, roll))
+                        Attribute.WIL -> state.copy(wil = maxOf(state.wil, roll), maxWil = maxOf(state.maxWil, roll))
                     }
                     updated.copy(hp = 0, scar = scar, scarAttribute = attribute)
                 }
