@@ -167,9 +167,9 @@ class RulesEngine(private val random: RandomSource) {
             ScarRecovery.MORTAL_WOUND -> random.d6() + random.d6()
         }
         val updated = when (recovery) {
-            ScarRecovery.WALLOPED -> state.copy(hp = state.maxHp, deprived = false, maxHp = state.maxHp + roll, scarRecovery = null)
-            ScarRecovery.BROKEN_LIMB -> state.copy(hp = state.maxHp, maxHp = maxOf(state.maxHp, roll), scarRecovery = null)
-            ScarRecovery.DISEASED -> state.copy(hp = state.maxHp, maxHp = maxOf(state.maxHp, roll), diseased = false, scarRecovery = null)
+            ScarRecovery.WALLOPED -> { val newMaxHp = state.maxHp + roll; state.copy(hp = newMaxHp, deprived = false, maxHp = newMaxHp, scarRecovery = null) }
+            ScarRecovery.BROKEN_LIMB -> { val newMaxHp = maxOf(state.maxHp, roll); state.copy(hp = newMaxHp, maxHp = newMaxHp, brokenLimb = null, scarRecovery = null) }
+            ScarRecovery.DISEASED -> { val newMaxHp = maxOf(state.maxHp, roll); state.copy(hp = newMaxHp, maxHp = newMaxHp, diseased = false, scarRecovery = null) }
             ScarRecovery.HAMSTRUNG -> state.copy(hp = state.maxHp, maxDex = maxOf(state.maxDex, roll), hamstrung = false, scarRecovery = null)
             ScarRecovery.MORTAL_WOUND -> state.copy(hp = roll, deprived = false, critical = false, maxHp = roll, scarRecovery = null)
         }
