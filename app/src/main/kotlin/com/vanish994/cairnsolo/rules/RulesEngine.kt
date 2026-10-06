@@ -12,13 +12,14 @@ data class CharacterState(
     val hp: Int, val maxHp: Int, val armor: Int,
     val inventory: List<InventoryItem> = emptyList(),
     val fatigue: Int = 0, val deprived: Boolean = false,
-    val critical: Boolean = false, val dead: Boolean = false, val scar: Scar? = null
+    val critical: Boolean = false, val dead: Boolean = false, val scar: Scar? = null, val maxStr: Int = str, val maxDex: Int = dex, val maxWil: Int = wil, val lastingScar: String? = null, val brokenLimb: String? = null, val sundered: Boolean = false, val deafened: Boolean = false, val diseased: Boolean = false, val hamstrung: Boolean = false, val doomed: Boolean = false
 ) {
     init {
         require(str >= 0 && dex >= 0 && wil >= 0)
         require(hp >= 0 && maxHp >= 0 && hp <= maxHp)
         require(armor in 0..3)
         require(fatigue >= 0)
+        require(maxStr >= str && maxDex >= dex && maxWil >= wil)
         require(inventory.sumOf { it.slotCost } + fatigue <= 10)
         
     }
