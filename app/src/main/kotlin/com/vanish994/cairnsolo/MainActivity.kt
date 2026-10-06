@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -18,6 +19,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.vanish994.cairnsolo.game.GameAction
+import com.vanish994.cairnsolo.guardian.HttpGuardianClient
 import com.vanish994.cairnsolo.game.GameActionResolver
 import com.vanish994.cairnsolo.game.GameState
 import com.vanish994.cairnsolo.game.ExplorationEngine
@@ -56,6 +58,10 @@ class MainActivity : ComponentActivity() {
                 var name by remember { mutableStateOf("") }
                 var rolled by remember { mutableStateOf<RolledCharacter?>(null) }
                 var selectedBackground by remember { mutableStateOf<Background?>(null) }
+                val guardianClient = remember { HttpGuardianClient() }
+                val scope = rememberCoroutineScope()
+                var guardianLoading by remember { mutableStateOf(false) }
+                var guardianError by remember { mutableStateOf<String?>(null) }
                 val actionResolver = remember {
                     GameActionResolver(
                         exploration = ExplorationEngine(KotlinRandomSource()),
@@ -135,6 +141,29 @@ class MainActivity : ComponentActivity() {
                                     repository.save(result.state)
                                     state = result.state
                                 },
+                                guardianLoading = guardianLoading,
+                                guardianError = guardianError,
+                                onGuardianIntent = { intent ->
+                                    guardianLoading = true
+                                    guardianError = null
+                                    scope.launch {
+                                        guardianClient.narrate(current, intent)
+                                            .onSuccess { response ->
+                                                val next = current.applyGuardianResponse(
+                                                    narration = response.narration,
+                                                    sceneTitle = response.sceneTitle,
+                                                    sceneDescription = response.sceneDescription,
+                                                    interactionId = response.interactionId
+                                                )
+                                                repository.save(next)
+                                                state = next
+                                            }
+                                            .onFailure { error ->
+                                                guardianError = error.message ?: "Não foi possível falar com o Guardião."
+                                            }
+                                        guardianLoading = false
+                                    }
+                                },
                                 onBack = { screen = AppScreen.CHARACTER }
                             )
                             AppScreen.RULES -> RulesScreen(onBack = { screen = AppScreen.CHARACTER })
@@ -211,7 +240,14 @@ private fun StatTile(label: String, value: Int) {
 }
 
 @Composable
-private fun ExplorationScreen(state: GameState, onAction: (GameAction) -> Unit, onBack: () -> Unit) {
+private fun ExplorationScreen(
+    state: GameState,
+    onAction: (GameAction) -> Unit,
+    guardianLoading: Boolean,
+    guardianError: String?,
+    onGuardianIntent: (String) -> Unit,
+    onBack: () -> Unit
+) {
     val c = state.campaign
     var intent by remember { mutableStateOf("") }
 
@@ -245,11 +281,21 @@ private fun ExplorationScreen(state: GameState, onAction: (GameAction) -> Unit, 
                 )
                 Spacer(Modifier.height(10.dp))
                 Button(
-                    onClick = { onAction(GameAction.GuardianIntent(intent)); intent = "" },
-                    enabled = intent.isNotBlank(),
+                    onClick = { onGuardianIntent(intent); intent = "" },
+                    enabled = intent.isNotBlank() && !guardianLoading,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(14.dp)
-                ) { Text("Falar com o Guardião") }
+                ) {
+                    if (guardianLoading) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                        Spacer(Modifier.width(8.dp))
+                    }
+                    Text(if (guardianLoading) "O Guardião responde…" else "Falar com o Guardião")
+                }
+                guardianError?.let {
+                    Spacer(Modifier.height(6.dp))
+                    Text(it, color = CairnDanger, style = MaterialTheme.typography.bodySmall)
+                }
             }
         }
         item { Text("AÇÕES DA CENA", color = CairnMuted, style = MaterialTheme.typography.labelLarge) }
