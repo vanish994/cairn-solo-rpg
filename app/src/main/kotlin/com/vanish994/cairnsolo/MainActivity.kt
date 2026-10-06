@@ -339,7 +339,7 @@ private fun CharacterSheet(
         items(r.inventory, key = { it.id }) { item ->
             ListItem(
                 headlineContent = { Text(item.id) },
-                supportingContent = { Text(item.slotCost.toString() + if (item.slotCost == 1) " espaço" else " espaços") },
+                supportingContent = { Text(buildList { add(item.slotCost.toString() + if (item.slotCost == 1) " espaço" else " espaços"); item.damage?.let { add(it) }; item.armor.takeIf { it > 0 }?.let { add("Armor " + it) }; item.uses?.let { add(it.toString() + " usos") } }.joinToString(" • ")) },
                 trailingContent = { TextButton(onClick = { onRemoveItem(item.id) }) { Text("Remover") } }
             )
         }
