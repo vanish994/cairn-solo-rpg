@@ -166,50 +166,100 @@ private fun CharacterCreation(
     name: String,
     onNameChange: (String) -> Unit,
     rolled: RolledCharacter?,
+    selectedBackground: Background?,
     onRoll: () -> Unit,
+    onBackgroundChange: (Background) -> Unit,
+    onSwap: (AttributeSlot, AttributeSlot) -> Unit,
+    onRules: () -> Unit,
     onCreate: () -> Unit
 ) {
-    Column(
+    var backgroundMenu by remember { mutableStateOf(false) }
+
+    LazyColumn(
         Modifier.fillMaxSize().padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text("Cairn Solo RPG", style = MaterialTheme.typography.headlineMedium)
-        Text("Criação de personagem")
-        Spacer(Modifier.height(16.dp))
-        OutlinedTextField(name, onNameChange, label = { Text("Nome") }, singleLine = true)
-        Spacer(Modifier.height(12.dp))
+        item {
+            Text("Cairn Solo RPG", style = MaterialTheme.typography.headlineMedium)
+            Text("Criação de personagem", style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(12.dp))
 
-        if (rolled != null) {
-            Text("FOR " + rolled.str + "   DES " + rolled.dex + "   VON " + rolled.wil)
-            Text("Pontos de vida: " + rolled.hp)
+            OutlinedTextField(
+                value = name,
+                onValueChange = onNameChange,
+                label = { Text("Nome") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
             Spacer(Modifier.height(12.dp))
-            HorizontalDivider()
-            Spacer(Modifier.height(12.dp))
-            Text("Perfil", style = MaterialTheme.typography.titleMedium)
-            rolled.age?.let { Text("Idade: $it anos") }
-            rolled.background?.let { Text("Background: " + backgroundLabel(it)) }
-            rolled.traits?.let { traits ->
+
+            if (rolled == null) {
+                Text("Role o personagem para gerar atributos, HP, background, idade e características.")
+            } else {
+                Text("Atributos", style = MaterialTheme.typography.titleMedium)
+                Text("FOR " + rolled.str + "   DES " + rolled.dex + "   VON " + rolled.wil)
+                Text("HP: " + rolled.hp)
                 Spacer(Modifier.height(8.dp))
-                Text("Características", style = MaterialTheme.typography.titleSmall)
-                Text("Físico: " + traitLabel(traits.physique))
-                Text("Pele: " + traitLabel(traits.skin))
-                Text("Cabelo: " + traitLabel(traits.hair))
-                Text("Rosto: " + traitLabel(traits.face))
-                Text("Fala: " + traitLabel(traits.speech))
-                Text("Vestuário: " + traitLabel(traits.clothing))
-                Text("Virtude: " + traitLabel(traits.virtue))
-                Text("Vício: " + traitLabel(traits.vice))
-            }
-            Spacer(Modifier.height(12.dp))
-        }
+                Text("Você pode trocar quaisquer dois resultados:")
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    OutlinedButton(onClick = { onSwap(AttributeSlot.STR, AttributeSlot.DEX) }) { Text("FOR ↔ DES") }
+                    OutlinedButton(onClick = { onSwap(AttributeSlot.STR, AttributeSlot.WIL) }) { Text("FOR ↔ VON") }
+                }
+                OutlinedButton(onClick = { onSwap(AttributeSlot.DEX, AttributeSlot.WIL) }) { Text("DES ↔ VON") }
 
-        OutlinedButton(onClick = onRoll) {
-            Text(if (rolled == null) "Rolar personagem" else "Rolar novamente")
+                Spacer(Modifier.height(8.dp))
+                Text("Background", style = MaterialTheme.typography.titleMedium)
+                Box {
+                    OutlinedButton(onClick = { backgroundMenu = true }) {
+                        Text(selectedBackground?.let(::backgroundLabel) ?: "Escolher")
+                    }
+                    DropdownMenu(
+                        expanded = backgroundMenu,
+                        onDismissRequest = { backgroundMenu = false }
+                    ) {
+                        Background.entries.forEach { background ->
+                            DropdownMenuItem(
+                                text = { Text(backgroundLabel(background)) },
+                                onClick = {
+                                    onBackgroundChange(background)
+                                    backgroundMenu = false
+                                }
+                            )
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(8.dp))
+                Text("Perfil", style = MaterialTheme.typography.titleMedium)
+                rolled.age?.let { Text("Idade: " + it + " anos") }
+                rolled.traits?.let { traits ->
+                    Text("Físico: " + traitLabel(traits.physique))
+                    Text("Pele: " + traitLabel(traits.skin))
+                    Text("Cabelo: " + traitLabel(traits.hair))
+                    Text("Rosto: " + traitLabel(traits.face))
+                    Text("Fala: " + traitLabel(traits.speech))
+                    Text("Vestuário: " + traitLabel(traits.clothing))
+                    Text("Virtude: " + traitLabel(traits.virtue))
+                    Text("Vício: " + traitLabel(traits.vice))
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+            OutlinedButton(onClick = onRoll) {
+                Text(if (rolled == null) "Rolar personagem" else "Rolar novamente")
+            }
+            Spacer(Modifier.height(8.dp))
+            Button(onClick = onCreate, enabled = name.isNotBlank() && rolled != null) {
+                Text("Começar aventura")
+            }
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(onClick = onRules) { Text("Como jogar?") }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "FOR, DES e VON: 3d6. HP: 1d6. Idade: 2d20 + 10.",
+                style = MaterialTheme.typography.bodySmall
+            )
         }
-        Spacer(Modifier.height(8.dp))
-        Button(onClick = onCreate, enabled = name.isNotBlank()) { Text("Começar aventura") }
-        Text("3d6 para cada atributo e 1d6 para os pontos de vida.", style = MaterialTheme.typography.bodySmall)
     }
 }
 
