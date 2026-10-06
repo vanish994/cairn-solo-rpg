@@ -230,6 +230,8 @@ fun createCharacter(name: String, rolled: RolledCharacter): GameState {
                 traits = rolled.traits,
                 gold = rolled.gold,
                 bondRoll = rolled.bondRoll,
+                secondBondRoll = rolled.secondBondRoll,
+                omenRoll = rolled.omenRoll,
                 backgroundRolls = rolled.backgroundRolls,
                 backgroundFeatures = rolled.background?.let { bg -> rolled.backgroundRolls?.let { rs -> backgroundOutcomes(bg, rs).map { it.key } } } ?: emptyList()
             ),
