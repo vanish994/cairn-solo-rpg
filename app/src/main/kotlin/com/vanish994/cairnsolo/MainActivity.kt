@@ -4,6 +4,9 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -11,6 +14,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
@@ -29,7 +33,7 @@ class MainActivity : ComponentActivity() {
         val repository = LocalGameStateRepository(applicationContext)
 
         setContent {
-            MaterialTheme {
+            MaterialTheme(colorScheme = darkColorScheme()) {
                 var state by remember { mutableStateOf(repository.load()) }
                 var name by remember { mutableStateOf("") }
                 var rolled by remember { mutableStateOf<RolledCharacter?>(null) }
@@ -191,112 +195,102 @@ private fun CharacterCreation(
 ) {
     var backgroundMenu by remember { mutableStateOf(false) }
     var selectedSprite by remember { mutableStateOf(0) }
-
-    LazyColumn(
-        Modifier.fillMaxSize().padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        item {
-            Text("Cairn Solo RPG", style = MaterialTheme.typography.headlineMedium)
-            Text("Criação de personagem", style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(12.dp))
-
-            Text("Escolha um retrato", style = MaterialTheme.typography.titleMedium)
-            Image(
-                painter = painterResource(CAIRN_PROTAGONIST_SPRITES[selectedSprite]),
-                contentDescription = "Retrato do protagonista ${selectedSprite + 1}",
-                contentScale = ContentScale.Fit,
-                modifier = Modifier.size(width = 180.dp, height = 220.dp)
-            )
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
-            ) {
-                items(CAIRN_PROTAGONIST_SPRITES.size) { index ->
-                    OutlinedButton(onClick = { selectedSprite = index }) {
-                        Text("${index + 1}")
-                    }
-                }
-            }
-
+    Box(Modifier.fillMaxSize()) {
+        Image(
+            painter = painterResource(R.drawable.cairn_scene_old_road),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxSize()
+        )
+        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.58f)))
+        Column(
+            Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text("CAIRN", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+            Text("Criação de personagem", style = MaterialTheme.typography.headlineSmall)
             OutlinedTextField(
                 value = name,
                 onValueChange = onNameChange,
-                label = { Text("Nome") },
+                label = { Text("Nome do aventureiro") },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
-            Spacer(Modifier.height(12.dp))
-
-            if (rolled == null) {
-                Text("Role o personagem para gerar atributos, HP, background, idade e características.")
-            } else {
-                Text("Atributos", style = MaterialTheme.typography.titleMedium)
-                Text("FOR " + rolled.str + "   DES " + rolled.dex + "   VON " + rolled.wil)
-                Text("HP: " + rolled.hp)
-                Text("Ouro: " + rolled.gold + " po")
-                Text("Vínculo: resultado " + (rolled.bondRoll ?: 0) + "/20")
-                Spacer(Modifier.height(8.dp))
-                Text("Você pode trocar quaisquer dois resultados:")
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    OutlinedButton(onClick = { onSwap(AttributeSlot.STR, AttributeSlot.DEX) }) { Text("FOR ↔ DES") }
-                    OutlinedButton(onClick = { onSwap(AttributeSlot.STR, AttributeSlot.WIL) }) { Text("FOR ↔ VON") }
-                }
-                OutlinedButton(onClick = { onSwap(AttributeSlot.DEX, AttributeSlot.WIL) }) { Text("DES ↔ VON") }
-
-                Spacer(Modifier.height(8.dp))
-                Text("Background", style = MaterialTheme.typography.titleMedium)
-                Box {
-                    OutlinedButton(onClick = { backgroundMenu = true }) {
-                        Text(selectedBackground?.let(::backgroundLabel) ?: "Escolher")
-                    }
-                    DropdownMenu(
-                        expanded = backgroundMenu,
-                        onDismissRequest = { backgroundMenu = false }
-                    ) {
-                        Background.entries.forEach { background ->
-                            DropdownMenuItem(
-                                text = { Text(backgroundLabel(background)) },
-                                onClick = {
-                                    onBackgroundChange(background)
-                                    backgroundMenu = false
-                                }
-                            )
+            Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Card(
+                    Modifier.weight(0.9f).fillMaxHeight(),
+                    colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.40f)),
+                    shape = RoundedCornerShape(18.dp)
+                ) {
+                    Column(Modifier.fillMaxSize().padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("Retrato", style = MaterialTheme.typography.labelLarge)
+                        Image(
+                            painter = painterResource(CAIRN_PROTAGONIST_SPRITES[selectedSprite]),
+                            contentDescription = "Retrato do protagonista ${selectedSprite + 1}",
+                            contentScale = ContentScale.Fit,
+                            modifier = Modifier.weight(1f).fillMaxWidth()
+                        )
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                            CAIRN_PROTAGONIST_SPRITES.forEachIndexed { index, sprite ->
+                                Image(
+                                    painter = painterResource(sprite),
+                                    contentDescription = "Selecionar retrato ${index + 1}",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.size(42.dp).clickable { selectedSprite = index }
+                                )
+                            }
                         }
                     }
                 }
-
-                Spacer(Modifier.height(8.dp))
-                Text("Perfil", style = MaterialTheme.typography.titleMedium)
-                rolled.age?.let { Text("Idade: " + it + " anos") }
-                rolled.traits?.let { traits ->
-                    Text("Físico: " + traitLabel(traits.physique))
-                    Text("Pele: " + traitLabel(traits.skin))
-                    Text("Cabelo: " + traitLabel(traits.hair))
-                    Text("Rosto: " + traitLabel(traits.face))
-                    Text("Fala: " + traitLabel(traits.speech))
-                    Text("Vestuário: " + traitLabel(traits.clothing))
-                    Text("Virtude: " + traitLabel(traits.virtue))
-                    Text("Vício: " + traitLabel(traits.vice))
-                    Text("Equipamento básico: mochila, rações para 3 dias e tocha")
+                Card(
+                    Modifier.weight(1.1f).fillMaxHeight(),
+                    colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.52f)),
+                    shape = RoundedCornerShape(18.dp)
+                ) {
+                    Column(Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("Ficha rápida", style = MaterialTheme.typography.titleMedium)
+                        if (rolled == null) {
+                            Text("Role para gerar atributos, HP e background.", style = MaterialTheme.typography.bodyMedium)
+                        } else {
+                            Text("FOR ${rolled.str}   DES ${rolled.dex}   VON ${rolled.wil}")
+                            Text("HP ${rolled.hp}   Ouro ${rolled.gold} po")
+                            rolled.age?.let { Text("Idade: $it anos") }
+                            Text("Background: ${selectedBackground?.let(::backgroundLabel) ?: "—"}")
+                            Text("Físico: ${rolled.traits?.let { traitLabel(it.physique) } ?: "—"}", style = MaterialTheme.typography.bodySmall)
+                            Text("Vestuário: ${rolled.traits?.let { traitLabel(it.clothing) } ?: "—"}", style = MaterialTheme.typography.bodySmall)
+                            Spacer(Modifier.weight(1f))
+                            Text("Trocar atributos", style = MaterialTheme.typography.labelLarge)
+                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                TextButton(onClick = { onSwap(AttributeSlot.STR, AttributeSlot.DEX) }) { Text("FOR/DES") }
+                                TextButton(onClick = { onSwap(AttributeSlot.STR, AttributeSlot.WIL) }) { Text("FOR/VON") }
+                            }
+                            TextButton(onClick = { onSwap(AttributeSlot.DEX, AttributeSlot.WIL) }) { Text("DES/VON") }
+                            Box {
+                                OutlinedButton(onClick = { backgroundMenu = true }, modifier = Modifier.fillMaxWidth()) {
+                                    Text(selectedBackground?.let(::backgroundLabel) ?: "Escolher background")
+                                }
+                                DropdownMenu(expanded = backgroundMenu, onDismissRequest = { backgroundMenu = false }) {
+                                    Background.entries.forEach { background ->
+                                        DropdownMenuItem(
+                                            text = { Text(backgroundLabel(background)) },
+                                            onClick = { onBackgroundChange(background); backgroundMenu = false }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
-
-            Spacer(Modifier.height(12.dp))
-            OutlinedButton(onClick = onRoll) {
-                Text(if (rolled == null) "Rolar personagem" else "Rolar novamente")
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = onRoll, modifier = Modifier.weight(1f)) {
+                    Text(if (rolled == null) "Rolar" else "Rolar novamente")
+                }
+                Button(onClick = onCreate, enabled = name.isNotBlank() && rolled != null, modifier = Modifier.weight(1.5f)) {
+                    Text("Começar aventura")
+                }
+                OutlinedButton(onClick = onRules, modifier = Modifier.weight(0.8f)) { Text("Regras") }
             }
-            Spacer(Modifier.height(8.dp))
-            Button(onClick = onCreate, enabled = name.isNotBlank() && rolled != null) {
-                Text("Começar aventura")
-            }
-            Spacer(Modifier.height(8.dp))
-            OutlinedButton(onClick = onRules) { Text("Como jogar?") }
-            Spacer(Modifier.height(8.dp))
-            Text(
-                "FOR, DES e VON: 3d6. HP: 1d6. Idade: 2d20 + 10.",
-                style = MaterialTheme.typography.bodySmall
-            )
         }
     }
 }
