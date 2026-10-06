@@ -1,6 +1,5 @@
 package com.vanish994.cairnsolo.game
 
-import com.vanish994.cairnsolo.rules.CharacterProfile
 import com.vanish994.cairnsolo.rules.CharacterState
 
 data class MJContext(
