@@ -33,6 +33,8 @@ object GameStatePersistenceCodec {
             put("hamstrung", r.hamstrung.toString()); put("doomed", r.doomed.toString()); put("inventoryCount", r.inventory.size.toString())
             r.inventory.forEachIndexed { index, item ->
                 put("item_${index}_id", item.id); put("item_${index}_slots", item.slots.toString()); put("item_${index}_petty", item.petty.toString())
+                put("item_${index}_damage", item.damage ?: ""); put("item_${index}_uses", item.uses?.toString() ?: "")
+                put("item_${index}_armor", item.armor.toString()); put("item_${index}_tags", item.tags.joinToString(SEPARATOR))
             }
         }
     }
@@ -47,7 +49,15 @@ object GameStatePersistenceCodec {
 
         val count = int("inventoryCount", 0)
         val inventory = (0 until count).map { index ->
-            InventoryItem(string("item_${index}_id", "item-$index"), int("item_${index}_slots", 1), bool("item_${index}_petty", false))
+            InventoryItem(
+                id = string("item_${index}_id", "item-$index"),
+                slots = int("item_${index}_slots", 1),
+                petty = bool("item_${index}_petty", false),
+                damage = nullableString("item_${index}_damage"),
+                uses = values["item_${index}_uses"]?.toIntOrNull(),
+                armor = int("item_${index}_armor", 0),
+                tags = string("item_${index}_tags").split(SEPARATOR).filter { it.isNotBlank() }.toSet()
+            )
         }
         val rules = CharacterState(
             str = int("str", 10), dex = int("dex", 10), wil = int("wil", 10),
