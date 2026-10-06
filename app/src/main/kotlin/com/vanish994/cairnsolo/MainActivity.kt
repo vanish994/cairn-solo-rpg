@@ -349,6 +349,51 @@ private fun rollPlayableCharacter(): RolledCharacter {
     )
 }
 
+@Composable
+private fun RulesScreen(onBack: () -> Unit) {
+    LazyColumn(
+        Modifier.fillMaxSize().padding(24.dp),
+        horizontalAlignment = Alignment.Start
+    ) {
+        item {
+            Text("Como jogar Cairn", style = MaterialTheme.typography.headlineMedium)
+            Spacer(Modifier.height(8.dp))
+            Text("Guia rápido para quem está começando. Você descreve o que seu personagem tenta fazer; o MJ apresenta a situação e o motor de regras resolve os resultados mecânicos.")
+            Spacer(Modifier.height(16.dp))
+
+            Text("Atributos", style = MaterialTheme.typography.titleMedium)
+            Text("FOR: força e resistência física.")
+            Text("DES: velocidade, reflexos e precisão.")
+            Text("VON: vontade, influência e magia.")
+            Spacer(Modifier.height(12.dp))
+
+            Text("Testes", style = MaterialTheme.typography.titleMedium)
+            Text("Role 1d20 e obtenha sucesso se o resultado for igual ou menor que o atributo usado.")
+            Text("1 natural é sempre sucesso; 20 natural é sempre falha.")
+            Spacer(Modifier.height(12.dp))
+
+            Text("HP e dano", style = MaterialTheme.typography.titleMedium)
+            Text("A Armadura reduz o dano antes de ele reduzir seu HP.")
+            Text("Quando o HP chega a 0, podem surgir consequências de Dano Crítico.")
+            Spacer(Modifier.height(12.dp))
+
+            Text("Inventário", style = MaterialTheme.typography.titleMedium)
+            Text("O personagem possui 10 espaços de inventário. Itens e Fadiga ocupam esses espaços conforme as regras.")
+            Spacer(Modifier.height(12.dp))
+
+            Text("Exploração", style = MaterialTheme.typography.titleMedium)
+            Text("Escolha ações, observe as consequências e administre os recursos do personagem.")
+            Spacer(Modifier.height(12.dp))
+
+            Text("Regra principal", style = MaterialTheme.typography.titleMedium)
+            Text("Você descreve o que quer fazer. O MJ interpreta a situação. O motor de regras decide os resultados mecânicos válidos.")
+            Spacer(Modifier.height(16.dp))
+
+            OutlinedButton(onClick = onBack) { Text("Voltar") }
+        }
+    }
+}
+
 private fun backgroundLabel(background: Background): String =
     when (background) {
         Background.AURIFEX -> "Aurífice"
