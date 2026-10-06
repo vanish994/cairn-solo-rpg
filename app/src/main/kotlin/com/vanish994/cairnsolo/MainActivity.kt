@@ -174,7 +174,7 @@ private fun CharacterCreation(
         Button(onClick = onCreate, enabled = name.isNotBlank()) {
             Text("Começar aventura")
         }
-        Text("3d6 para cada atributo e 1d6 para HP.", style = MaterialTheme.typography.bodySmall)
+        Text("3d6 para cada atributo e 1d6 para os pontos de vida.", style = MaterialTheme.typography.bodySmall)
     }
 }
 
@@ -240,7 +240,6 @@ private fun CharacterSheet(
 }
 
 
-@Composable
 private fun sceneTypeLabel(type: com.vanish994.cairnsolo.game.SceneType): String =
     when (type) {
         com.vanish994.cairnsolo.game.SceneType.EXPLORATION -> "Exploração"
