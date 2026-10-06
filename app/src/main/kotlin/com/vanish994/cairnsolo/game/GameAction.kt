@@ -19,6 +19,7 @@ sealed interface GameAction {
     data class MarkDeprived(val deprived: Boolean) : GameAction
     data class Save(val attribute: Attribute) : GameAction
     data object StabilizeCritical : GameAction
+    data object RecoverScar : GameAction
 }
 
 data class GameResult(
@@ -45,6 +46,7 @@ sealed interface GameEvent {
     data class DeprivationChanged(val deprived: Boolean) : GameEvent
     data class SaveResolved(val attribute: Attribute, val roll: Int, val success: Boolean) : GameEvent
     data object CriticalStabilized : GameEvent
+    data class ScarRecovered(val scar: String) : GameEvent
 }
 
 class GameActionResolver(
@@ -91,6 +93,11 @@ class GameActionResolver(
         is GameAction.Save -> {
             val result = rules.save(state.campaign.rules, action.attribute)
             GameResult(state.withRules(result.newState), result.events.toGameEvents(result.newState))
+        }
+
+        GameAction.RecoverScar -> {
+            val result = rules.recoverScar(state.campaign.rules)
+            GameResult(state.withRules(result.newState), if (result.newState == state.campaign.rules) emptyList() else listOf(GameEvent.ScarRecovered(result.newState.scar?.name ?: "unknown")))
         }
 
         GameAction.StabilizeCritical -> {
