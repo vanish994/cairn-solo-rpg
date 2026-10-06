@@ -106,7 +106,7 @@ class CharacterGeneratorTest {
 
     @Test
     fun mjContextExposesReadOnlyProfile() {
-        val rolled = RolledCharacter(9, 11, 13, 5, Background.PROWLER, null, 31)
+        val rolled = RolledCharacter(9, 11, 13, 5, background = Background.PROWLER, age = 31)
         val context = MJContext.from(createCharacter("Aran", rolled))
         assertEquals(31, context.profile.age)
         assertEquals(Background.PROWLER, context.profile.background)
