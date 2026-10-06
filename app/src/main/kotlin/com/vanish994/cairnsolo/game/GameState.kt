@@ -104,8 +104,16 @@ data class GameState(
                 sceneTitle = sceneTitle.ifBlank { campaign.sceneTitle },
                 sceneDescription = sceneDescription.ifBlank { campaign.sceneDescription },
                 guardianMessage = clean,
-                guardianHistory = (campaign.guardianHistory + clean).takeLast(20),
-                log = (campaign.log + clean).takeLast(50),
+                guardianHistory = if (campaign.guardianHistory.lastOrNull() == clean) {
+                    campaign.guardianHistory
+                } else {
+                    (campaign.guardianHistory + clean).takeLast(20)
+                },
+                log = if (campaign.log.lastOrNull() == clean) {
+                    campaign.log
+                } else {
+                    (campaign.log + clean).takeLast(50)
+                },
                 turn = campaign.turn + 1,
                 guardianInteractionId = interactionId ?: campaign.guardianInteractionId
             ),
