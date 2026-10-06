@@ -8,6 +8,7 @@ import com.vanish994.cairnsolo.rules.ScarRecovery
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 class GameActionResolverTest {
     private fun state(
