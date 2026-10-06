@@ -34,13 +34,15 @@ interface RandomSource {
     fun roll(sides: Int): Int
     fun d20(): Int = roll(20)
     fun d6(): Int = roll(6)
+    fun d12(): Int = roll(12)
 }
 
-class FixedRandomSource(private val d20Value: Int, private val d6Value: Int = 1) : RandomSource {
-    init { require(d20Value in 1..20); require(d6Value in 1..6) }
+class FixedRandomSource(private val d20Value: Int, private val d6Value: Int = 1, private val d12Value: Int = 1) : RandomSource {
+    init { require(d20Value in 1..20); require(d6Value in 1..6); require(d12Value in 1..12) }
     override fun roll(sides: Int): Int = when (sides) {
         20 -> d20Value
         6 -> d6Value
+        12 -> d12Value
         else -> error("FixedRandomSource only supports d20 and d6")
     }
 }
@@ -51,7 +53,7 @@ sealed interface RuleEvent {
     data class SaveResolved(val attribute: Attribute, val roll: Int, val success: Boolean) : RuleEvent
     data class DamageApplied(val rawDamage: Int, val armorAbsorbed: Int, val hpDamage: Int) : RuleEvent
     data class CriticalDamage(val excessDamage: Int, val strAfter: Int, val saveRoll: Int, val saveSuccess: Boolean) : RuleEvent
-    data class ScarTriggered(val scar: Scar, val hpLost: Int, val detail: String) : RuleEvent
+    data class ScarTriggered(val scar: Scar, val hpLost: Int, val detail: String, val roll: Int) : RuleEvent
     data class InventoryChanged(val usedSlots: Int) : RuleEvent
     data class FatigueAdded(val amount: Int) : RuleEvent
     data class FatigueRecovered(val amount: Int) : RuleEvent
@@ -79,7 +81,8 @@ class RulesEngine(private val random: RandomSource) {
         if (remainingHp > 0) return GameResult(state.copy(hp = remainingHp), listOf(damageEvent))
 
         if (remainingHp == 0) {
-            val scar = Scar.entries[hpDamage.coerceIn(1, 12) - 1]
+            val scarRoll = random.d12()
+            val scar = Scar.entries[scarRoll - 1]
             val detail = when (scar) {
                 Scar.LASTING -> "lasting_scar"
                 Scar.RATTLING -> "rattling_blow"
@@ -96,7 +99,7 @@ class RulesEngine(private val random: RandomSource) {
             }
             return GameResult(
                 state.copy(hp = 0, scar = scar),
-                listOf(damageEvent, RuleEvent.ScarTriggered(scar, hpDamage, detail, rolls))
+                listOf(damageEvent, RuleEvent.ScarTriggered(scar, hpDamage, detail, scarRoll))
             )
         }
 
@@ -124,8 +127,6 @@ class RulesEngine(private val random: RandomSource) {
             finalState,
             buildList {
                 add(RuleEvent.InventoryChanged(finalState.usedSlots))
-                if (full) add(RuleEvent.InventoryFull)
-                if (full && state.hp > 0) add(RuleEvent.ScarTriggered(Scar.RATTLING, 0))
             }
         )
     }
