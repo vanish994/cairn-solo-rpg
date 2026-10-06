@@ -20,6 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.vanish994.cairnsolo.game.GameAction
 import com.vanish994.cairnsolo.guardian.HttpGuardianClient
+import com.vanish994.cairnsolo.guardian.GuardianRuleResolver
 import com.vanish994.cairnsolo.game.GameActionResolver
 import com.vanish994.cairnsolo.game.GameState
 import com.vanish994.cairnsolo.game.ExplorationEngine
@@ -68,6 +69,7 @@ class MainActivity : ComponentActivity() {
                         rules = RulesEngine(KotlinRandomSource())
                     )
                 }
+                val guardianRuleResolver = remember { GuardianRuleResolver(actionResolver) }
                 var screen by remember { mutableStateOf(AppScreen.CHARACTER) }
 
                 Surface(Modifier.fillMaxSize(), color = CairnBackground) {
@@ -149,7 +151,7 @@ class MainActivity : ComponentActivity() {
                                     scope.launch {
                                         guardianClient.narrate(current, intent)
                                             .onSuccess { response ->
-                                                val next = current.applyGuardianResponse(
+                                                var next = current.applyGuardianResponse(
                                                     narration = response.narration,
                                                     sceneTitle = response.sceneTitle,
                                                     sceneDescription = response.sceneDescription,
@@ -157,6 +159,38 @@ class MainActivity : ComponentActivity() {
                                                 )
                                                 repository.save(next)
                                                 state = next
+
+                                                response.ruleRequest?.let { request ->
+                                                    runCatching {
+                                                        val resolution = guardianRuleResolver.resolve(next, request)
+                                                        next = resolution.state
+                                                        repository.save(next)
+                                                        state = next
+
+                                                        guardianClient.narrate(
+                                                            next,
+                                                            "O motor de regras resolveu a solicitação anterior. " +
+                                                                "Resultado autoritativo: " + resolution.resultText
+                                                        )
+                                                            .onSuccess { followUp ->
+                                                                next = next.applyGuardianResponse(
+                                                                    narration = followUp.narration,
+                                                                    sceneTitle = followUp.sceneTitle,
+                                                                    sceneDescription = followUp.sceneDescription,
+                                                                    interactionId = followUp.interactionId
+                                                                )
+                                                                repository.save(next)
+                                                                state = next
+                                                            }
+                                                            .onFailure { error ->
+                                                                guardianError = error.message
+                                                                    ?: "A regra foi resolvida, mas o Guardião não respondeu à consequência."
+                                                            }
+                                                    }.onFailure { error ->
+                                                        guardianError = error.message
+                                                            ?: "O Guardião solicitou uma regra que o motor não reconhece."
+                                                    }
+                                                }
                                             }
                                             .onFailure { error ->
                                                 guardianError = error.message ?: "Não foi possível falar com o Guardião."
