@@ -2,6 +2,7 @@ package com.vanish994.cairnsolo.rules
 
 import com.vanish994.cairnsolo.game.GameState
 import com.vanish994.cairnsolo.game.CampaignState
+import com.vanish994.cairnsolo.game.CharacterProfile
 import com.vanish994.cairnsolo.game.CharacterIdentity
 import kotlin.random.Random
 
