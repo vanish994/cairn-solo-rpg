@@ -3,13 +3,17 @@ package com.vanish994.cairnsolo
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import com.vanish994.cairnsolo.game.GameAction
 import com.vanish994.cairnsolo.game.GameActionResolver
@@ -126,6 +130,14 @@ class MainActivity : ComponentActivity() {
 
 enum class AppScreen { CHARACTER, EXPLORATION, RULES }
 
+private val CAIRN_PROTAGONIST_SPRITES = listOf(
+    R.drawable.cairn_protagonist_01,
+    R.drawable.cairn_protagonist_02,
+    R.drawable.cairn_protagonist_03,
+    R.drawable.cairn_protagonist_04,
+    R.drawable.cairn_protagonist_05,
+)
+
 @Composable
 private fun ExplorationScreen(
     state: GameState,
@@ -178,6 +190,7 @@ private fun CharacterCreation(
     onCreate: () -> Unit
 ) {
     var backgroundMenu by remember { mutableStateOf(false) }
+    var selectedSprite by remember { mutableStateOf(0) }
 
     LazyColumn(
         Modifier.fillMaxSize().padding(24.dp),
@@ -187,6 +200,24 @@ private fun CharacterCreation(
             Text("Cairn Solo RPG", style = MaterialTheme.typography.headlineMedium)
             Text("Criação de personagem", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(12.dp))
+
+            Text("Escolha um retrato", style = MaterialTheme.typography.titleMedium)
+            Image(
+                painter = painterResource(CAIRN_PROTAGONIST_SPRITES[selectedSprite]),
+                contentDescription = "Retrato do protagonista ${selectedSprite + 1}",
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.size(width = 180.dp, height = 220.dp)
+            )
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)
+            ) {
+                items(CAIRN_PROTAGONIST_SPRITES.size) { index ->
+                    OutlinedButton(onClick = { selectedSprite = index }) {
+                        Text("${index + 1}")
+                    }
+                }
+            }
 
             OutlinedTextField(
                 value = name,
