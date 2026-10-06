@@ -72,6 +72,82 @@ class RulesEngineTest {
     }
 
     @Test
+    fun lastingScarRecordsLocationAndMayIncreaseMaxHp() {
+        val result = RulesEngine(FixedRandomSource(10, 2)).applyDamage(state(hp = 1, maxHp = 1), 1)
+        assertEquals(Scar.LASTING, result.newState.scar)
+        assertEquals("hands", result.newState.lastingScar)
+        assertEquals(2, result.newState.maxHp)
+    }
+
+    @Test
+    fun brokenLimbStoresLocationUntilRecovery() {
+        val engine = RulesEngine(FixedRandomSource(10, 4))
+        val damaged = engine.applyDamage(state(hp = 4, maxHp = 4), 4)
+        assertEquals(Scar.BROKEN_LIMB, damaged.newState.scar)
+        assertEquals("arm", damaged.newState.brokenLimb)
+        assertEquals(ScarRecovery.BROKEN_LIMB, damaged.newState.scarRecovery)
+        val recovered = engine.recoverScar(damaged.newState)
+        assertEquals(8, recovered.newState.hp)
+        assertEquals(8, recovered.newState.maxHp)
+        assertEquals(null, recovered.newState.scarRecovery)
+    }
+
+    @Test
+    fun headWoundImprovesSelectedAttributeWithoutBreakingMaximumInvariant() {
+        val result = RulesEngine(FixedRandomSource(10, 6)).applyDamage(
+            state(hp = 6, maxHp = 6, str = 1), 6
+        )
+        assertEquals(Scar.HEAD_WOUND, result.newState.scar)
+        assertEquals(18, result.newState.str)
+        assertEquals(18, result.newState.maxStr)
+        assertEquals(Attribute.WIL, result.newState.scarAttribute)
+    }
+
+    @Test
+    fun deafenedAndSunderedResolveWillSaves() {
+        val deafened = RulesEngine(FixedRandomSource(10, 1, d12Value = 12, d4Value = 3))
+            .applyDamage(state(hp = 8, maxHp = 8), 8)
+        assertEquals(Scar.DEAFENED, deafened.newState.scar)
+        assertTrue(deafened.newState.deafened)
+        assertEquals(13, deafened.newState.maxWil)
+
+        val sundered = RulesEngine(FixedRandomSource(10, 1))
+            .applyDamage(state(hp = 10, maxHp = 10), 10)
+        assertEquals(Scar.SUNDERED, sundered.newState.scar)
+        assertTrue(sundered.newState.sundered)
+        assertEquals(11, sundered.newState.maxWil)
+    }
+
+    @Test
+    fun mortalWoundRequiresScarRecovery() {
+        val engine = RulesEngine(FixedRandomSource(10, 2))
+        val damaged = engine.applyDamage(state(hp = 11, maxHp = 11), 11)
+        assertEquals(Scar.MORTAL_WOUND, damaged.newState.scar)
+        assertTrue(damaged.newState.deprived)
+        assertTrue(damaged.newState.critical)
+        assertEquals(ScarRecovery.MORTAL_WOUND, damaged.newState.scarRecovery)
+        val recovered = engine.recoverScar(damaged.newState)
+        assertEquals(2, recovered.newState.hp)
+        assertEquals(2, recovered.newState.maxHp)
+        assertFalse(recovered.newState.critical)
+        assertFalse(recovered.newState.deprived)
+    }
+
+    @Test
+    fun doomedResolvesOnNextCriticalSave() {
+        val engine = RulesEngine(FixedRandomSource(1, 2))
+        val doomed = state(hp = 12, maxHp = 12).copy(doomed = true)
+        val result = engine.applyDamage(doomed, 13)
+        assertEquals(Scar.DOOMED, result.newState.scar)
+        assertEquals(false, result.newState.doomed)
+
+        val fatal = RulesEngine(FixedRandomSource(20, 2)).applyDamage(
+            doomed.copy(hp = 1, str = 1), 2
+        )
+        assertTrue(fatal.newState.dead)
+    }
+
+    @Test
     fun scarImmediateEffectsAreAppliedToAuthoritativeState() {
         val walloped = RulesEngine(FixedRandomSource(1)).applyDamage(state(hp = 3), 3)
         assertEquals(Scar.WALLOPED, walloped.newState.scar)
