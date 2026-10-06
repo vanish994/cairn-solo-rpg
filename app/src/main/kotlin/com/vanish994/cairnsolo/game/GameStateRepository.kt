@@ -21,6 +21,11 @@ class LocalGameStateRepository(context: Context) : GameStateRepository {
         e.putString("characterId", c.character.id)
         e.putString("characterName", c.character.name)
         e.putString("sceneId", c.sceneId)
+        e.putString("sceneType", c.sceneType.name)
+        e.putString("sceneTitle", c.sceneTitle)
+        e.putString("sceneDescription", c.sceneDescription)
+        e.putString("exits", c.exits.joinToString("\u001F"))
+        e.putString("log", c.log.joinToString("\u001F"))
         e.putLong("turn", c.turn)
         e.putLong("updatedAt", state.updatedAtEpochMs)
         e.putInt("str", r.str).putInt("dex", r.dex).putInt("wil", r.wil)
@@ -70,6 +75,11 @@ class LocalGameStateRepository(context: Context) : GameStateRepository {
                 ),
                 rules = rules,
                 sceneId = prefs.getString("sceneId", "prologue")!!,
+                sceneType = prefs.getString("sceneType", SceneType.EXPLORATION.name)!!.let { runCatching { SceneType.valueOf(it) }.getOrDefault(SceneType.EXPLORATION) },
+                sceneTitle = prefs.getString("sceneTitle", "Prologue")!!,
+                sceneDescription = prefs.getString("sceneDescription", "A aventura começa.")!!,
+                exits = prefs.getString("exits", "")!!.split("\u001F").filter { it.isNotBlank() },
+                log = prefs.getString("log", "")!!.split("\u001F").filter { it.isNotBlank() },
                 turn = prefs.getLong("turn", 0L)
             ),
             updatedAtEpochMs = prefs.getLong("updatedAt", 0L)
