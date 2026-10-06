@@ -11,8 +11,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.vanish994.cairnsolo.game.GameAction
+import com.vanish994.cairnsolo.game.GameActionResolver
 import com.vanish994.cairnsolo.game.GameState
-import com.vanish994.cairnsolo.game.SceneType
+import com.vanish994.cairnsolo.game.ExplorationEngine
 import com.vanish994.cairnsolo.game.LocalGameStateRepository
 import com.vanish994.cairnsolo.rules.*
 import kotlin.random.Random
@@ -28,6 +30,8 @@ class MainActivity : ComponentActivity() {
                 var name by remember { mutableStateOf("") }
                 var rolled by remember { mutableStateOf<RolledCharacter?>(null) }
                 val engine = remember { RulesEngine(KotlinRandomSource()) }
+                val actionResolver = remember { GameActionResolver(ExplorationEngine(KotlinRandomSource())) }
+                var screen by remember { mutableStateOf(AppScreen.CHARACTER) }
 
                 Surface(Modifier.fillMaxSize()) {
                     if (state == null) {
@@ -45,25 +49,15 @@ class MainActivity : ComponentActivity() {
                         )
                     } else {
                         val current = state!!
-                        CharacterSheet(
+                        when (screen) {
+                            AppScreen.CHARACTER -> CharacterSheet(
                             state = current,
                             onDamage = {
                                 val next = current.withRules(engine.applyDamage(current.campaign.rules, 2).newState)
                                 repository.save(next)
                                 state = next
                             },
-                            onExplore = {
-                                val next = current.advanceScene(
-                                    id = "path-${current.campaign.turn + 1}",
-                                    type = SceneType.EXPLORATION,
-                                    title = "Caminho adiante",
-                                    description = "O caminho se abre à frente. Você pode investigar o entorno antes de continuar.",
-                                    exits = listOf("continuar", "investigar"),
-                                    narration = "Explorou a área e avançou um turno."
-                                )
-                                repository.save(next)
-                                state = next
-                            },
+                            onExplore = { screen = AppScreen.EXPLORATION },
                             onRest = {
                                 val next = current.withRules(engine.safeRest(current.campaign.rules).newState)
                                 repository.save(next)
@@ -89,9 +83,61 @@ class MainActivity : ComponentActivity() {
                                 state = null
                             }
                         )
+                            AppScreen.EXPLORATION -> ExplorationScreen(
+                                state = current,
+                                onAction = { action ->
+                                    val result = actionResolver.resolve(current, action)
+                                    repository.save(result.state)
+                                    state = result.state
+                                },
+                                onBack = { screen = AppScreen.CHARACTER }
+                            )
+                        }
                     }
                 }
             }
+        }
+    }
+}
+
+
+enum class AppScreen { CHARACTER, EXPLORATION }
+
+@Composable
+private fun ExplorationScreen(
+    state: GameState,
+    onAction: (GameAction) -> Unit,
+    onBack: () -> Unit
+) {
+    val c = state.campaign
+    LazyColumn(
+        Modifier.fillMaxSize().padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        item {
+            Text("Exploração", style = MaterialTheme.typography.headlineMedium)
+            Text("Turno " + c.turn + " • " + c.sceneType.name)
+            Spacer(Modifier.height(16.dp))
+            Text(c.sceneTitle, style = MaterialTheme.typography.titleLarge)
+            Spacer(Modifier.height(8.dp))
+            Text(c.sceneDescription)
+            Spacer(Modifier.height(16.dp))
+            if (c.exits.isNotEmpty()) {
+                Text("Possibilidades: " + c.exits.joinToString(" • "))
+                Spacer(Modifier.height(12.dp))
+            }
+            Button(onClick = { onAction(GameAction.ExploreContinue) }) { Text("Continuar") }
+            Spacer(Modifier.height(8.dp))
+            Button(onClick = { onAction(GameAction.ExploreInvestigate) }) { Text("Investigar") }
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(onClick = { onAction(GameAction.ExploreRest) }) { Text("Solicitar descanso") }
+            Spacer(Modifier.height(16.dp))
+            OutlinedButton(onClick = onBack) { Text("Voltar à ficha") }
+            Spacer(Modifier.height(16.dp))
+            Text("Diário", style = MaterialTheme.typography.titleMedium)
+        }
+        items(c.log.takeLast(10)) { entry ->
+            Text(entry, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp))
         }
     }
 }
