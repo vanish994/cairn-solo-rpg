@@ -6,11 +6,11 @@
 
 ## Gate atual
 
-**Gate 0 — Arquitetura Android e repositório**
+**Gate 1 — Motor de Regras Cairn**
 
-Status: 🟡 Implementação concluída; validação do build em andamento
+Status: 🔵 Gate 0 concluído; Gate 1 pronto para iniciar
 
-## O que foi implementado
+## Gate 0 — Concluído
 
 - Projeto Android nativo em Kotlin.
 - Jetpack Compose e Material 3.
@@ -18,16 +18,41 @@ Status: 🟡 Implementação concluída; validação do build em andamento
 - Manifesto e Activity de entrada.
 - Tela inicial mínima do Cairn Solo RPG.
 - Configuração de build debug.
-- GitHub Actions para validar `assembleDebug` e publicar o APK como artefato.
-- Nenhuma integração Gemini ou regra de jogo foi adicionada.
+- GitHub Actions validando `assembleDebug`.
+- Build debug confirmado com sucesso no GitHub Actions.
+- Artefato `cairn-solo-rpg-debug` gerado e disponível.
+- Correção aplicada para alinhar Java/Kotlin em JVM 17.
 
-## Validação pendente
+Workflow validado:
+- Run: `37454905482`
+- Check: `112240012489`
+- Commit validado: `9cd506ef2a15c9c6744fa4bacc6d6da55bbdb777`
+- Resultado: **success**
+- Artefato: `cairn-solo-rpg-debug`
 
-O primeiro workflow de build foi iniciado no GitHub Actions e está aguardando execução. O Gate 0 só deve ser marcado como concluído depois que o build passar e o APK debug for confirmado.
+## Gate 1 — Próximo
 
-## Próximo objetivo
+Objetivo: implementar o núcleo determinístico das regras Cairn sem dependência de Android ou Gemini.
 
-Confirmar o build debug no GitHub Actions. Depois disso, testar a instalação do APK em Android e, se aprovado, avançar para o Gate 1.
+Antes de codificar regras específicas, deve ser fixada a fonte/edição de Cairn usada pelo projeto. O repositório oficial informa que existem múltiplas edições compatíveis e que o texto está sob CC-BY-SA 4.0.
+
+A arquitetura adotada para o motor será baseada em:
+
+```text
+GameAction
+    ↓
+Rules Engine
+    ↓
+GameResult
+    ├── newState
+    └── events
+```
+
+O RNG deverá ser isolável para testes e o GameState só poderá ser alterado por operações válidas do domínio.
+
+## Próximo passo
+
+Definir e registrar a edição/fonte normativa de Cairn e então implementar o primeiro núcleo do Gate 1 com testes automatizados.
 
 ## Regras para agentes
 
@@ -36,7 +61,8 @@ Confirmar o build debug no GitHub Actions. Depois disso, testar a instalação d
 - Não transformar a IA em autoridade das regras.
 - Não adicionar dependências sem justificativa.
 - Não quebrar uma etapa já validada sem registrar a mudança.
+- Não inventar ou misturar regras de edições diferentes de Cairn.
 
 ## Última atualização
 
-Base Android do Gate 0 implementada diretamente no repositório; CI aguardando validação.
+Gate 0 validado no CI. Arquitetura de ações/resultados/eventos registrada no ADR-005. Projeto preparado para iniciar o Gate 1.
