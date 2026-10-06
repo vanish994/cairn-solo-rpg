@@ -12,6 +12,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.vanish994.cairnsolo.game.GameState
+import com.vanish994.cairnsolo.game.SceneType
 import com.vanish994.cairnsolo.game.LocalGameStateRepository
 import com.vanish994.cairnsolo.rules.*
 import kotlin.random.Random
@@ -48,6 +49,18 @@ class MainActivity : ComponentActivity() {
                             state = current,
                             onDamage = {
                                 val next = current.withRules(engine.applyDamage(current.campaign.rules, 2).newState)
+                                repository.save(next)
+                                state = next
+                            },
+                            onExplore = {
+                                val next = current.advanceScene(
+                                    id = "path-${current.campaign.turn + 1}",
+                                    type = SceneType.EXPLORATION,
+                                    title = "Caminho adiante",
+                                    description = "O caminho se abre à frente. Você pode investigar o entorno antes de continuar.",
+                                    exits = listOf("continuar", "investigar"),
+                                    narration = "Explorou a área e avançou um turno."
+                                )
                                 repository.save(next)
                                 state = next
                             },
@@ -121,6 +134,7 @@ private fun CharacterCreation(
 private fun CharacterSheet(
     state: GameState,
     onDamage: () -> Unit,
+    onExplore: () -> Unit,
     onRest: () -> Unit,
     onAddItem: () -> Unit,
     onRemoveItem: (String) -> Unit,
@@ -135,7 +149,10 @@ private fun CharacterSheet(
     ) {
         item {
             Text(c.character.name, style = MaterialTheme.typography.headlineMedium)
-            Text("Turno " + c.turn + " • Cena " + c.sceneId)
+            Text("Turno " + c.turn + " • " + c.sceneType.name)
+            Text(c.sceneTitle, style = MaterialTheme.typography.titleLarge)
+            Text(c.sceneDescription)
+            if (c.exits.isNotEmpty()) Text("Saídas: " + c.exits.joinToString(" • "))
             Spacer(Modifier.height(12.dp))
             Text("HP " + r.hp + "/" + r.maxHp)
             Text("STR " + r.str + "   DEX " + r.dex + "   WIL " + r.wil)
@@ -145,6 +162,7 @@ private fun CharacterSheet(
             if (r.scar != null) Text("Cicatriz: resultado " + r.scar)
             Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = onExplore) { Text("Explorar") }
                 Button(onClick = onDamage) { Text("Dano 2") }
                 Button(onClick = onRest) { Text("Descansar") }
             }
