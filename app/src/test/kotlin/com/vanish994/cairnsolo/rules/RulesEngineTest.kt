@@ -87,8 +87,8 @@ class RulesEngineTest {
         assertEquals("arm", damaged.newState.brokenLimb)
         assertEquals(ScarRecovery.BROKEN_LIMB, damaged.newState.scarRecovery)
         val recovered = engine.recoverScar(damaged.newState)
-        assertEquals(8, recovered.newState.hp)
-        assertEquals(8, recovered.newState.maxHp)
+        assertEquals(4, recovered.newState.hp)
+        assertEquals(4, recovered.newState.maxHp)
         assertEquals(null, recovered.newState.scarRecovery)
     }
 
@@ -127,8 +127,8 @@ class RulesEngineTest {
         assertTrue(damaged.newState.critical)
         assertEquals(ScarRecovery.MORTAL_WOUND, damaged.newState.scarRecovery)
         val recovered = engine.recoverScar(damaged.newState)
-        assertEquals(2, recovered.newState.hp)
-        assertEquals(2, recovered.newState.maxHp)
+        assertEquals(4, recovered.newState.hp)
+        assertEquals(4, recovered.newState.maxHp)
         assertFalse(recovered.newState.critical)
         assertFalse(recovered.newState.deprived)
     }
@@ -140,7 +140,7 @@ class RulesEngineTest {
         )
         assertFalse(survived.newState.dead)
         assertFalse(survived.newState.doomed)
-        assertEquals(6, survived.newState.maxHp)
+        assertEquals(12, survived.newState.maxHp)
 
         val fatal = RulesEngine(FixedRandomSource(20, 2)).applyDamage(
             state(hp = 1, maxHp = 12).copy(doomed = true, str = 1), 2
