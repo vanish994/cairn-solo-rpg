@@ -4,6 +4,7 @@ import com.vanish994.cairnsolo.game.GameState
 import com.vanish994.cairnsolo.game.CampaignState
 import com.vanish994.cairnsolo.game.CharacterProfile
 import com.vanish994.cairnsolo.game.CharacterIdentity
+import com.vanish994.cairnsolo.game.CompanionState
 import kotlin.random.Random
 
 class KotlinRandomSource(private val random: Random = Random.Default) : RandomSource {
@@ -138,7 +139,8 @@ data class RolledCharacter(
     val gold: Int = 0,
     val bondRoll: Int? = null,
     val secondBondRoll: Int? = null,
-    val omenRoll: Int? = null
+    val omenRoll: Int? = null,
+    val companions: List<CompanionState> = emptyList()
 )
 
 fun rollCharacter(random: RandomSource): RolledCharacter {
@@ -165,7 +167,8 @@ fun rollCharacter(random: RandomSource): RolledCharacter {
         gold = gold + firstEffects.bonusGold,
         bondRoll = bondRoll,
         secondBondRoll = firstEffects.secondBondRoll,
-        omenRoll = firstEffects.omenRoll
+        omenRoll = firstEffects.omenRoll,
+        companions = firstEffects.companions
     )
 }
 
@@ -195,15 +198,24 @@ fun backgroundCreationEffects(
         else -> 0
     }
     val secondBond = if ("second_bond" in keys) random.d20() else null
-    val omen = if (
-        background == Background.FOUNDLING ||
-        "omen_knife" in keys
-    ) random.d20() else null
+    val omen = if (background == Background.FOUNDLING || "omen_knife" in keys) random.d20() else null
+    val companions = buildList {
+        if ("falcon" in keys) add(CompanionState("falcon", 4, 4, dex = 14, wil = 8, tags = setOf("flying", "scouting")))
+        if ("raven_familiar" in keys) add(CompanionState("raven", 3, 3, dex = 15, wil = 12, tags = setOf("flying", "familiar")))
+        if ("carrion_cat" in keys) add(CompanionState("carrion-cat", 4, 4, dex = 14, wil = 10, tags = setOf("animal")))
+        if ("destrier" in keys) add(CompanionState("destrier", 8, 8, armor = 1, slots = 2, tags = setOf("horse", "mount")))
+        if ("blacklegged_dandy" in keys) add(CompanionState("blacklegged-dandy", 6, 6, slots = 4, tags = setOf("horse", "mount", "terrain")))
+        if ("rivertooth" in keys) add(CompanionState("rivertooth", 4, 4, slots = 6, tags = setOf("horse", "mount", "swimming")))
+        if ("piebald_cob" in keys) add(CompanionState("piebald-cob", 6, 6, slots = 4, tags = setOf("horse", "mount", "intelligent")))
+        if ("linden_white" in keys) add(CompanionState("linden-white", 4, 4, slots = 3, tags = setOf("horse", "mount", "skittish")))
+        if ("stray_fogger" in keys) add(CompanionState("stray-fogger", 4, 4, slots = 2, tags = setOf("horse", "mount", "fast")))
+    }
     return BackgroundCreationEffects(
         bonusHp = extraHp,
         bonusGold = extraGold,
         secondBondRoll = secondBond,
-        omenRoll = omen
+        omenRoll = omen,
+        companions = companions
     )
 }
 
@@ -233,6 +245,7 @@ fun createCharacter(name: String, rolled: RolledCharacter): GameState {
                 bondRoll = rolled.bondRoll,
                 secondBondRoll = rolled.secondBondRoll,
                 omenRoll = rolled.omenRoll,
+                companions = rolled.companions,
                 backgroundRolls = rolled.backgroundRolls,
                 backgroundFeatures = rolled.background?.let { bg -> rolled.backgroundRolls?.let { rs -> backgroundOutcomes(bg, rs).map { it.key } } } ?: emptyList()
             ),
