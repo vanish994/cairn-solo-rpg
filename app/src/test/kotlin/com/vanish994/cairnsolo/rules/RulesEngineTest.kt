@@ -64,9 +64,10 @@ class RulesEngineTest {
 
     @Test
     fun exactZeroHpCreatesScarResult() {
-        val result = RulesEngine(FixedRandomSource(1)).applyDamage(state(hp = 2), 2)
+        val result = RulesEngine(FixedRandomSource(1, 1, 2)).applyDamage(state(hp = 2), 2)
         assertEquals(Scar.RATTLING, result.newState.scar)
         assertEquals(Scar.RATTLING, (result.events.last() as RuleEvent.ScarTriggered).scar)
+        assertEquals(2, (result.events.last() as RuleEvent.ScarTriggered).roll)
     }
 
     @Test
