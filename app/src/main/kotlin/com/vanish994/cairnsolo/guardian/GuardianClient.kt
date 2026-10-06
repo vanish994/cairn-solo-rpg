@@ -1,5 +1,6 @@
 package com.vanish994.cairnsolo.guardian
 
+import android.util.Log
 import com.vanish994.cairnsolo.BuildConfig
 import com.vanish994.cairnsolo.game.GameState
 import kotlinx.coroutines.Dispatchers
@@ -65,9 +66,9 @@ class HttpGuardianClient(
             connection.disconnect()
 
             if (code !in 200..299) {
-                error("Guardião HTTP $code: \${body.take(300)}")
+                Log.e("CairnGuardian", "Guardian request failed: HTTP " + code + ", body=" + body)
+                error("O Guardião está temporariamente em silêncio. Tente novamente.")
             }
-
             parseResponse(body)
         }
     }
