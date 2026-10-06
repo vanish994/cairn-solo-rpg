@@ -12,7 +12,7 @@ data class CharacterState(
     val hp: Int, val maxHp: Int, val armor: Int,
     val inventory: List<InventoryItem> = emptyList(),
     val fatigue: Int = 0, val deprived: Boolean = false,
-    val critical: Boolean = false, val dead: Boolean = false, val scar: Scar? = null, val maxStr: Int = str, val maxDex: Int = dex, val maxWil: Int = wil, val lastingScar: String? = null, val brokenLimb: String? = null, val sundered: Boolean = false, val deafened: Boolean = false, val diseased: Boolean = false, val hamstrung: Boolean = false, val doomed: Boolean = false
+    val critical: Boolean = false, val dead: Boolean = false, val scar: Scar? = null, val maxStr: Int = str, val maxDex: Int = dex, val maxWil: Int = wil, val lastingScar: String? = null, val brokenLimb: String? = null, val scarRecovery: ScarRecovery? = null, val scarAttribute: Attribute? = null, val sundered: Boolean = false, val deafened: Boolean = false, val diseased: Boolean = false, val hamstrung: Boolean = false, val doomed: Boolean = false
 ) {
     init {
         require(str >= 0 && dex >= 0 && wil >= 0)
@@ -49,6 +49,8 @@ class FixedRandomSource(private val d20Value: Int, private val d6Value: Int = 1,
 
 enum class Scar { LASTING, RATTLING, WALLOPED, BROKEN_LIMB, DISEASED, HEAD_WOUND, HAMSTRUNG, DEAFENED, RE_BRAINED, SUNDERED, MORTAL_WOUND, DOOMED }
 
+enum class ScarRecovery { WALLOPED, BROKEN_LIMB, DISEASED, HAMSTRUNG, MORTAL_WOUND }
+
 sealed interface RuleEvent {
     data class SaveResolved(val attribute: Attribute, val roll: Int, val success: Boolean) : RuleEvent
     data class DamageApplied(val rawDamage: Int, val armorAbsorbed: Int, val hpDamage: Int) : RuleEvent
@@ -67,7 +69,7 @@ class RulesEngine(private val random: RandomSource) {
     fun save(state: CharacterState, attribute: Attribute): SaveResult {
         val roll = random.d20()
         val value = state.attribute(attribute)
-        val success = when (roll) { 1 -> true; 20 -> false; else -> roll <= value }
+        val success = saveSucceeds(roll, value)
         return SaveResult(state, listOf(RuleEvent.SaveResolved(attribute, roll, success)), roll, success)
     }
 
@@ -85,29 +87,46 @@ class RulesEngine(private val random: RandomSource) {
             // not by a separate d12 roll. The table has entries 1-12.
             val scarRoll = hpDamage.coerceIn(1, 12)
             val scar = Scar.entries[scarRoll - 1]
-            val detail = when (scar) {
-                Scar.LASTING -> "lasting_scar"
-                Scar.RATTLING -> "rattling_blow"
-                Scar.WALLOPED -> "walloped"
-                Scar.BROKEN_LIMB -> "broken_limb"
-                Scar.DISEASED -> "diseased"
-                Scar.HEAD_WOUND -> "reorienting_head_wound"
-                Scar.HAMSTRUNG -> "hamstrung"
-                Scar.DEAFENED -> "deafened"
-                Scar.RE_BRAINED -> "re_brained"
-                Scar.SUNDERED -> "sundered"
-                Scar.MORTAL_WOUND -> "mortal_wound"
-                Scar.DOOMED -> "doomed"
-            }
+            val detail = scar.name.lowercase()
             val scarState = when (scar) {
-                Scar.WALLOPED -> state.copy(hp = 0, scar = scar, deprived = true)
-                Scar.DISEASED -> state.copy(hp = 0, scar = scar, diseased = true)
-                Scar.HAMSTRUNG -> state.copy(hp = 0, scar = scar, hamstrung = true)
-                Scar.DEAFENED -> state.copy(hp = 0, scar = scar, deafened = true)
-                Scar.SUNDERED -> state.copy(hp = 0, scar = scar, sundered = true)
-                Scar.MORTAL_WOUND -> state.copy(hp = 0, scar = scar, deprived = true, critical = true)
+                Scar.LASTING -> {
+                    val location = when (random.d6()) { 1 -> "neck"; 2 -> "hands"; 3 -> "eye"; 4 -> "chest"; 5 -> "legs"; else -> "ear" }
+                    state.copy(hp = 0, scar = scar, lastingScar = location, maxHp = maxOf(state.maxHp, random.d6()))
+                }
+                Scar.RATTLING -> state.copy(hp = 0, scar = scar, maxHp = maxOf(state.maxHp, random.d6()))
+                Scar.WALLOPED -> state.copy(hp = 0, scar = scar, deprived = true, scarRecovery = ScarRecovery.WALLOPED)
+                Scar.BROKEN_LIMB -> {
+                    val location = when (random.d6()) { 1, 2 -> "leg"; 3, 4 -> "arm"; 5 -> "rib"; else -> "skull" }
+                    state.copy(hp = 0, scar = scar, brokenLimb = location, scarRecovery = ScarRecovery.BROKEN_LIMB)
+                }
+                Scar.DISEASED -> state.copy(hp = 0, scar = scar, diseased = true, scarRecovery = ScarRecovery.DISEASED)
+                Scar.HEAD_WOUND -> {
+                    val attribute = when (random.d6()) { in 1..2 -> Attribute.STR; in 3..4 -> Attribute.DEX; else -> Attribute.WIL }
+                    val roll = random.d6() + random.d6() + random.d6()
+                    val updated = when (attribute) {
+                        Attribute.STR -> state.copy(str = maxOf(state.str, roll))
+                        Attribute.DEX -> state.copy(dex = maxOf(state.dex, roll))
+                        Attribute.WIL -> state.copy(wil = maxOf(state.wil, roll))
+                    }
+                    updated.copy(hp = 0, scar = scar, scarAttribute = attribute)
+                }
+                Scar.HAMSTRUNG -> state.copy(hp = 0, scar = scar, hamstrung = true, scarRecovery = ScarRecovery.HAMSTRUNG)
+                Scar.DEAFENED -> {
+                    val roll = random.d20()
+                    val success = saveSucceeds(roll, state.wil)
+                    state.copy(hp = 0, scar = scar, deafened = true, maxWil = if (success) state.maxWil + random.roll(4) else state.maxWil)
+                }
+                Scar.RE_BRAINED -> {
+                    val roll = random.d6() + random.d6() + random.d6()
+                    state.copy(hp = 0, scar = scar, maxWil = maxOf(state.maxWil, roll))
+                }
+                Scar.SUNDERED -> {
+                    val roll = random.d20()
+                    val success = saveSucceeds(roll, state.wil)
+                    state.copy(hp = 0, scar = scar, sundered = true, maxWil = if (success) state.maxWil + random.d6() else state.maxWil)
+                }
+                Scar.MORTAL_WOUND -> state.copy(hp = 0, scar = scar, deprived = true, critical = true, scarRecovery = ScarRecovery.MORTAL_WOUND)
                 Scar.DOOMED -> state.copy(hp = 0, scar = scar, doomed = true)
-                else -> state.copy(hp = 0, scar = scar)
             }
             return GameResult(
                 scarState,
@@ -118,11 +137,35 @@ class RulesEngine(private val random: RandomSource) {
         val excessDamage = -remainingHp
         val newStr = maxOf(0, state.str - excessDamage)
         val roll = random.d20()
-        val success = when (roll) { 1 -> true; 20 -> false; else -> roll <= newStr }
+        val success = saveSucceeds(roll, newStr)
         return GameResult(
             state.copy(hp = 0, str = newStr, critical = true, dead = !success),
             listOf(damageEvent, RuleEvent.CriticalDamage(excessDamage, newStr, roll, success))
         )
+    }
+
+    fun recoverScar(state: CharacterState): GameResult {
+        val recovery = state.scarRecovery ?: return GameResult(state, emptyList())
+        val roll = when (recovery) {
+            ScarRecovery.WALLOPED -> random.d6()
+            ScarRecovery.BROKEN_LIMB -> random.d6() + random.d6()
+            ScarRecovery.DISEASED -> random.d6() + random.d6()
+            ScarRecovery.HAMSTRUNG -> random.d6() + random.d6() + random.d6()
+            ScarRecovery.MORTAL_WOUND -> random.d6() + random.d6()
+        }
+        val updated = when (recovery) {
+            ScarRecovery.WALLOPED -> state.copy(hp = state.maxHp, deprived = false, maxHp = state.maxHp + roll, scarRecovery = null)
+            ScarRecovery.BROKEN_LIMB, ScarRecovery.DISEASED -> state.copy(hp = state.maxHp, maxHp = maxOf(state.maxHp, roll), scarRecovery = null)
+            ScarRecovery.HAMSTRUNG -> state.copy(hp = state.maxHp, maxDex = maxOf(state.maxDex, roll), hamstrung = false, scarRecovery = null)
+            ScarRecovery.MORTAL_WOUND -> state.copy(hp = roll, deprived = false, critical = false, maxHp = roll, scarRecovery = null)
+        }
+        return GameResult(updated, emptyList())
+    }
+
+    private fun saveSucceeds(roll: Int, attribute: Int): Boolean = when (roll) {
+        1 -> true
+        20 -> false
+        else -> roll <= attribute
     }
 
     fun setArmor(state: CharacterState, armor: Int): GameResult {
