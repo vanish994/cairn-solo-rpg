@@ -190,12 +190,7 @@ fun backgroundCreationEffects(
     }
     val secondBond = if ("second_bond" in keys) random.d20() else null
     val omen = if (
-        "longbow_jerkin" in keys ||
-        "healing_unguent" in keys ||
-        "gnarled_staff" in keys ||
-        "chainmail" in keys ||
-        "storybook_dagger" in keys ||
-        "control_plants" in keys ||
+        background == Background.FOUNDLING ||
         "omen_knife" in keys
     ) random.d20() else null
     return BackgroundCreationEffects(
