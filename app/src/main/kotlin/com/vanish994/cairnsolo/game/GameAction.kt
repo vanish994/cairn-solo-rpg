@@ -11,6 +11,7 @@ sealed interface GameAction {
     data object ExploreContinue : GameAction
     data object ExploreInvestigate : GameAction
     data object ExploreRest : GameAction
+    data class GuardianIntent(val text: String) : GameAction
     data object Rest : GameAction
     data class ApplyDamage(val amount: Int) : GameAction
     data class AddItem(val item: InventoryItem) : GameAction
@@ -60,7 +61,12 @@ class GameActionResolver(
         }
         GameAction.ExploreContinue -> exploration.resolve(state, ExplorationAction.CONTINUE).toGameResult()
         GameAction.ExploreInvestigate -> exploration.resolve(state, ExplorationAction.INVESTIGATE).toGameResult()
-        GameAction.ExploreRest, GameAction.Rest -> resolveRest(state)
+        GameAction.ExploreRest -> resolveRest(state)
+        is GameAction.GuardianIntent -> GameResult(
+            state = state.recordGuardianIntent(action.text),
+            events = emptyList()
+        )
+        GameAction.Rest -> resolveRest(state)
 
         is GameAction.ApplyDamage -> {
             val result = rules.applyDamage(state.campaign.rules, action.amount)
