@@ -21,8 +21,27 @@ object FeedbackMapper {
             is GameEvent.CharacterCreated -> "Personagem criado." to FeedbackType.SUCCESS
             is GameEvent.SceneAdvanced -> "Você avançou para " + event.sceneId.toDisplayName() + "." to FeedbackType.INFO
             is GameEvent.SceneInvestigated -> event.detail to FeedbackType.INFO
-            is GameEvent.RestCompleted -> restMessage(event) to FeedbackType.SUCCESS
-            is GameEvent.DamageResolved -> damageMessage(event) to if (event.critical || event.scar != null) FeedbackType.CRITICAL else FeedbackType.DAMAGE
+            is GameEvent.RestCompleted -> {
+                val message = buildList {
+                    if (event.hpRecovered > 0) add("+${event.hpRecovered} HP")
+                    if (event.fatigueRecovered > 0) add("-${event.fatigueRecovered} fadiga")
+                }.let { parts ->
+                    if (parts.isEmpty()) "Descanso concluído, sem recuperação." else "Descanso concluído: ${parts.joinToString(", ")}."
+                }
+                message to FeedbackType.SUCCESS
+            }
+            is GameEvent.DamageResolved -> {
+                val damage = "Você sofreu ${event.hpDamage} de dano"
+                val armor = if (event.armorAbsorbed > 0) " (${event.armorAbsorbed} absorvido pela armadura)" else ""
+                val suffix = when {
+                    event.dead -> " Você não pode continuar."
+                    event.critical && event.scar != null -> " Dano crítico: ${event.scar.toDisplayName()}."
+                    event.critical -> " Dano crítico."
+                    event.scar != null -> " Cicatriz: ${event.scar.toDisplayName()}."
+                    else -> ""
+                }
+                (damage + armor + "." + suffix) to if (event.critical || event.scar != null) FeedbackType.CRITICAL else FeedbackType.DAMAGE
+            }
             is GameEvent.ItemAdded -> "Item adicionado: " + event.itemId.toDisplayName() + "." to FeedbackType.INVENTORY
             is GameEvent.ItemRemoved -> "Item removido: " + event.itemId.toDisplayName() + "." to FeedbackType.INVENTORY
             is GameEvent.FatigueAdded -> "Você ganhou " + event.amount + " de fadiga." to FeedbackType.WARNING
@@ -36,27 +55,6 @@ object FeedbackMapper {
 
     fun mapAll(events: List<GameEvent>, turn: Long): List<FeedbackEntry> =
         events.mapIndexed { index, event -> map(event, turn).copy(id = map(event, turn).id + ":" + index) }
-
-    private fun restMessage(event: GameEvent.RestCompleted): String {
-        val parts = buildList {
-            if (event.hpRecovered > 0) add("+" + event.hpRecovered + " HP")
-            if (event.fatigueRecovered > 0) add("-" + event.fatigueRecovered + " fadiga")
-        }
-        return if (parts.isEmpty()) "Descanso concluído, sem recuperação." else "Descanso concluído: " + parts.joinToString(", ") + "."
-    }
-
-    private fun damageMessage(event: GameEvent.DamageResolved): String {
-        val damage = "Você sofreu " + event.hpDamage + " de dano"
-        val armor = if (event.armorAbsorbed > 0) " (" + event.armorAbsorbed + " absorvido pela armadura)" else ""
-        val suffix = when {
-            event.dead -> " Você não pode continuar."
-            event.critical && event.scar != null -> " Dano crítico: " + event.scar.toDisplayName() + "."
-            event.critical -> " Dano crítico."
-            event.scar != null -> " Cicatriz: " + event.scar.toDisplayName() + "."
-            else -> ""
-        }
-        return damage + armor + "." + suffix
-    }
 
     private fun saveMessage(attribute: Attribute, roll: Int, success: Boolean): String =
         "Teste de " + attribute.displayName() + ": " + roll + " — " + if (success) "sucesso" else "falha" + "."
