@@ -63,11 +63,22 @@ class RulesEngineTest {
     }
 
     @Test
-    fun exactZeroHpCreatesScarResult() {
-        val result = RulesEngine(FixedRandomSource(1, 1, 2)).applyDamage(state(hp = 2), 2)
+    fun exactZeroHpUsesHpLostForScarResult() {
+        val result = RulesEngine(FixedRandomSource(1, 1, 12)).applyDamage(state(hp = 2), 2)
         assertEquals(Scar.RATTLING, result.newState.scar)
         assertEquals(Scar.RATTLING, (result.events.last() as RuleEvent.ScarTriggered).scar)
         assertEquals(2, (result.events.last() as RuleEvent.ScarTriggered).roll)
+    }
+
+    @Test
+    fun scarImmediateEffectsAreAppliedToAuthoritativeState() {
+        val walloped = RulesEngine(FixedRandomSource(1)).applyDamage(state(hp = 3), 3)
+        assertEquals(Scar.WALLOPED, walloped.newState.scar)
+        assertTrue(walloped.newState.deprived)
+
+        val hamstrung = RulesEngine(FixedRandomSource(1)).applyDamage(state(hp = 7), 7)
+        assertEquals(Scar.HAMSTRUNG, hamstrung.newState.scar)
+        assertTrue(hamstrung.newState.hamstrung)
     }
 
     @Test
