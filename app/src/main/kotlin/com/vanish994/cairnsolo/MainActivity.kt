@@ -18,6 +18,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
+import com.vanish994.cairnsolo.feedback.FeedbackEntry
+import com.vanish994.cairnsolo.feedback.FeedbackMapper
 import com.vanish994.cairnsolo.game.GameAction
 import com.vanish994.cairnsolo.game.GameActionResolver
 import com.vanish994.cairnsolo.game.GameState
@@ -51,6 +53,7 @@ class MainActivity : ComponentActivity() {
                     )
                 }
                 var screen by remember { mutableStateOf(AppScreen.CHARACTER) }
+                var feedback by remember { mutableStateOf<List<FeedbackEntry>>(emptyList()) }
 
                 Surface(Modifier.fillMaxSize(), color = Color(0xFF0B0D0C)) {
                     if (state == null) {
@@ -90,16 +93,19 @@ class MainActivity : ComponentActivity() {
                         when (screen) {
                             AppScreen.CHARACTER -> CharacterSheet(
                                 state = current,
+                                feedback = feedback,
                                 onDamage = {
-                                    val next = actionResolver.resolve(current, GameAction.ApplyDamage(2)).state
-                                    repository.save(next)
-                                    state = next
+                                    val result = actionResolver.resolve(current, GameAction.ApplyDamage(2))
+                                    repository.save(result.state)
+                                    state = result.state
+                                    feedback = (feedback + FeedbackMapper.mapAll(result.events, result.state.campaign.turn)).takeLast(6)
                                 },
                                 onExplore = { screen = AppScreen.EXPLORATION },
                                 onRest = {
-                                    val next = actionResolver.resolve(current, GameAction.Rest).state
-                                    repository.save(next)
-                                    state = next
+                                    val result = actionResolver.resolve(current, GameAction.Rest)
+                                    repository.save(result.state)
+                                    state = result.state
+                                    feedback = (feedback + FeedbackMapper.mapAll(result.events, result.state.campaign.turn)).takeLast(6)
                                 },
                                 onAddItem = {
                                     val id = "item-" + Random.nextInt(100000, 999999)
@@ -120,10 +126,12 @@ class MainActivity : ComponentActivity() {
 
                             AppScreen.EXPLORATION -> ExplorationScreen(
                                 state = current,
+                                feedback = feedback,
                                 onAction = { action ->
                                     val result = actionResolver.resolve(current, action)
                                     repository.save(result.state)
                                     state = result.state
+                                    feedback = (feedback + FeedbackMapper.mapAll(result.events, result.state.campaign.turn)).takeLast(6)
                                 },
                                 onBack = { screen = AppScreen.CHARACTER }
                             )
@@ -144,6 +152,7 @@ enum class AppScreen { CHARACTER, EXPLORATION, RULES }
 @Composable
 private fun ExplorationScreen(
     state: GameState,
+    feedback: List<FeedbackEntry>,
     onAction: (GameAction) -> Unit,
     onBack: () -> Unit
 ) {
@@ -175,6 +184,10 @@ private fun ExplorationScreen(
                 }
             }
             Spacer(Modifier.height(16.dp))
+            feedback.lastOrNull()?.let { entry ->
+                FeedbackCard(entry)
+                Spacer(Modifier.height(12.dp))
+            }
             if (c.exits.isNotEmpty()) {
                 Text("Possibilidades: " + c.exits.joinToString(" • "))
                 Spacer(Modifier.height(12.dp))
@@ -305,6 +318,7 @@ private fun CharacterCreation(
 @Composable
 private fun CharacterSheet(
     state: GameState,
+    feedback: List<FeedbackEntry>,
     onDamage: () -> Unit,
     onExplore: () -> Unit,
     onRest: () -> Unit,
@@ -375,7 +389,31 @@ private fun CharacterSheet(
                 Text("Background: " + rolls.first + " e " + rolls.second)
                 c.profile.backgroundFeatures.forEach { Text("• " + backgroundOutcomeLabel(it)) }
             }
-            c.profile.companions.forEach { Text("Companheiro: " + it.id + " — HP " + it.hp + "/" + it.maxHp) }
+            c.profile.companions.forEach { companion ->
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = Color(0xFF121615),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Image(
+                            painter = painterResource(R.drawable.cairn_companion),
+                            contentDescription = "Companheiro em pixel art",
+                            modifier = Modifier.size(44.dp)
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Column {
+                            Text(companion.id.replace('-', ' ').replaceFirstChar { it.uppercase() })
+                            Text("HP " + companion.hp + "/" + companion.maxHp)
+                        }
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+            }
+            feedback.lastOrNull()?.let { entry ->
+                FeedbackCard(entry)
+                Spacer(Modifier.height(12.dp))
+            }
             Text("Inventário", style = MaterialTheme.typography.titleMedium)
             if (r.inventory.isEmpty()) Text("Nenhum item")
             Spacer(Modifier.height(4.dp))
@@ -385,6 +423,13 @@ private fun CharacterSheet(
 
         items(r.inventory, key = { it.id }) { item ->
             ListItem(
+                leadingContent = {
+                    Image(
+                        painter = painterResource(itemIconResource(item.id)),
+                        contentDescription = "Ícone de " + item.id,
+                        modifier = Modifier.size(40.dp)
+                    )
+                },
                 headlineContent = { Text(item.id) },
                 supportingContent = { Text(buildList { add(item.slotCost.toString() + if (item.slotCost == 1) " espaço" else " espaços"); item.damage?.let { add(it) }; item.armor.takeIf { it > 0 }?.let { add("Armor " + it) }; item.uses?.let { add(it.toString() + " usos") } }.joinToString(" • ")) },
                 trailingContent = { TextButton(onClick = { onRemoveItem(item.id) }) { Text("Remover") } }
@@ -588,3 +633,43 @@ private fun scarLabel(scar: com.vanish994.cairnsolo.rules.Scar): String =
         com.vanish994.cairnsolo.rules.Scar.MORTAL_WOUND -> "Ferimento Mortal"
         com.vanish994.cairnsolo.rules.Scar.DOOMED -> "Condenado"
     }
+
+
+@Composable
+private fun FeedbackCard(entry: FeedbackEntry) {
+    val accent = when (entry.type.name) {
+        "SUCCESS" -> Color(0xFF7A9B61)
+        "DAMAGE", "CRITICAL" -> Color(0xFFB6534B)
+        "WARNING" -> Color(0xFFD0A04A)
+        "INVENTORY" -> Color(0xFF6F8FA8)
+        else -> Color(0xFF8E8B7E)
+    }
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = Color(0xFF171A18),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(10.dp).clip(RoundedCornerShape(3.dp)).background(accent))
+            Spacer(Modifier.width(10.dp))
+            Text(entry.message, style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+}
+
+private fun itemIconResource(id: String): Int {
+    val key = id.lowercase()
+    return when {
+        "sword" in key || "rapier" in key || "falchion" in key -> R.drawable.cairn_sword
+        "dagger" in key || "knife" in key || "blade" in key -> R.drawable.cairn_dagger
+        "bow" in key || "crossbow" in key -> R.drawable.cairn_bow
+        "armor" in key || "leather" in key || "mail" in key || "brigandine" in key || "jerkin" in key || "gambeson" in key -> R.drawable.cairn_armor
+        "shield" in key || "buckler" in key -> R.drawable.cairn_shield
+        "potion" in key || "salve" in key || "tincture" in key || "unguent" in key -> R.drawable.cairn_potion
+        "lantern" in key || "torch" in key -> R.drawable.cairn_lantern
+        "rope" in key || "cord" in key || "twine" in key -> R.drawable.cairn_rope
+        "ration" in key || "food" in key -> R.drawable.cairn_food
+        "backpack" in key || "bag" in key -> R.drawable.cairn_backpack
+        else -> R.drawable.cairn_backpack
+    }
+}
