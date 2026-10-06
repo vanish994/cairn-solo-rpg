@@ -37,7 +37,7 @@ object FeedbackMapper {
     fun mapAll(events: List<GameEvent>, turn: Long): List<FeedbackEntry> =
         events.mapIndexed { index, event -> map(event, turn).copy(id = map(event, turn).id + ":" + index) }
 
-    private fun restMessage(event: GameEvent): String {
+    private fun restMessage(event: GameEvent.RestCompleted): String {
         val parts = buildList {
             if (event.hpRecovered > 0) add("+" + event.hpRecovered + " HP")
             if (event.fatigueRecovered > 0) add("-" + event.fatigueRecovered + " fadiga")
@@ -45,7 +45,7 @@ object FeedbackMapper {
         return if (parts.isEmpty()) "Descanso concluído, sem recuperação." else "Descanso concluído: " + parts.joinToString(", ") + "."
     }
 
-    private fun damageMessage(event: GameEvent): String {
+    private fun damageMessage(event: GameEvent.DamageResolved): String {
         val damage = "Você sofreu " + event.hpDamage + " de dano"
         val armor = if (event.armorAbsorbed > 0) " (" + event.armorAbsorbed + " absorvido pela armadura)" else ""
         val suffix = when {
@@ -59,7 +59,7 @@ object FeedbackMapper {
     }
 
     private fun saveMessage(attribute: Attribute, roll: Int, success: Boolean): String =
-        "Teste de " + attribute.displayName() + ": " + roll + " — " + if (success) "sucesso" else "falha" + "."
+        "Teste de " + attribute.displayName() + ": " + roll + " — " + (if (success) "sucesso" else "falha") + "."
 
     private fun idFor(event: GameEvent, turn: Long): String =
         turn.toString() + ":" + event::class.simpleName + ":" + event.hashCode()
@@ -71,5 +71,5 @@ object FeedbackMapper {
     }
 
     private fun String.toDisplayName(): String =
-        replace('_', ' ').replace('-', ' ').trim().replaceFirstChar { it.uppercase() }
+        lowercase().replace('_', ' ').replace('-', ' ').trim().replaceFirstChar { it.uppercase() }
 }
