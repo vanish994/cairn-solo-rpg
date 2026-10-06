@@ -17,6 +17,8 @@ import com.vanish994.cairnsolo.game.GameState
 import com.vanish994.cairnsolo.game.ExplorationEngine
 import com.vanish994.cairnsolo.game.LocalGameStateRepository
 import com.vanish994.cairnsolo.rules.*
+import com.vanish994.cairnsolo.feedback.FeedbackEntry
+import com.vanish994.cairnsolo.feedback.FeedbackMapper
 import kotlin.random.Random
 
 class MainActivity : ComponentActivity() {
@@ -37,6 +39,12 @@ class MainActivity : ComponentActivity() {
                     )
                 }
                 var screen by remember { mutableStateOf(AppScreen.CHARACTER) }
+                var feedback by remember { mutableStateOf<List<FeedbackEntry>>(emptyList()) }
+                fun applyResult(result: com.vanish994.cairnsolo.game.GameResult) {
+                    repository.save(result.state)
+                    state = result.state
+                    feedback = (feedback + FeedbackMapper.mapAll(result.events, result.state.campaign.turn)).takeLast(8)
+                }
 
                 Surface(Modifier.fillMaxSize()) {
                     if (state == null) {
@@ -76,27 +84,24 @@ class MainActivity : ComponentActivity() {
                             AppScreen.CHARACTER -> CharacterSheet(
                                 state = current,
                                 onDamage = {
-                                    val next = actionResolver.resolve(current, GameAction.ApplyDamage(2)).state
-                                    repository.save(next)
-                                    state = next
+                                    val result = actionResolver.resolve(current, GameAction.ApplyDamage(2))
+                                    applyResult(result)
                                 },
                                 onExplore = { screen = AppScreen.EXPLORATION },
                                 onRest = {
-                                    val next = actionResolver.resolve(current, GameAction.Rest).state
-                                    repository.save(next)
-                                    state = next
+                                    val result = actionResolver.resolve(current, GameAction.Rest)
+                                    applyResult(result)
                                 },
                                 onAddItem = {
                                     val id = "item-" + Random.nextInt(100000, 999999)
-                                    val next = actionResolver.resolve(current, GameAction.AddItem(InventoryItem(id))).state
-                                    repository.save(next)
-                                    state = next
+                                    val result = actionResolver.resolve(current, GameAction.AddItem(InventoryItem(id)))
+                                    applyResult(result)
                                 },
                                 onRemoveItem = { id ->
-                                    val next = actionResolver.resolve(current, GameAction.RemoveItem(id)).state
-                                    repository.save(next)
-                                    state = next
+                                    val result = actionResolver.resolve(current, GameAction.RemoveItem(id))
+                                    applyResult(result)
                                 },
+                                feedback = feedback,
                                 onDelete = {
                                     repository.clear()
                                     state = null
@@ -107,8 +112,7 @@ class MainActivity : ComponentActivity() {
                                 state = current,
                                 onAction = { action ->
                                     val result = actionResolver.resolve(current, action)
-                                    repository.save(result.state)
-                                    state = result.state
+                                    applyResult(result)
                                 },
                                 onBack = { screen = AppScreen.CHARACTER }
                             )
@@ -278,6 +282,7 @@ private fun CharacterSheet(
     onRest: () -> Unit,
     onAddItem: () -> Unit,
     onRemoveItem: (String) -> Unit,
+    feedback: List<FeedbackEntry>,
     onDelete: () -> Unit
 ) {
     val c = state.campaign
@@ -321,6 +326,13 @@ private fun CharacterSheet(
                 Button(onClick = onRest) { Text("Descansar") }
             }
             Spacer(Modifier.height(12.dp))
+            if (feedback.isNotEmpty()) {
+                Text("Últimos acontecimentos", style = MaterialTheme.typography.titleMedium)
+                feedback.takeLast(4).forEach { entry ->
+                    Text("• " + entry.message, modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp))
+                }
+                Spacer(Modifier.height(12.dp))
+            }
             Text("Inventário", style = MaterialTheme.typography.titleMedium)
             if (r.inventory.isEmpty()) Text("Nenhum item")
             Spacer(Modifier.height(4.dp))
