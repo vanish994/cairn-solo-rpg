@@ -100,3 +100,15 @@ Base normativa fixada em Cairn 2e e registrada no ADR-006. Gate 1 pronto para im
 - [x] Restauração da campanha ao abrir o aplicativo.
 - [x] Operações de dano/descanso atualizando e salvando o GameState.
 - [x] Testes básicos do GameState.
+
+## Incremento atual — personagem e estado de combate
+
+- [x] Criação baseada nas rolagens 3d6 por atributo e 1d6 de HP da 2e.
+- [x] RNG real isolado do motor de regras.
+- [x] Dano exato a 0 gera resultado de Cicatriz; dano além de 0 entra em Dano Crítico.
+- [x] Estado crítico e resultado de salvamento crítico persistidos.
+- [x] Inventário funcional na interface.
+- [x] Persistência de campanha ampliada para o estado de morte.
+- [x] Descanso não remove automaticamente o estado crítico; estabilização é operação separada.
+
+A criação de personagem ainda será expandida com Antecedente/Traços e tabelas oficiais antes de ser considerada completa.
