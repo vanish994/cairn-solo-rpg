@@ -9,11 +9,17 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 
+data class GuardianRuleRequest(
+    val type: String,
+    val attribute: String? = null,
+    val amount: Int? = null
+)
+
 data class GuardianResponse(
     val narration: String,
     val sceneTitle: String,
     val sceneDescription: String,
-    val ruleRequest: String?,
+    val ruleRequest: GuardianRuleRequest?,
     val suggestedActions: List<String>,
     val interactionId: String?
 )
@@ -106,6 +112,14 @@ class HttpGuardianClient(
 
     private fun parseResponse(body: String): GuardianResponse {
         val json = JSONObject(body)
+        val ruleObject = json.optJSONObject("ruleRequest")
+        val ruleRequest = ruleObject?.let {
+            GuardianRuleRequest(
+                type = it.getString("type"),
+                attribute = it.optString("attribute").takeIf { value -> value.isNotBlank() },
+                amount = if (it.has("amount") && !it.isNull("amount")) it.getInt("amount") else null
+            )
+        }
         val actions = buildList {
             val array = json.optJSONArray("suggestedActions") ?: JSONArray()
             for (i in 0 until array.length()) add(array.getString(i))
@@ -114,7 +128,7 @@ class HttpGuardianClient(
             narration = json.getString("narration"),
             sceneTitle = json.getString("sceneTitle"),
             sceneDescription = json.getString("sceneDescription"),
-            ruleRequest = if (json.isNull("ruleRequest")) null else json.getString("ruleRequest"),
+            ruleRequest = ruleRequest,
             suggestedActions = actions,
             interactionId = json.optString("interactionId").takeIf { it.isNotBlank() }
         )
