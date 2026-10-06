@@ -32,7 +32,7 @@ android {
 
     buildTypes {
         debug {
-            buildConfigField("String", "GUARDIAN_API_URL", "\"${project.findProperty("guardianApiUrl") ?: ""}\"")
+            buildConfigField("String", "GUARDIAN_API_URL", "\"${project.findProperty("guardianApiUrl") ?: "https://cairn-guardian.onrender.com/guardian"}\"")
         }
         release {
             buildConfigField("String", "GUARDIAN_API_URL", "\"${project.findProperty("guardianApiUrl") ?: ""}\"")
