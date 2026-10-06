@@ -3,6 +3,8 @@ package com.vanish994.cairnsolo.game
 import com.vanish994.cairnsolo.rules.CharacterState
 import com.vanish994.cairnsolo.rules.FixedRandomSource
 import com.vanish994.cairnsolo.rules.RulesEngine
+import com.vanish994.cairnsolo.rules.Scar
+import com.vanish994.cairnsolo.rules.ScarRecovery
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -120,6 +122,37 @@ class GameActionResolverTest {
         val stabilized = resolver().resolve(critical, GameAction.StabilizeCritical)
         assertEquals(false, stabilized.state.campaign.rules.critical)
         assertIs<GameEvent.CriticalStabilized>(stabilized.events.single())
+    }
+
+    @Test
+    fun scarRecoveryIsResolvedThroughRulesEngine() {
+        val damaged = state(hp = 3, maxHp = 6).let {
+            resolver(FixedRandomSource(d20Value = 10, d6Value = 2)).resolve(it, GameAction.ApplyDamage(3))
+        }
+        assertEquals(Scar.WALLOPED, damaged.state.campaign.rules.scar)
+        assertEquals(ScarRecovery.WALLOPPED, damaged.state.campaign.rules.scarRecovery)
+
+        val recovered = resolver(FixedRandomSource(d20Value = 10, d6Value = 2))
+            .resolve(damaged.state, GameAction.RecoverScar)
+        assertEquals(8, recovered.state.campaign.rules.maxHp)
+        assertEquals(8, recovered.state.campaign.rules.hp)
+        assertEquals(null, recovered.state.campaign.rules.scarRecovery)
+        assertIs<GameEvent.ScarRecovered>(recovered.events.single())
+    }
+
+    @Test
+    fun createCharacterActionStoresRolledProfile() {
+        val rolled = com.vanish994.cairnsolo.rules.RolledCharacter(
+            9, 11, 13, 5,
+            com.vanish994.cairnsolo.rules.Background.PROWLER,
+            null,
+            29
+        )
+        val result = resolver().resolve(state(), GameAction.CreateCharacter("Aran", rolled))
+        assertEquals("Aran", result.state.campaign.character.name)
+        assertEquals(29, result.state.campaign.profile.age)
+        assertEquals(com.vanish994.cairnsolo.rules.Background.PROWLER, result.state.campaign.profile.background)
+        assertIs<GameEvent.CharacterCreated>(result.events.single())
     }
 
     @Test
