@@ -31,11 +31,11 @@ jobs:
       - name: Test Guardian server
         run: gradle :guardian-server:test
 
-      - name: Build debug APK
-        run: gradle assembleDebug
+      - name: Build optimized release APK
+        run: gradle assembleRelease
 
-      - name: Upload debug APK
+      - name: Upload optimized release APK
         uses: actions/upload-artifact@v4
         with:
-          name: cairn-solo-rpg-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: cairn-solo-rpg-release
+          path: app/build/outputs/apk/release/app-release.apk
