@@ -126,6 +126,7 @@ data class RolledCharacter(
     val wil: Int,
     val hp: Int,
     val background: Background? = null,
+    val backgroundRolls: BackgroundRolls? = null,
     val traits: CharacterTraits? = null,
     val age: Int? = null,
     val gold: Int = 0,
@@ -169,7 +170,9 @@ fun createCharacter(name: String, rolled: RolledCharacter): GameState {
                 background = rolled.background,
                 traits = rolled.traits,
                 gold = rolled.gold,
-                bondRoll = rolled.bondRoll
+                bondRoll = rolled.bondRoll,
+                backgroundRolls = rolled.backgroundRolls,
+                backgroundFeatures = rolled.background?.let { bg -> rolled.backgroundRolls?.let { rs -> backgroundOutcomes(bg, rs).map { it.key } } } ?: emptyList()
             ),
             rules = CharacterState(
                 str = rolled.str,
