@@ -28,6 +28,9 @@ jobs:
       - name: Run unit tests
         run: gradle testDebugUnitTest
 
+      - name: Test Guardian server
+        run: gradle :guardian-server:test
+
       - name: Build debug APK
         run: gradle assembleDebug
 
