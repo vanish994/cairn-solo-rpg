@@ -12,7 +12,12 @@ data class CampaignState(
     val character: CharacterIdentity,
     val rules: CharacterState,
     val sceneId: String = "prologue",
-    val turn: Long = 0L
+    val turn: Long = 0L,
+    val sceneType: SceneType = SceneType.EXPLORATION,
+    val sceneTitle: String = "Prologue",
+    val sceneDescription: String = "A aventura começa.",
+    val exits: List<String> = emptyList(),
+    val log: List<String> = emptyList()
 )
 
 data class GameState(
@@ -21,6 +26,19 @@ data class GameState(
 ) {
     fun withRules(newRules: CharacterState): GameState = copy(
         campaign = campaign.copy(rules = newRules, turn = campaign.turn + 1),
+        updatedAtEpochMs = System.currentTimeMillis()
+    )
+
+    fun advanceScene(id: String, type: SceneType, title: String, description: String, exits: List<String> = emptyList(), narration: String = description): GameState = copy(
+        campaign = campaign.copy(
+            sceneId = id,
+            sceneType = type,
+            sceneTitle = title,
+            sceneDescription = description,
+            exits = exits,
+            turn = campaign.turn + 1,
+            log = (campaign.log + narration).takeLast(50)
+        ),
         updatedAtEpochMs = System.currentTimeMillis()
     )
 }
