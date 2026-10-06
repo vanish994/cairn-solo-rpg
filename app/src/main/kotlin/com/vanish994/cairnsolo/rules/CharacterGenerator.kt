@@ -176,7 +176,8 @@ data class BackgroundCreationEffects(
     val bonusHp: Int = 0,
     val bonusGold: Int = 0,
     val secondBondRoll: Int? = null,
-    val omenRoll: Int? = null
+    val omenRoll: Int? = null,
+    val companions: List<CompanionState> = emptyList()
 )
 
 fun backgroundCreationEffects(
