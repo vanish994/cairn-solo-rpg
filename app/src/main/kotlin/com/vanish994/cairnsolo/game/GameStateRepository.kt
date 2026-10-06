@@ -26,7 +26,7 @@ class LocalGameStateRepository(context: Context) : GameStateRepository {
         e.putInt("str", r.str).putInt("dex", r.dex).putInt("wil", r.wil)
         e.putInt("hp", r.hp).putInt("maxHp", r.maxHp).putInt("armor", r.armor)
         e.putInt("fatigue", r.fatigue)
-        e.putBoolean("deprived", r.deprived).putBoolean("critical", r.critical)
+        e.putBoolean("deprived", r.deprived).putBoolean("critical", r.critical).putBoolean("dead", r.dead)
         e.putInt("inventoryCount", r.inventory.size)
         r.inventory.forEachIndexed { i, item ->
             e.putString("item_"+i+"_id", item.id)
@@ -56,7 +56,8 @@ class LocalGameStateRepository(context: Context) : GameStateRepository {
             inventory = inventory,
             fatigue = prefs.getInt("fatigue", 0),
             deprived = prefs.getBoolean("deprived", false),
-            critical = prefs.getBoolean("critical", false)
+            critical = prefs.getBoolean("critical", false),
+            dead = prefs.getBoolean("dead", false)
         )
         return GameState(
             campaign = CampaignState(
