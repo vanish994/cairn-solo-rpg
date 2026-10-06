@@ -75,7 +75,7 @@ class GameActionResolverTest {
     fun damageIsResolvedByRulesEngineThroughGameAction() {
         val result = resolver().resolve(state(hp = 6), GameAction.ApplyDamage(2))
         assertEquals(4, result.state.campaign.rules.hp)
-        assertIs<GameEvent.DamageApplied>(result.events.single())
+        assertIs<GameEvent.DamageResolved>(result.events.single())
     }
 
     @Test
@@ -90,6 +90,36 @@ class GameActionResolverTest {
         val removed = resolver().resolve(added.state, GameAction.RemoveItem("torch"))
         assertEquals(0, removed.state.campaign.rules.inventory.size)
         assertIs<GameEvent.ItemRemoved>(removed.events.single())
+    }
+
+    @Test
+    fun fatigueAndSaveAreResolvedThroughRulesEngine() {
+        val fatigued = resolver().resolve(state(), GameAction.AddFatigue(2))
+        assertEquals(2, fatigued.state.campaign.rules.fatigue)
+        assertIs<GameEvent.FatigueAdded>(fatigued.events.single())
+
+        val saved = resolver(FixedRandomSource(d20Value = 5)).resolve(
+            state(), GameAction.Save(com.vanish994.cairnsolo.rules.Attribute.STR)
+        )
+        val event = assertIs<GameEvent.SaveResolved>(saved.events.single())
+        assertEquals(5, event.roll)
+        assertEquals(true, event.success)
+    }
+
+    @Test
+    fun deprivationAndStabilizationAreAuthoritativeActions() {
+        val deprived = resolver().resolve(state(), GameAction.MarkDeprived(true))
+        assertEquals(true, deprived.state.campaign.rules.deprived)
+        assertIs<GameEvent.DeprivationChanged>(deprived.events.single())
+
+        val critical = state().copy(
+            campaign = state().campaign.copy(
+                rules = state().campaign.rules.copy(critical = true)
+            )
+        )
+        val stabilized = resolver().resolve(critical, GameAction.StabilizeCritical)
+        assertEquals(false, stabilized.state.campaign.rules.critical)
+        assertIs<GameEvent.CriticalStabilized>(stabilized.events.single())
     }
 
     @Test
