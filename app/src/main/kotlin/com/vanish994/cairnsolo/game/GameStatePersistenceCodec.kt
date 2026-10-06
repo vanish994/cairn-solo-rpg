@@ -64,3 +64,37 @@ object GameStatePersistenceCodec {
         )
     }
 }
+
+
+data class MJContext(
+    val campaignId: String,
+    val characterId: String,
+    val characterName: String,
+    val sceneId: String,
+    val sceneType: SceneType,
+    val sceneTitle: String,
+    val sceneDescription: String,
+    val exits: List<String>,
+    val turn: Long,
+    val rules: com.vanish994.cairnsolo.rules.CharacterState,
+    val recentLog: List<String>
+) {
+    companion object {
+        fun from(state: GameState, recentEntries: Int = 10): MJContext {
+            val c = state.campaign
+            return MJContext(
+                campaignId = c.campaignId,
+                characterId = c.character.id,
+                characterName = c.character.name,
+                sceneId = c.sceneId,
+                sceneType = c.sceneType,
+                sceneTitle = c.sceneTitle,
+                sceneDescription = c.sceneDescription,
+                exits = c.exits,
+                turn = c.turn,
+                rules = c.rules,
+                recentLog = c.log.takeLast(recentEntries)
+            )
+        }
+    }
+}
