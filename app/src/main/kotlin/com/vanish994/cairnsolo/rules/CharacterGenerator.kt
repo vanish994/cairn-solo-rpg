@@ -4,6 +4,8 @@ import com.vanish994.cairnsolo.game.GameState
 import com.vanish994.cairnsolo.game.CampaignState
 import com.vanish994.cairnsolo.game.CharacterProfile
 import com.vanish994.cairnsolo.game.CharacterIdentity
+import com.vanish994.cairnsolo.game.CharacterProfile
+import com.vanish994.cairnsolo.rules.InventoryItem
 import kotlin.random.Random
 
 class KotlinRandomSource(private val random: Random = Random.Default) : RandomSource {
@@ -36,7 +38,9 @@ data class RolledCharacter(
     val hp: Int,
     val background: Background? = null,
     val traits: CharacterTraits? = null,
-    val age: Int? = null
+    val age: Int? = null,
+    val gold: Int = 0,
+    val bondRoll: Int? = null
 )
 
 fun rollCharacter(random: RandomSource): RolledCharacter =
@@ -47,7 +51,9 @@ fun rollCharacter(random: RandomSource): RolledCharacter =
         hp = random.d6(),
         background = Background.fromD20(random.d20()),
         traits = rollTraits(random),
-        age = rollAge(random).years
+        age = rollAge(random).years,
+        gold = random.d6() + random.d6() + random.d6(),
+        bondRoll = random.d20()
     )
 
 fun RolledCharacter.swapAttributes(first: AttributeSlot, second: AttributeSlot): RolledCharacter {
@@ -68,15 +74,22 @@ fun createCharacter(name: String, rolled: RolledCharacter): GameState {
     return GameState(
         campaign = CampaignState(
             character = CharacterIdentity(name = name.trim()),
+            profile = CharacterProfile(
+                age = rolled.age,
+                background = rolled.background,
+                traits = rolled.traits,
+                gold = rolled.gold,
+                bondRoll = rolled.bondRoll
+            ),
             rules = CharacterState(
                 str = rolled.str,
                 dex = rolled.dex,
                 wil = rolled.wil,
                 hp = rolled.hp,
                 maxHp = rolled.hp,
-                armor = 0
-            ),
-            profile = CharacterProfile(rolled.age, rolled.background, rolled.traits)
+                armor = 0,
+                inventory = startingInventory()
+            )
         )
     )
 }
@@ -102,3 +115,10 @@ data class CharacterAge(val years: Int)
 
 fun rollAge(random: RandomSource): CharacterAge =
     CharacterAge(random.d20() + random.d20() + 10)
+
+
+fun startingInventory(): List<InventoryItem> = listOf(
+    InventoryItem("mochila", slots = 1),
+    InventoryItem("racoes-3-dias", slots = 1),
+    InventoryItem("tocha", slots = 1)
+)
