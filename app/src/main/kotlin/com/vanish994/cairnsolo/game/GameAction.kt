@@ -129,5 +129,4 @@ class GameActionResolver(
                 else -> null
             }
         }
-    }
 }
