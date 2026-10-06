@@ -1,6 +1,8 @@
 package com.vanish994.cairnsolo.game
 
+import com.vanish994.cairnsolo.rules.Background
 import com.vanish994.cairnsolo.rules.CharacterState
+import com.vanish994.cairnsolo.rules.CharacterTraits
 import com.vanish994.cairnsolo.rules.InventoryItem
 import com.vanish994.cairnsolo.rules.Scar
 
@@ -10,8 +12,11 @@ object GameStatePersistenceCodec {
     fun encode(state: GameState): Map<String, String> {
         val c = state.campaign
         val r = c.rules
+        val p = c.profile
         return buildMap {
             put("campaignId", c.campaignId); put("characterId", c.character.id); put("characterName", c.character.name)
+            put("profileAge", p.age?.toString() ?: ""); put("profileBackground", p.background?.name ?: "")
+            p.traits?.let { t -> put("traitPhysique", t.physique); put("traitSkin", t.skin); put("traitHair", t.hair); put("traitFace", t.face); put("traitSpeech", t.speech); put("traitClothing", t.clothing); put("traitVirtue", t.virtue); put("traitVice", t.vice) }
             put("sceneId", c.sceneId); put("sceneType", c.sceneType.name); put("sceneTitle", c.sceneTitle)
             put("sceneDescription", c.sceneDescription); put("exits", c.exits.joinToString(SEPARATOR))
             put("log", c.log.joinToString(SEPARATOR)); put("turn", c.turn.toString()); put("updatedAt", state.updatedAtEpochMs.toString())
@@ -51,13 +56,16 @@ object GameStatePersistenceCodec {
             sundered = bool("sundered", false), deafened = bool("deafened", false), diseased = bool("diseased", false),
             hamstrung = bool("hamstrung", false), doomed = bool("doomed", false)
         )
+        val traits = if (values.containsKey("traitPhysique")) CharacterTraits(string("traitPhysique"), string("traitSkin"), string("traitHair"), string("traitFace"), string("traitSpeech"), string("traitClothing"), string("traitVirtue"), string("traitVice")) else null
+        val background = values["profileBackground"]?.takeIf { it.isNotEmpty() }?.let { runCatching { Background.valueOf(it) }.getOrNull() }
+        val profile = CharacterProfile(values["profileAge"]?.toIntOrNull(), background, traits)
         val exits = string("exits").split(SEPARATOR).filter { it.isNotBlank() }
         val log = string("log").split(SEPARATOR).filter { it.isNotBlank() }
         val sceneType = runCatching { SceneType.valueOf(string("sceneType", SceneType.EXPLORATION.name)) }.getOrDefault(SceneType.EXPLORATION)
         return GameState(
             campaign = CampaignState(
                 campaignId = string("campaignId"), character = CharacterIdentity(string("characterId"), string("characterName", "Aventureiro")),
-                rules = rules, sceneId = string("sceneId", "prologue"), sceneType = sceneType,
+                rules = rules, profile = profile, sceneId = string("sceneId", "prologue"), sceneType = sceneType,
                 sceneTitle = string("sceneTitle", "Prologue"), sceneDescription = string("sceneDescription", "A aventura começa."),
                 exits = exits, log = log, turn = long("turn", 0L)
             ), updatedAtEpochMs = long("updatedAt", 0L)
