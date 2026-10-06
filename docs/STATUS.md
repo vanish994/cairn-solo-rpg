@@ -116,3 +116,8 @@ A criação de personagem ainda será expandida com Antecedente/Traços e tabela
 ## Revisão normativa — Gate 1
 
 A implementação foi revisada contra o Core Rules e Character Creation oficiais da Cairn 2e. O motor agora possui RNG d20/d6 isolável, geração 3d6/1d6, estado crítico/morte, resultado tipado de Cicatriz e persistência da Cicatriz. A cobertura de testes foi ampliada para esses casos. A tabela completa de efeitos de cada Cicatriz e regras avançadas de magia/recuperação ainda serão implementadas como operações de domínio antes do fechamento definitivo do Gate 1.
+
+
+## Continuação do Gate 1
+
+Concluídas as correções de capacidade de inventário e Fatigue, estrutura persistente inicial para efeitos de Cicatrizes, testes adicionais e início do Character Builder com a tabela oficial de Backgrounds da 2e. O fechamento definitivo do Gate 1 permanece condicionado à validação completa de recuperação, efeitos individuais de Cicatrizes e execução confirmada da suíte no CI.
