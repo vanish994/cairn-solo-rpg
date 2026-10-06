@@ -142,3 +142,13 @@ Pendências deliberadamente fora do fechamento do núcleo: catálogo de equipame
 - [x] Primeiro fluxo de exploração conectado à UI.
 
 Próximo incremento: separar ações de exploração da tela de personagem e preparar o contrato de entrada/saída que será consumido futuramente pelo MJ.
+
+## Gate 2 — contrato de ações
+
+- [x] `GameAction` representa intenções do jogador sem depender da UI.
+- [x] `GameActionResolver` centraliza a entrada da campanha.
+- [x] `GameResult` expõe novo estado + eventos para a camada narrativa.
+- [x] Eventos de exploração são traduzidos para um contrato estável de campanha.
+- [x] Testes unitários cobrem CONTINUE e INVESTIGATE através do novo contrato.
+
+O contrato foi criado sem Gemini e sem permitir que narrativa altere o estado mecânico. A próxima etapa é mover a interação de exploração para uma tela própria e conectar a UI exclusivamente a `GameActionResolver`.
