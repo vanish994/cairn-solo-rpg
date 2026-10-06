@@ -72,6 +72,27 @@ class GameActionResolverTest {
     }
 
     @Test
+    fun damageIsResolvedByRulesEngineThroughGameAction() {
+        val result = resolver().resolve(state(hp = 6), GameAction.ApplyDamage(2))
+        assertEquals(4, result.state.campaign.rules.hp)
+        assertIs<GameEvent.DamageApplied>(result.events.single())
+    }
+
+    @Test
+    fun addAndRemoveItemAreResolvedThroughGameAction() {
+        val added = resolver().resolve(
+            state(),
+            GameAction.AddItem(com.vanish994.cairnsolo.rules.InventoryItem("torch"))
+        )
+        assertEquals(1, added.state.campaign.rules.inventory.size)
+        assertIs<GameEvent.ItemAdded>(added.events.single())
+
+        val removed = resolver().resolve(added.state, GameAction.RemoveItem("torch"))
+        assertEquals(0, removed.state.campaign.rules.inventory.size)
+        assertIs<GameEvent.ItemRemoved>(removed.events.single())
+    }
+
+    @Test
     fun deprivedRestDoesNotRecoverHpOrFatigue() {
         val result = resolver().resolve(
             state(hp = 2, maxHp = 6, fatigue = 2, deprived = true),
