@@ -40,35 +40,41 @@ enum class Background(val id: Int, val displayName: String) {
 data class StartingGear(
     val id: String,
     val slots: Int = 1,
-    val petty: Boolean = false
+    val petty: Boolean = false,
+    val damage: String? = null,
+    val uses: Int? = null,
+    val armor: Int = 0,
+    val tags: Set<String> = emptySet()
 ) {
-    fun toInventoryItem(): InventoryItem = InventoryItem(id = id, slots = slots, petty = petty)
+    fun toInventoryItem(): InventoryItem =
+        InventoryItem(id = id, slots = slots, petty = petty, damage = damage, uses = uses, armor = armor, tags = tags)
 }
 
 fun startingGear(background: Background): List<StartingGear> = when (background) {
-    Background.AURIFEX -> listOf(g("rations-3-uses"), g("lantern"), g("oil-can-6-uses"), g("needle-knife"), g("protective-gloves", petty = true))
-    Background.BARBER_SURGEON -> listOf(g("rations-3-uses"), g("torch-3-uses"), g("amputation-knife"), g("bandages-3-uses"), g("leech-3-uses"), g("stained-medical-finery", petty = true))
-    Background.BEAST_HANDLER -> listOf(g("rations-3-uses"), g("torch-3-uses"), g("leather-whip"), g("soporific-darts"), g("lure"), g("rope-25ft"))
-    Background.BONEKEEPER -> listOf(g("rations-3-uses"), g("lantern"), g("oil-can-6-uses"), g("stake"), g("chains-10ft"))
-    Background.CUTPURSE -> listOf(g("rations-3-uses"), g("torch-3-uses"), g("twin-daggers", slots = 2), g("padded-leather"), g("lockpicks"), g("black-outfit", petty = true))
-    Background.FIELDWARDEN -> listOf(g("rations-3-uses"), g("torch-3-uses"), g("brigandine", slots = 2), g("sling"), g("hand-axe"), g("repellent-3-uses"))
-    Background.FLETCHWIND -> listOf(g("rations-3-uses"), g("torch-3-uses"), g("bow"), g("serrated-knife"), g("boiled-leather"), g("heartroot-salve"))
-    Background.FOUNDLING -> listOf(g("rations-3-uses"), g("torch-3-uses"), g("salt-pouch"), g("heirloom-amulet", petty = true), g("sling"), g("dagger"))
-    Background.FUNGAL_FORAGER -> listOf(g("rations-3-uses"), g("sharpened-trowel"), g("candle-helmet"), g("rope-25ft"), g("metal-pail"))
-    Background.GREENWISE -> listOf(g("rations-3-uses"), g("torch-3-uses"), g("iron-pot"), g("root-knife"), g("healing-salve"), g("twine-bauble", petty = true))
-    Background.HALF_WITCH -> listOf(g("rations-3-uses"), g("torch-3-uses"), g("spellbook"), g("iron-dagger"), g("herbs-pouch-3-uses"), g("ghillie-suit"))
-    Background.HEXENBANE -> listOf(g("rations-3-uses"), g("torch-3-uses"), g("vestments-of-the-order", petty = true), g("blessed-tinctures"), g("silver-knife"), g("crossbow", slots = 2))
-    Background.JONGLEUR -> listOf(g("rations-3-uses"), g("torch-3-uses"), g("costume"), g("simple-instrument"), g("lucky-jerkin"), g("sling"))
-    Background.KETTLEWRIGHT -> listOf(g("rations-3-uses"), g("torch-3-uses"), g("pincers"), g("roll-of-tin"), g("gloves", petty = true), g("hammer"))
-    Background.MARCHGUARD -> listOf(g("rations-3-uses"), g("lantern"), g("oil-can-6-uses"), g("long-sword", slots = 2), g("boiled-leather"))
-    Background.MOUNTEBANK -> listOf(g("rations-3-uses"), g("torch-3-uses"), g("cart", slots = 2), g("trick-playing-cards"), g("fancy-hat", petty = true), g("cane-sword"))
-    Background.OUTRIDER -> listOf(g("rations-3-uses"), g("torch-3-uses"), g("long-sword", slots = 2), g("leather-jerkin"), g("crossbow", slots = 2), g("spyglass"))
-    Background.PROWLER -> listOf(g("rations-3-uses"), g("torch-3-uses"), g("tarp"), g("boiled-leather"), g("short-sword"), g("spring-loaded-trap"))
-    Background.RILL_RUNNER -> listOf(g("rations-3-uses"), g("torch-3-uses"), g("water-shoes"), g("brigandine", slots = 2), g("compass"), g("dagger"))
-    Background.SCRIVENER -> listOf(g("rations-3-uses"), g("torch-3-uses"), g("quill-and-ink"), g("blank-book"), g("awl"), g("badge", petty = true))
+    Background.AURIFEX -> listOf(g("rations-3-uses", uses = 3, tags = setOf("ration")), g("lantern"), g("oil-can-6-uses", uses = 6), g("needle-knife", damage = "d6"), g("protective-gloves", petty = true))
+    Background.BARBER_SURGEON -> listOf(g("rations-3-uses", uses = 3, tags = setOf("ration")), g("torch-3-uses"), g("amputation-knife", damage = "d6"), g("bandages-3-uses", uses = 3), g("leech-3-uses", uses = 3), g("stained-medical-finery", petty = true))
+    Background.BEAST_HANDLER -> listOf(g("rations-3-uses", uses = 3, tags = setOf("ration")), g("torch-3-uses"), g("leather-whip", damage = "d6"), g("soporific-darts"), g("lure"), g("rope-25ft"))
+    Background.BONEKEEPER -> listOf(g("rations-3-uses", uses = 3, tags = setOf("ration")), g("lantern"), g("oil-can-6-uses", uses = 6), g("stake", damage = "d6"), g("chains-10ft"))
+    Background.CUTPURSE -> listOf(g("rations-3-uses", uses = 3, tags = setOf("ration")), g("torch-3-uses"), g("twin-daggers", slots = 2, damage = "d6+d6", tags = setOf("paired")), g("padded-leather", armor = 1), g("lockpicks"), g("black-outfit", petty = true))
+    Background.FIELDWARDEN -> listOf(g("rations-3-uses", uses = 3, tags = setOf("ration")), g("torch-3-uses"), g("brigandine", slots = 2, armor = 1), g("sling", damage = "d6"), g("hand-axe", damage = "d6"), g("repellent-3-uses"))
+    Background.FLETCHWIND -> listOf(g("rations-3-uses", uses = 3, tags = setOf("ration")), g("torch-3-uses"), g("bow", damage = "d6"), g("serrated-knife", damage = "d6"), g("boiled-leather", armor = 1), g("heartroot-salve"))
+    Background.FOUNDLING -> listOf(g("rations-3-uses", uses = 3, tags = setOf("ration")), g("torch-3-uses"), g("salt-pouch"), g("heirloom-amulet", petty = true), g("sling", damage = "d6"), g("dagger", damage = "d6"))
+    Background.FUNGAL_FORAGER -> listOf(g("rations-3-uses", uses = 3, tags = setOf("ration")), g("sharpened-trowel", damage = "d6"), g("candle-helmet", uses = 6, armor = 1), g("rope-25ft"), g("metal-pail"))
+    Background.GREENWISE -> listOf(g("rations-3-uses", uses = 3, tags = setOf("ration")), g("torch-3-uses"), g("iron-pot"), g("root-knife", damage = "d6"), g("healing-salve", uses = 1), g("twine-bauble", petty = true))
+    Background.HALF_WITCH -> listOf(g("rations-3-uses", uses = 3, tags = setOf("ration")), g("torch-3-uses"), g("spellbook"), g("iron-dagger", damage = "d6"), g("herbs-pouch-3-uses"), g("ghillie-suit"))
+    Background.HEXENBANE -> listOf(g("rations-3-uses", uses = 3, tags = setOf("ration")), g("torch-3-uses"), g("vestments-of-the-order", petty = true), g("blessed-tinctures"), g("silver-knife", damage = "d6"), g("crossbow", slots = 2, damage = "d8"))
+    Background.JONGLEUR -> listOf(g("rations-3-uses", uses = 3, tags = setOf("ration")), g("torch-3-uses"), g("costume"), g("simple-instrument"), g("lucky-jerkin", armor = 1), g("sling", damage = "d6"))
+    Background.KETTLEWRIGHT -> listOf(g("rations-3-uses", uses = 3, tags = setOf("ration")), g("torch-3-uses"), g("pincers"), g("roll-of-tin"), g("gloves", petty = true), g("hammer", damage = "d6"))
+    Background.MARCHGUARD -> listOf(g("rations-3-uses", uses = 3, tags = setOf("ration")), g("lantern"), g("oil-can-6-uses", uses = 6), g("long-sword", slots = 2, damage = "d10"), g("boiled-leather", armor = 1))
+    Background.MOUNTEBANK -> listOf(g("rations-3-uses", uses = 3, tags = setOf("ration")), g("torch-3-uses"), g("cart", slots = 2, tags = setOf("capacity:+4","bulky-when-pulled")), g("trick-playing-cards"), g("fancy-hat", petty = true), g("cane-sword", damage = "d6"))
+    Background.OUTRIDER -> listOf(g("rations-3-uses", uses = 3, tags = setOf("ration")), g("torch-3-uses"), g("long-sword", slots = 2, damage = "d10"), g("leather-jerkin", armor = 1), g("crossbow", slots = 2, damage = "d8"), g("spyglass"))
+    Background.PROWLER -> listOf(g("rations-3-uses", uses = 3, tags = setOf("ration")), g("torch-3-uses"), g("tarp"), g("boiled-leather", armor = 1), g("short-sword", damage = "d6"), g("spring-loaded-trap", damage = "4 STR", tags = setOf("trap")))
+    Background.RILL_RUNNER -> listOf(g("rations-3-uses", uses = 3, tags = setOf("ration")), g("torch-3-uses"), g("water-shoes"), g("brigandine", slots = 2, armor = 1), g("compass"), g("dagger", damage = "d6"))
+    Background.SCRIVENER -> listOf(g("rations-3-uses", uses = 3, tags = setOf("ration")), g("torch-3-uses"), g("quill-and-ink"), g("blank-book"), g("awl", damage = "d6"), g("badge", petty = true))
 }
 
-private fun g(id: String, slots: Int = 1, petty: Boolean = false) = StartingGear(id, slots, petty)
+private fun g(id: String, slots: Int = 1, petty: Boolean = false, damage: String? = null, uses: Int? = null, armor: Int = 0, tags: Set<String> = emptySet()) =
+    StartingGear(id, slots, petty, damage, uses, armor, tags)
 
 fun startingArmor(background: Background): Int = when (background) {
     Background.CUTPURSE, Background.FIELDWARDEN, Background.FLETCHWIND,
