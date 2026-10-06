@@ -8,7 +8,7 @@
 
 **Gate 1 — Motor de Regras Cairn**
 
-Status: 🟡 Base normativa definida; implementação do Rules Engine pronta para iniciar
+Status: 🟡 Rules Engine base implementado; GameState, criação de personagem e persistência local implementados
 
 ## Gate 0 — Concluído
 
@@ -74,7 +74,7 @@ Cada regra implementada deverá ter referência à seção normativa corresponde
 
 ## Próximo passo
 
-Implementar o núcleo do Gate 1 contra Cairn 2e, começando pelos modelos de domínio, RNG isolável, saves e operações básicas de HP/dano.
+Completar a persistência com testes de round-trip e avançar para inventário/equipamentos de personagem e fluxo de campanha.
 
 ## Regras para agentes
 
@@ -90,3 +90,13 @@ Implementar o núcleo do Gate 1 contra Cairn 2e, começando pelos modelos de dom
 ## Última atualização
 
 Base normativa fixada em Cairn 2e e registrada no ADR-006. Gate 1 pronto para implementação.
+
+## Incremento atual — GameState
+
+- [x] GameState separado do Rules Engine.
+- [x] CampaignState e identidade do personagem.
+- [x] Criação inicial de personagem.
+- [x] Persistência local com SharedPreferences.
+- [x] Restauração da campanha ao abrir o aplicativo.
+- [x] Operações de dano/descanso atualizando e salvando o GameState.
+- [x] Testes básicos do GameState.
