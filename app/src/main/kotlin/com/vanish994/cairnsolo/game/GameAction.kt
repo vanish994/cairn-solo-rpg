@@ -96,8 +96,13 @@ class GameActionResolver(
         }
 
         GameAction.RecoverScar -> {
+            val previousScar = state.campaign.rules.scar?.name ?: "unknown"
             val result = rules.recoverScar(state.campaign.rules)
-            GameResult(state.withRules(result.newState), if (result.newState == state.campaign.rules) emptyList() else listOf(GameEvent.ScarRecovered(result.newState.scar?.name ?: "unknown")))
+            GameResult(
+                state.withRules(result.newState),
+                if (result.newState == state.campaign.rules) emptyList()
+                else listOf(GameEvent.ScarRecovered(previousScar))
+            )
         }
 
         GameAction.StabilizeCritical -> {
