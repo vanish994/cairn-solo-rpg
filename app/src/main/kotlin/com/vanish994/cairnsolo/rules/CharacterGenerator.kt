@@ -4,8 +4,6 @@ import com.vanish994.cairnsolo.game.GameState
 import com.vanish994.cairnsolo.game.CampaignState
 import com.vanish994.cairnsolo.game.CharacterProfile
 import com.vanish994.cairnsolo.game.CharacterIdentity
-import com.vanish994.cairnsolo.game.CharacterProfile
-import com.vanish994.cairnsolo.rules.InventoryItem
 import kotlin.random.Random
 
 class KotlinRandomSource(private val random: Random = Random.Default) : RandomSource {
