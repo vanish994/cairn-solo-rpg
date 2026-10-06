@@ -198,9 +198,9 @@ class CharacterGeneratorTest {
         val state = createCharacter("Fletch", fletch)
         assertEquals("falcon", state.campaign.profile.companions.single().id)
 
-        val rider = rollCharacter(FixedRandomSource(17, d6Value = 1))
-        val riderState = createCharacter("Rider", rider)
-        assertEquals(emptyList(), riderState.campaign.profile.companions)
+        val ordinary = rollCharacter(FixedRandomSource(1, d6Value = 1))
+        val ordinaryState = createCharacter("Aran", ordinary)
+        assertEquals(emptyList(), ordinaryState.campaign.profile.companions)
     }
 
     @Test
