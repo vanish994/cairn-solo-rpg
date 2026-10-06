@@ -139,8 +139,20 @@ class RulesEngine(private val random: RandomSource) {
         val newStr = maxOf(0, state.str - excessDamage)
         val roll = random.d20()
         val success = saveSucceeds(roll, newStr)
+        val doomedResolved = if (state.doomed && success) {
+            state.doomed to maxOf(state.maxHp, random.d6() + random.d6() + random.d6())
+        } else {
+            state.doomed to state.maxHp
+        }
         return GameResult(
-            state.copy(hp = 0, str = newStr, critical = true, dead = !success),
+            state.copy(
+                hp = 0,
+                str = newStr,
+                critical = true,
+                dead = !success,
+                doomed = if (state.doomed) !success else false,
+                maxHp = doomedResolved.second
+            ),
             listOf(damageEvent, RuleEvent.CriticalDamage(excessDamage, newStr, roll, success))
         )
     }
@@ -156,7 +168,8 @@ class RulesEngine(private val random: RandomSource) {
         }
         val updated = when (recovery) {
             ScarRecovery.WALLOPED -> state.copy(hp = state.maxHp, deprived = false, maxHp = state.maxHp + roll, scarRecovery = null)
-            ScarRecovery.BROKEN_LIMB, ScarRecovery.DISEASED -> state.copy(hp = state.maxHp, maxHp = maxOf(state.maxHp, roll), scarRecovery = null)
+            ScarRecovery.BROKEN_LIMB -> state.copy(hp = state.maxHp, maxHp = maxOf(state.maxHp, roll), scarRecovery = null)
+            ScarRecovery.DISEASED -> state.copy(hp = state.maxHp, maxHp = maxOf(state.maxHp, roll), diseased = false, scarRecovery = null)
             ScarRecovery.HAMSTRUNG -> state.copy(hp = state.maxHp, maxDex = maxOf(state.maxDex, roll), hamstrung = false, scarRecovery = null)
             ScarRecovery.MORTAL_WOUND -> state.copy(hp = roll, deprived = false, critical = false, maxHp = roll, scarRecovery = null)
         }
