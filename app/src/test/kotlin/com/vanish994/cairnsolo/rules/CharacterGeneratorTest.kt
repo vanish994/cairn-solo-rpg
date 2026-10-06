@@ -29,7 +29,7 @@ class CharacterGeneratorTest {
 
     @Test
     fun backgroundRollsAreRolledAndPersisted() {
-        val result = rollCharacter(FixedRandomSource(4))
+        val result = rollCharacter(FixedRandomSource(4, d6Value = 4))
         assertEquals(4, result.backgroundRolls?.first)
         assertEquals(4, result.backgroundRolls?.second)
 
@@ -143,7 +143,7 @@ class CharacterGeneratorTest {
         val effects = backgroundCreationEffects(
             Background.FIELDWARDEN,
             BackgroundRolls(6, 1),
-            FixedRandomSource(3)
+            FixedRandomSource(3, d4Value = 3)
         )
         assertEquals(3, effects.bonusHp)
 
@@ -194,17 +194,13 @@ class CharacterGeneratorTest {
 
     @Test
     fun backgroundCompanionsBecomeStructuredState() {
-        val state = createCharacter(
-            "Fletch",
-            RolledCharacter(9, 11, 13, 5, background = Background.FLETCHWIND, backgroundRolls = BackgroundRolls(2, 1))
-        )
+        val fletch = rollCharacter(FixedRandomSource(7, d6Value = 2))
+        val state = createCharacter("Fletch", fletch)
         assertEquals("falcon", state.campaign.profile.companions.single().id)
 
-        val rider = createCharacter(
-            "Rider",
-            RolledCharacter(9, 11, 13, 5, background = Background.OUTRIDER, backgroundRolls = BackgroundRolls(1, 1))
-        )
-        assertEquals(emptyList(), rider.campaign.profile.companions)
+        val rider = rollCharacter(FixedRandomSource(17, d6Value = 1))
+        val riderState = createCharacter("Rider", rider)
+        assertEquals(emptyList(), riderState.campaign.profile.companions)
     }
 
     @Test
