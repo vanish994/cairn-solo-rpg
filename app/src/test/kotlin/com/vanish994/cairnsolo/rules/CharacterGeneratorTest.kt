@@ -137,6 +137,43 @@ class CharacterGeneratorTest {
         }
     }
 
+
+    @Test
+    fun directBackgroundCreationEffectsAreResolved() {
+        val fieldwarden = createCharacter(
+            "Field",
+            RolledCharacter(
+                9, 11, 13, 5,
+                background = Background.FIELDWARDEN,
+                backgroundRolls = BackgroundRolls(6, 1)
+            )
+        )
+        assertEquals(5, fieldwarden.campaign.rules.maxHp)
+
+        val outrider = createCharacter(
+            "Rider",
+            RolledCharacter(
+                9, 11, 13, 5,
+                background = Background.OUTRIDER,
+                backgroundRolls = BackgroundRolls(4, 1)
+            )
+        )
+        assertEquals(0, outrider.campaign.profile.gold)
+    }
+
+    @Test
+    fun backgroundSecondaryRollsPersist() {
+        val rolled = RolledCharacter(
+            9, 11, 13, 5,
+            background = Background.OUTRIDER,
+            secondBondRoll = 17,
+            omenRoll = 9
+        )
+        val state = createCharacter("Aran", rolled)
+        assertEquals(17, state.campaign.profile.secondBondRoll)
+        assertEquals(9, state.campaign.profile.omenRoll)
+    }
+
     @Test
     fun backgroundUsesD20Range() {
         assertEquals(Background.AURIFEX, Background.fromD20(1))
