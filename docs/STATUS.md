@@ -8,7 +8,7 @@
 
 **Gate 1 — Motor de Regras Cairn**
 
-Status: 🔵 Gate 0 concluído; Gate 1 pronto para iniciar
+Status: 🟡 Base normativa definida; implementação do Rules Engine pronta para iniciar
 
 ## Gate 0 — Concluído
 
@@ -23,20 +23,25 @@ Status: 🔵 Gate 0 concluído; Gate 1 pronto para iniciar
 - Artefato `cairn-solo-rpg-debug` gerado e disponível.
 - Correção aplicada para alinhar Java/Kotlin em JVM 17.
 
-Workflow validado:
-- Run: `37454905482`
-- Check: `112240012489`
-- Commit validado: `9cd506ef2a15c9c6744fa4bacc6d6da55bbdb777`
-- Resultado: **success**
-- Artefato: `cairn-solo-rpg-debug`
+## Base normativa definida
 
-## Gate 1 — Próximo
+**Cairn Second Edition (2ª Edição)** será a referência normativa do Rules Engine.
 
-Objetivo: implementar o núcleo determinístico das regras Cairn sem dependência de Android ou Gemini.
+Documentação oficial consultada:
+- Player's Guide da 2e.
+- Warden's Guide da 2e.
+- Materiais oficiais da 2e.
 
-Antes de codificar regras específicas, deve ser fixada a fonte/edição de Cairn usada pelo projeto. O repositório oficial informa que existem múltiplas edições compatíveis e que o texto está sob CC-BY-SA 4.0.
+A Cairn Barebones Edition poderá ser usada posteriormente como referência de apresentação genérica, mas não será uma fonte normativa separada: suas regras e procedimentos correspondem à 2e.
 
-A arquitetura adotada para o motor será baseada em:
+Decisão registrada em:
+`docs/decisions/ADR-006-cairn-2e.md`
+
+## Gate 1 — Implementação
+
+O núcleo deverá ser independente de Android e Gemini.
+
+Arquitetura:
 
 ```text
 GameAction
@@ -48,11 +53,28 @@ GameResult
     └── events
 ```
 
-O RNG deverá ser isolável para testes e o GameState só poderá ser alterado por operações válidas do domínio.
+O RNG será isolável para testes. O GameState só poderá mudar por operações válidas do domínio.
+
+Primeiro escopo:
+
+- atributos;
+- saves;
+- HP;
+- dano;
+- Armor;
+- inventário/slots;
+- Fatigue/Deprivation;
+- condições;
+- Critical Damage;
+- Scars;
+- recuperação;
+- regras essenciais de combate e magia.
+
+Cada regra implementada deverá ter referência à seção normativa correspondente e testes automatizados.
 
 ## Próximo passo
 
-Definir e registrar a edição/fonte normativa de Cairn e então implementar o primeiro núcleo do Gate 1 com testes automatizados.
+Implementar o núcleo do Gate 1 contra Cairn 2e, começando pelos modelos de domínio, RNG isolável, saves e operações básicas de HP/dano.
 
 ## Regras para agentes
 
@@ -61,8 +83,10 @@ Definir e registrar a edição/fonte normativa de Cairn e então implementar o p
 - Não transformar a IA em autoridade das regras.
 - Não adicionar dependências sem justificativa.
 - Não quebrar uma etapa já validada sem registrar a mudança.
-- Não inventar ou misturar regras de edições diferentes de Cairn.
+- Não misturar regras da 1e com a 2e sem decisão explícita.
+- Não inventar regras ausentes na fonte normativa.
+- Preferir implementação mecânica a texto hardcoded da fonte.
 
 ## Última atualização
 
-Gate 0 validado no CI. Arquitetura de ações/resultados/eventos registrada no ADR-005. Projeto preparado para iniciar o Gate 1.
+Base normativa fixada em Cairn 2e e registrada no ADR-006. Gate 1 pronto para implementação.
