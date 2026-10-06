@@ -30,7 +30,12 @@ class MainActivity : ComponentActivity() {
                 var name by remember { mutableStateOf("") }
                 var rolled by remember { mutableStateOf<RolledCharacter?>(null) }
                 val engine = remember { RulesEngine(KotlinRandomSource()) }
-                val actionResolver = remember { GameActionResolver(ExplorationEngine(KotlinRandomSource())) }
+                val actionResolver = remember {
+                    GameActionResolver(
+                        exploration = ExplorationEngine(KotlinRandomSource()),
+                        rules = RulesEngine(KotlinRandomSource())
+                    )
+                }
                 var screen by remember { mutableStateOf(AppScreen.CHARACTER) }
 
                 Surface(Modifier.fillMaxSize()) {
@@ -51,38 +56,46 @@ class MainActivity : ComponentActivity() {
                         val current = state!!
                         when (screen) {
                             AppScreen.CHARACTER -> CharacterSheet(
-                            state = current,
-                            onDamage = {
-                                val next = current.withRules(engine.applyDamage(current.campaign.rules, 2).newState)
-                                repository.save(next)
-                                state = next
-                            },
-                            onExplore = { screen = AppScreen.EXPLORATION },
-                            onRest = {
-                                val next = current.withRules(engine.safeRest(current.campaign.rules).newState)
-                                repository.save(next)
-                                state = next
-                            },
-                            onAddItem = {
-                                val id = "item-" + Random.nextInt(100000, 999999)
-                                val next = current.withRules(
-                                    engine.addItem(current.campaign.rules, InventoryItem(id)).newState
-                                )
-                                repository.save(next)
-                                state = next
-                            },
-                            onRemoveItem = { id ->
-                                val next = current.withRules(
-                                    engine.removeItem(current.campaign.rules, id).newState
-                                )
-                                repository.save(next)
-                                state = next
-                            },
-                            onDelete = {
-                                repository.clear()
-                                state = null
-                            }
-                        )
+                                state = current,
+                                onDamage = {
+                                    val next = current.withRules(
+                                        engine.applyDamage(current.campaign.rules, 2).newState
+                                    )
+                                    repository.save(next)
+                                    state = next
+                                },
+                                onExplore = { screen = AppScreen.EXPLORATION },
+                                onRest = {
+                                    val next = current.withRules(
+                                        engine.safeRest(current.campaign.rules).newState
+                                    )
+                                    repository.save(next)
+                                    state = next
+                                },
+                                onAddItem = {
+                                    val id = "item-" + Random.nextInt(100000, 999999)
+                                    val next = current.withRules(
+                                        engine.addItem(
+                                            current.campaign.rules,
+                                            InventoryItem(id)
+                                        ).newState
+                                    )
+                                    repository.save(next)
+                                    state = next
+                                },
+                                onRemoveItem = { id ->
+                                    val next = current.withRules(
+                                        engine.removeItem(current.campaign.rules, id).newState
+                                    )
+                                    repository.save(next)
+                                    state = next
+                                },
+                                onDelete = {
+                                    repository.clear()
+                                    state = null
+                                }
+                            )
+
                             AppScreen.EXPLORATION -> ExplorationScreen(
                                 state = current,
                                 onAction = { action ->
@@ -99,7 +112,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
-
 
 enum class AppScreen { CHARACTER, EXPLORATION }
 
@@ -130,7 +142,9 @@ private fun ExplorationScreen(
             Spacer(Modifier.height(8.dp))
             Button(onClick = { onAction(GameAction.ExploreInvestigate) }) { Text("Investigar") }
             Spacer(Modifier.height(8.dp))
-            OutlinedButton(onClick = { onAction(GameAction.ExploreRest) }) { Text("Solicitar descanso") }
+            OutlinedButton(onClick = { onAction(GameAction.ExploreRest) }) {
+                Text("Solicitar descanso")
+            }
             Spacer(Modifier.height(16.dp))
             OutlinedButton(onClick = onBack) { Text("Voltar à ficha") }
             Spacer(Modifier.height(16.dp))
