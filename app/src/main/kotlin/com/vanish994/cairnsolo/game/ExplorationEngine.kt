@@ -28,10 +28,10 @@ class ExplorationEngine(private val random: RandomSource) {
                 val next = state.advanceScene(
                     id = destination,
                     type = SceneType.EXPLORATION,
-                    title = destination.replace('_', ' ').replaceFirstChar { it.uppercase() },
+                    title = destinationTitle(destination),
                     description = "Você chega a um novo ponto da jornada.",
                     exits = listOf("continuar", "investigar"),
-                    narration = "Avançou para $destination."
+                    narration = destinationNarration(destination)
                 )
                 ExplorationResult(next, listOf(ExplorationEvent.Advanced(destination)))
             }
@@ -59,3 +59,22 @@ class ExplorationEngine(private val random: RandomSource) {
         }
     }
 }
+
+
+private fun destinationTitle(destination: String): String =
+    when (destination) {
+        "old_road" -> "Estrada Antiga"
+        "woodland_edge" -> "Limite da Floresta"
+        "ruined_shrine" -> "Santuário em Ruínas"
+        "watchtower" -> "Torre de Vigia"
+        else -> destination.replace('_', ' ').replaceFirstChar { it.uppercase() }
+    }
+
+private fun destinationNarration(destination: String): String =
+    when (destination) {
+        "old_road" -> "A estrada antiga se estende à sua frente, silenciosa e quase esquecida."
+        "woodland_edge" -> "Você alcança o limite da floresta. As árvores fecham-se adiante."
+        "ruined_shrine" -> "Entre as árvores, surgem as pedras de um santuário em ruínas."
+        "watchtower" -> "Você alcança a Torre de Vigia. A construção domina a paisagem à frente."
+        else -> "Você avança para um novo ponto da jornada."
+    }
