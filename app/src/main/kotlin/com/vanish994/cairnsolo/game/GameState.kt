@@ -15,6 +15,8 @@ data class CharacterProfile(
     val traits: CharacterTraits? = null,
     val gold: Int = 0,
     val bondRoll: Int? = null,
+    val secondBondRoll: Int? = null,
+    val omenRoll: Int? = null,
     val backgroundRolls: com.vanish994.cairnsolo.rules.BackgroundRolls? = null,
     val backgroundFeatures: List<String> = emptyList()
 ) {
@@ -22,6 +24,8 @@ data class CharacterProfile(
         require(age == null || age >= 1)
         require(gold >= 0)
         require(bondRoll == null || bondRoll in 1..20)
+        require(secondBondRoll == null || secondBondRoll in 1..20)
+        require(omenRoll == null || omenRoll in 1..20)
     }
 }
 
