@@ -199,6 +199,8 @@ private fun CharacterCreation(
                 Text("Atributos", style = MaterialTheme.typography.titleMedium)
                 Text("FOR " + rolled.str + "   DES " + rolled.dex + "   VON " + rolled.wil)
                 Text("HP: " + rolled.hp)
+                Text("Ouro: " + rolled.gold + " po")
+                Text("Vínculo: resultado " + (rolled.bondRoll ?: 0) + "/20")
                 Spacer(Modifier.height(8.dp))
                 Text("Você pode trocar quaisquer dois resultados:")
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -241,6 +243,7 @@ private fun CharacterCreation(
                     Text("Vestuário: " + traitLabel(traits.clothing))
                     Text("Virtude: " + traitLabel(traits.virtue))
                     Text("Vício: " + traitLabel(traits.vice))
+                    Text("Equipamento básico: mochila, rações para 3 dias e tocha")
                 }
             }
 
