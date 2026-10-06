@@ -29,7 +29,6 @@ class MainActivity : ComponentActivity() {
                 var state by remember { mutableStateOf(repository.load()) }
                 var name by remember { mutableStateOf("") }
                 var rolled by remember { mutableStateOf<RolledCharacter?>(null) }
-                val engine = remember { RulesEngine(KotlinRandomSource()) }
                 val actionResolver = remember {
                     GameActionResolver(
                         exploration = ExplorationEngine(KotlinRandomSource()),
@@ -58,35 +57,24 @@ class MainActivity : ComponentActivity() {
                             AppScreen.CHARACTER -> CharacterSheet(
                                 state = current,
                                 onDamage = {
-                                    val next = current.withRules(
-                                        engine.applyDamage(current.campaign.rules, 2).newState
-                                    )
+                                    val next = actionResolver.resolve(current, GameAction.ApplyDamage(2)).state
                                     repository.save(next)
                                     state = next
                                 },
                                 onExplore = { screen = AppScreen.EXPLORATION },
                                 onRest = {
-                                    val next = current.withRules(
-                                        engine.safeRest(current.campaign.rules).newState
-                                    )
+                                    val next = actionResolver.resolve(current, GameAction.Rest).state
                                     repository.save(next)
                                     state = next
                                 },
                                 onAddItem = {
                                     val id = "item-" + Random.nextInt(100000, 999999)
-                                    val next = current.withRules(
-                                        engine.addItem(
-                                            current.campaign.rules,
-                                            InventoryItem(id)
-                                        ).newState
-                                    )
+                                    val next = actionResolver.resolve(current, GameAction.AddItem(InventoryItem(id))).state
                                     repository.save(next)
                                     state = next
                                 },
                                 onRemoveItem = { id ->
-                                    val next = current.withRules(
-                                        engine.removeItem(current.campaign.rules, id).newState
-                                    )
+                                    val next = actionResolver.resolve(current, GameAction.RemoveItem(id)).state
                                     repository.save(next)
                                     state = next
                                 },
