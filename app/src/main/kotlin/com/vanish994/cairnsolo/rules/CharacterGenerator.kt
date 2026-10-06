@@ -107,6 +107,7 @@ fun rollCharacter(random: RandomSource): RolledCharacter =
         wil = random.d6() + random.d6() + random.d6(),
         hp = random.d6(),
         background = Background.fromD20(random.d20()),
+        backgroundRolls = BackgroundRolls(random.d6(), random.d6()),
         traits = rollTraits(random),
         age = rollAge(random).years,
         gold = random.d6() + random.d6() + random.d6(),
