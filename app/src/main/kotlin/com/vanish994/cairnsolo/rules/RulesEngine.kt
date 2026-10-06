@@ -102,11 +102,17 @@ class RulesEngine(private val random: RandomSource) {
 
     fun addItem(state: CharacterState, item: InventoryItem): GameResult {
         require(state.freeSlots >= item.slotCost)
-        val updated = state.copy(
-            inventory = state.inventory + item,
-            hp = if (state.freeSlots == item.slotCost) 0 else state.hp
+        val updated = state.copy(inventory = state.inventory + item)
+        val full = updated.usedSlots == 10
+        val finalState = if (full) updated.copy(hp = 0) else updated
+        return GameResult(
+            finalState,
+            buildList {
+                add(RuleEvent.InventoryChanged(finalState.usedSlots))
+                if (full) add(RuleEvent.InventoryFull)
+                if (full && state.hp > 0) add(RuleEvent.ScarTriggered(Scar.RATTLING, 0))
+            }
         )
-        return GameResult(updated, listOf(RuleEvent.InventoryChanged(updated.usedSlots)))
     }
 
     fun removeItem(state: CharacterState, itemId: String): GameResult {
