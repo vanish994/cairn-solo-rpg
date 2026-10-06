@@ -135,16 +135,18 @@ class RulesEngineTest {
 
     @Test
     fun doomedResolvesOnNextCriticalSave() {
-        val engine = RulesEngine(FixedRandomSource(1, 2))
-        val doomed = state(hp = 12, maxHp = 12).copy(doomed = true)
-        val result = engine.applyDamage(doomed, 13)
-        assertEquals(Scar.DOOMED, result.newState.scar)
-        assertEquals(false, result.newState.doomed)
+        val survived = RulesEngine(FixedRandomSource(1, 2)).applyDamage(
+            state(hp = 1, maxHp = 12).copy(doomed = true), 2
+        )
+        assertFalse(survived.newState.dead)
+        assertFalse(survived.newState.doomed)
+        assertEquals(6, survived.newState.maxHp)
 
         val fatal = RulesEngine(FixedRandomSource(20, 2)).applyDamage(
-            doomed.copy(hp = 1, str = 1), 2
+            state(hp = 1, maxHp = 12).copy(doomed = true, str = 1), 2
         )
         assertTrue(fatal.newState.dead)
+        assertTrue(fatal.newState.doomed)
     }
 
     @Test
