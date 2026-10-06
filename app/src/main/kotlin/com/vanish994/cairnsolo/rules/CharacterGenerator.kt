@@ -61,3 +61,25 @@ fun createCharacter(name: String, rolled: RolledCharacter): GameState {
         )
     )
 }
+
+
+fun rollTraits(random: RandomSource): CharacterTraits {
+    fun pick(values: List<String>): String = values[random.d10() - 1]
+    return CharacterTraits(
+        physique = pick(listOf("Athletic","Brawny","Flabby","Lanky","Rugged","Scrawny","Short","Statuesque","Stout","Towering")),
+        skin = pick(listOf("Birthmarked","Marked","Oily","Rosy","Scarred","Soft","Tanned","Tattooed","Weathered","Webbed")),
+        hair = pick(listOf("Bald","Braided","Curly","Filthy","Frizzy","Long","Luxurious","Oily","Wavy","Wispy")),
+        face = pick(listOf("Bony","Broken","Chiseled","Elongated","Pale","Perfect","Rakish","Sharp","Square","Sunken")),
+        speech = pick(listOf("Blunt","Booming","Cryptic","Droning","Formal","Gravelly","Precise","Squeaky","Stuttering","Whispery")),
+        clothing = pick(listOf("Antique","Bloody","Elegant","Filthy","Foreign","Frayed","Frumpy","Livery","Rancid","Soiled")),
+        virtue = pick(listOf("Ambitious","Cautious","Courageous","Disciplined","Gregarious","Honorable","Humble","Merciful","Serene","Tolerant")),
+        vice = pick(listOf("Aggressive","Bitter","Craven","Deceitful","Greedy","Lazy","Nervous","Rude","Vain","Vengeful"))
+    )
+}
+
+fun RandomSource.d10(): Int = roll(10)
+
+data class CharacterAge(val years: Int)
+
+fun rollAge(random: RandomSource): CharacterAge =
+    CharacterAge(random.d6() + random.d6() + 8 + random.d6() + random.d6() + 2)
