@@ -49,7 +49,9 @@ class GameStateTest {
                 profile = CharacterProfile(
                     age = 34,
                     background = Background.PROWLER,
-                    traits = CharacterTraits("Rugged", "Tanned", "Braided", "Sharp", "Blunt", "Frayed", "Cautious", "Greedy")
+                    traits = CharacterTraits("Rugged", "Tanned", "Braided", "Sharp", "Blunt", "Frayed", "Cautious", "Greedy"),
+                    gold = 12,
+                    bondRoll = 7
                 ),
                 sceneId = "ruined_shrine", turn = 42L,
                 sceneType = SceneType.EXPLORATION, sceneTitle = "Ruined Shrine",
@@ -86,5 +88,7 @@ class GameStateTest {
         assertEquals(null, restored.campaign.profile.age)
         assertEquals(null, restored.campaign.profile.background)
         assertEquals(null, restored.campaign.profile.traits)
+        assertEquals(0, restored.campaign.profile.gold)
+        assertEquals(null, restored.campaign.profile.bondRoll)
     }
 }

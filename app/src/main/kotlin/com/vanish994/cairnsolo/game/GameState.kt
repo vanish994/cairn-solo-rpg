@@ -9,7 +9,19 @@ data class CharacterIdentity(val id: String = UUID.randomUUID().toString(), val 
     init { require(name.isNotBlank()) }
 }
 
-data class CharacterProfile(val age: Int? = null, val background: Background? = null, val traits: CharacterTraits? = null) { init { require(age == null || age >= 1) } }
+data class CharacterProfile(
+    val age: Int? = null,
+    val background: Background? = null,
+    val traits: CharacterTraits? = null,
+    val gold: Int = 0,
+    val bondRoll: Int? = null
+) {
+    init {
+        require(age == null || age >= 1)
+        require(gold >= 0)
+        require(bondRoll == null || bondRoll in 1..20)
+    }
+}
 
 data class CampaignState(
     val campaignId: String = UUID.randomUUID().toString(),

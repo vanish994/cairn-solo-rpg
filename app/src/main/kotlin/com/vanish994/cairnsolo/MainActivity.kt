@@ -112,6 +112,10 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onBack = { screen = AppScreen.CHARACTER }
                             )
+
+                            AppScreen.RULES -> RulesScreen(
+                                onBack = { screen = AppScreen.CHARACTER }
+                            )
                         }
                     }
                 }
