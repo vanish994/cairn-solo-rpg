@@ -6,7 +6,7 @@ Criar a autoridade mecânica determinística do jogo.
 
 ## Fonte normativa
 
-O motor usa **Cairn Second Edition (2e)** como referência normativa. A página oficial de Core Rules confirma as regras de saves, HP, Armor, inventário, Fatigue/Deprivation, Critical Damage, combate e recuperação. citeturn0search0turn0search1
+O motor usa **Cairn Second Edition (2e)** como referência normativa. A página oficial de Core Rules é a referência para essas regras.
 
 Não misturar regras de outras edições sem uma decisão arquitetural explícita.
 
