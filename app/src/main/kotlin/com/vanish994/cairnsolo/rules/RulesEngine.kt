@@ -149,7 +149,7 @@ class RulesEngine(private val random: RandomSource) {
                 hp = 0,
                 str = newStr,
                 critical = true,
-                dead = !success,
+                dead = newStr == 0 || (state.doomed && !success),
                 doomed = if (state.doomed) !success else false,
                 maxHp = doomedResolved.second
             ),
