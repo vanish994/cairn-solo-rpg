@@ -9,6 +9,8 @@ data class CharacterIdentity(val id: String = UUID.randomUUID().toString(), val 
     init { require(name.isNotBlank()) }
 }
 
+data class CompanionState(val id: String, val hp: Int, val maxHp: Int, val armor: Int = 0, val str: Int = 0, val dex: Int = 0, val wil: Int = 0, val slots: Int = 0, val tags: Set<String> = emptySet())
+
 data class CharacterProfile(
     val age: Int? = null,
     val background: Background? = null,
@@ -18,7 +20,8 @@ data class CharacterProfile(
     val secondBondRoll: Int? = null,
     val omenRoll: Int? = null,
     val backgroundRolls: com.vanish994.cairnsolo.rules.BackgroundRolls? = null,
-    val backgroundFeatures: List<String> = emptyList()
+    val backgroundFeatures: List<String> = emptyList(),
+    val companions: List<CompanionState> = emptyList()
 ) {
     init {
         require(age == null || age >= 1)
