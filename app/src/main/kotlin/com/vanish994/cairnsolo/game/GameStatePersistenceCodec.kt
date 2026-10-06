@@ -24,7 +24,9 @@ object GameStatePersistenceCodec {
             p.traits?.let { t -> put("traitPhysique", t.physique); put("traitSkin", t.skin); put("traitHair", t.hair); put("traitFace", t.face); put("traitSpeech", t.speech); put("traitClothing", t.clothing); put("traitVirtue", t.virtue); put("traitVice", t.vice) }
             put("sceneId", c.sceneId); put("sceneType", c.sceneType.name); put("sceneTitle", c.sceneTitle)
             put("sceneDescription", c.sceneDescription); put("exits", c.exits.joinToString(SEPARATOR))
-            put("log", c.log.joinToString(SEPARATOR)); put("turn", c.turn.toString()); put("updatedAt", state.updatedAtEpochMs.toString())
+            put("log", c.log.joinToString(SEPARATOR)); put("turn", c.turn.toString())
+            put("guardianMessage", c.guardianMessage); put("guardianHistory", c.guardianHistory.joinToString(SEPARATOR))
+            put("updatedAt", state.updatedAtEpochMs.toString())
             put("str", r.str.toString()); put("dex", r.dex.toString()); put("wil", r.wil.toString())
             put("maxStr", r.maxStr.toString()); put("maxDex", r.maxDex.toString()); put("maxWil", r.maxWil.toString())
             put("hp", r.hp.toString()); put("maxHp", r.maxHp.toString()); put("armor", r.armor.toString()); put("fatigue", r.fatigue.toString())
@@ -95,7 +97,9 @@ object GameStatePersistenceCodec {
                 campaignId = string("campaignId"), character = CharacterIdentity(string("characterId"), string("characterName", "Aventureiro")),
                 rules = rules, profile = profile, sceneId = string("sceneId", "prologue"), sceneType = sceneType,
                 sceneTitle = string("sceneTitle", "Prologue"), sceneDescription = string("sceneDescription", "A aventura começa."),
-                exits = exits, log = log, turn = long("turn", 0L)
+                exits = exits, log = log, turn = long("turn", 0L),
+                guardianMessage = string("guardianMessage", DEFAULT_GUARDIAN_PROLOGUE),
+                guardianHistory = string("guardianHistory").split(SEPARATOR).filter { it.isNotBlank() }
             ), updatedAtEpochMs = long("updatedAt", 0L)
         )
     }
