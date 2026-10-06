@@ -22,6 +22,8 @@ Criar um APK Android jogável em que:
 6. **Nenhuma chave de API deve entrar no Git.**
 7. **O projeto deve continuar utilizável mesmo sem a IA, através de MockAIProvider.**
 8. **Preferir soluções simples e adequadas ao desenvolvimento pelo Android.**
+9. **Ações mecânicas passam pelo Rules Engine e produzem resultados/eventos verificáveis.**
+10. **A edição/fonte normativa de Cairn deve ser registrada antes da implementação das regras específicas.**
 
 ## Stack planejada
 
@@ -58,29 +60,33 @@ A estrutura pode evoluir conforme o projeto crescer. Não criar abstrações ou 
 ```text
 Jogador
    ↓
-UI
+UI / Intent
    ↓
-Intent/Action
+GameAction
    ↓
 Rules Engine
    ↓
-GameState
+GameResult
+   ├── newState
+   └── events
    ↓
 Context Builder
    ↓
-Gemini
+Gemini / MockAI
    ↓
 Narrativa
    ↓
 UI
 ```
 
+O Gemini nunca é autoridade sobre HP, dano, inventário, rolagens ou outras mudanças mecânicas.
+
 ## Desenvolvimento por Gates
 
 | Gate | Objetivo | Estado |
 |---|---|---|
-| 0 | Arquitetura Android e repositório | 🔵 |
-| 1 | Motor de regras Cairn | ⚪ |
+| 0 | Arquitetura Android e repositório | ✅ |
+| 1 | Motor de regras Cairn | 🟡 |
 | 2 | Criação de personagem | ⚪ |
 | 3 | Campanha e GameState | ⚪ |
 | 4 | Integração Gemini | ⚪ |
@@ -102,6 +108,16 @@ Antes de alterar código:
 5. Não avance Gates sem cumprir os critérios de conclusão.
 6. Faça alterações pequenas e verificáveis.
 7. Atualize documentação quando uma decisão arquitetural mudar.
+8. Inspecione o código existente antes de criar novas estruturas.
+
+## Referências arquiteturais
+
+O projeto usa ideias de referência, não cópia de implementação:
+
+- `kylep/claude-ttrpg`: separação forte entre GM/narrativa e engine determinística.
+- `yochaigal/cairn`: fonte oficial para consulta das regras de Cairn; a edição adotada pelo projeto deve ser registrada.
+- Projetos Android Kotlin/Compose com Clean Architecture: separação entre domínio, dados e apresentação.
+- Projetos de jogos com state machine/MVI: fluxo unidirecional e transições explícitas quando isso simplificar testes e depuração.
 
 ## Segurança
 
@@ -118,4 +134,6 @@ Use `.env.example` ou configuração equivalente apenas com nomes de variáveis.
 
 ## Estado atual
 
-Projeto inicial. Gate 0 em preparação.
+**Gate 0 concluído. Gate 1 pronto para iniciar.**
+
+O build debug foi validado no GitHub Actions e o artefato foi gerado. O próximo passo é fixar a fonte/edição normativa de Cairn e implementar o núcleo determinístico das regras com testes.
