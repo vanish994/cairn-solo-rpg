@@ -130,22 +130,77 @@ data class RolledCharacter(
     val traits: CharacterTraits? = null,
     val age: Int? = null,
     val gold: Int = 0,
-    val bondRoll: Int? = null
+    val bondRoll: Int? = null,
+    val secondBondRoll: Int? = null,
+    val omenRoll: Int? = null
 )
 
-fun rollCharacter(random: RandomSource): RolledCharacter =
-    RolledCharacter(
-        str = random.d6() + random.d6() + random.d6(),
-        dex = random.d6() + random.d6() + random.d6(),
-        wil = random.d6() + random.d6() + random.d6(),
-        hp = random.d6(),
-        background = Background.fromD20(random.d20()),
-        backgroundRolls = BackgroundRolls(random.d6(), random.d6()),
-        traits = rollTraits(random),
-        age = rollAge(random).years,
-        gold = random.d6() + random.d6() + random.d6(),
-        bondRoll = random.d20()
+fun rollCharacter(random: RandomSource): RolledCharacter {
+    val str = random.d6() + random.d6() + random.d6()
+    val dex = random.d6() + random.d6() + random.d6()
+    val wil = random.d6() + random.d6() + random.d6()
+    val hp = random.d6()
+    val background = Background.fromD20(random.d20())
+    val backgroundRolls = BackgroundRolls(random.d6(), random.d6())
+    val traits = rollTraits(random)
+    val age = rollAge(random).years
+    val gold = random.d6() + random.d6() + random.d6()
+    val bondRoll = random.d20()
+    val firstEffects = backgroundCreationEffects(background, backgroundRolls, random)
+    return RolledCharacter(
+        str = str,
+        dex = dex,
+        wil = wil,
+        hp = hp + firstEffects.bonusHp,
+        background = background,
+        backgroundRolls = backgroundRolls,
+        traits = traits,
+        age = age,
+        gold = gold + firstEffects.bonusGold,
+        bondRoll = bondRoll,
+        secondBondRoll = firstEffects.secondBondRoll,
+        omenRoll = firstEffects.omenRoll
     )
+}
+
+data class BackgroundCreationEffects(
+    val bonusHp: Int = 0,
+    val bonusGold: Int = 0,
+    val secondBondRoll: Int? = null,
+    val omenRoll: Int? = null
+)
+
+fun backgroundCreationEffects(
+    background: Background,
+    rolls: BackgroundRolls,
+    random: RandomSource
+): BackgroundCreationEffects {
+    val keys = backgroundOutcomes(background, rolls).map { it.key }
+    val extraHp = when {
+        "extra_hp_falchion" in keys || "extra_hp_gambeson" in keys -> random.d4()
+        else -> 0
+    }
+    val extraGold = when {
+        "extra_gold" in keys -> 30
+        else -> 0
+    }
+    val secondBond = if ("second_bond" in keys) random.d20() else null
+    val omen = if (
+        "longbow_jerkin" in keys ||
+        "healing_unguent" in keys ||
+        "gnarled_staff" in keys ||
+        "chainmail" in keys ||
+        "storybook_dagger" in keys ||
+        "control_plants" in keys ||
+        "omen_knife" in keys
+    ) random.d6() else null
+    return BackgroundCreationEffects(
+        bonusHp = extraHp,
+        bonusGold = extraGold,
+        secondBondRoll = secondBond,
+        omenRoll = omen
+    )
+}
 
 fun RolledCharacter.swapAttributes(first: AttributeSlot, second: AttributeSlot): RolledCharacter {
     require(first != second)
