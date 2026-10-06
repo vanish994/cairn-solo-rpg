@@ -177,11 +177,15 @@ fun backgroundCreationEffects(
 ): BackgroundCreationEffects {
     val keys = backgroundOutcomes(background, rolls).map { it.key }
     val extraHp = when {
-        "extra_hp_falchion" in keys || "extra_hp_gambeson" in keys -> random.d4()
+        "extra_hp_falchion" in keys || "extra_hp_gambeson" in keys -> random.roll(4)
         else -> 0
     }
     val extraGold = when {
         "extra_gold" in keys -> 30
+        "fence_cutters" in keys || "paring_knife_gold" in keys -> 20
+        "guild_contraptions" in keys -> 40
+        "prize_warrant" in keys || "tragic_tales" in keys || "star_waltz" in keys -> 100
+        "performance_gold" in keys -> random.roll(6)
         else -> 0
     }
     val secondBond = if ("second_bond" in keys) random.d20() else null
@@ -193,7 +197,7 @@ fun backgroundCreationEffects(
         "storybook_dagger" in keys ||
         "control_plants" in keys ||
         "omen_knife" in keys
-    ) random.d6() else null
+    ) random.d20() else null
     return BackgroundCreationEffects(
         bonusHp = extraHp,
         bonusGold = extraGold,
