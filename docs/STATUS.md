@@ -128,3 +128,17 @@ Concluídas as correções de capacidade de inventário e Fatigue, estrutura per
 O núcleo determinístico agora cobre Saves, Armor, dano, dano crítico, estado crítico/morte, inventário, Fatigue, Deprivation, descanso, persistência do estado, RNG injetável e a base do Character Builder. A geração de personagem inclui Background, Traits e Age conforme a Character Creation da Cairn 2e. A resolução de HP exatamente em 0 usa uma rolagem d12 para selecionar a Cicatriz, em vez de derivar o resultado do dano.
 
 Pendências deliberadamente fora do fechamento do núcleo: catálogo de equipamento/backgrounds detalhado e conteúdo específico de combate que dependa de itens. Essas partes ficam para a camada de conteúdo/campanha, mantendo o Rules Engine independente de conteúdo narrativo.
+
+
+## Gate 2 — exploração inicial
+
+- [x] Tipos de cena.
+- [x] Estado de cena persistente.
+- [x] Diário de campanha persistente.
+- [x] Motor determinístico de exploração.
+- [x] Ação CONTINUE com destinos determinados pelo RNG injetável.
+- [x] Ação INVESTIGATE com resultado determinístico.
+- [x] Testes unitários do motor de exploração.
+- [x] Primeiro fluxo de exploração conectado à UI.
+
+Próximo incremento: separar ações de exploração da tela de personagem e preparar o contrato de entrada/saída que será consumido futuramente pelo MJ.
