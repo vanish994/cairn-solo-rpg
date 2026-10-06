@@ -162,11 +162,13 @@ class RulesEngineTest {
     }
 
     @Test
-    fun fillingAllInventorySlotsDropsHpToZero() {
-        val full = state(inventory = List(9) { InventoryItem("item-$it") })
+    fun fillingAllInventorySlotsDoesNotChangeHp() {
+        val full = state(hp = 6, inventory = List(9) { InventoryItem("item-$it") })
         val result = RulesEngine(FixedRandomSource(1)).addItem(full, InventoryItem("last"))
-        assertEquals(0, result.newState.hp)
+        assertEquals(6, result.newState.hp)
         assertEquals(10, result.newState.usedSlots)
+        assertEquals(1, result.events.size)
+        assertIs<RuleEvent.InventoryChanged>(result.events.single())
     }
 
     @Test
