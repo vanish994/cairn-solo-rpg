@@ -29,7 +29,7 @@ class CharacterGeneratorTest {
 
     @Test
     fun backgroundRollsAreRolledAndPersisted() {
-        val result = rollCharacter(FixedRandomSource(4))
+        val result = rollCharacter(FixedRandomSource(4, d6Value = 4))
         assertEquals(4, result.backgroundRolls?.first)
         assertEquals(4, result.backgroundRolls?.second)
 
@@ -106,7 +106,7 @@ class CharacterGeneratorTest {
 
     @Test
     fun mjContextExposesReadOnlyProfile() {
-        val rolled = RolledCharacter(9, 11, 13, 5, Background.PROWLER, null, 31)
+        val rolled = RolledCharacter(9, 11, 13, 5, background = Background.PROWLER, age = 31)
         val context = MJContext.from(createCharacter("Aran", rolled))
         assertEquals(31, context.profile.age)
         assertEquals(Background.PROWLER, context.profile.background)
@@ -128,13 +128,79 @@ class CharacterGeneratorTest {
     @Test
     fun everyBackgroundHasTwelveCataloguedOutcomes() {
         for (background in Background.entries) {
-            val outcomes = BACKGROUND_OUTCOME_KEYS[background]
-            assertEquals(12, outcomes?.size, background.displayName)
             for (roll in 1..6) {
-                assertNotNull(backgroundOutcomes(background, BackgroundRolls(roll, roll)).first())
-                assertNotNull(backgroundOutcomes(background, BackgroundRolls(roll, roll)).second())
+                val outcomes = backgroundOutcomes(background, BackgroundRolls(roll, roll))
+                assertEquals(2, outcomes.size, background.displayName)
+                assertNotNull(outcomes.first().key)
+                assertNotNull(outcomes[1].key)
             }
         }
+    }
+
+
+    @Test
+    fun directBackgroundCreationEffectsAreResolved() {
+        val effects = backgroundCreationEffects(
+            Background.FIELDWARDEN,
+            BackgroundRolls(6, 1),
+            FixedRandomSource(3, d4Value = 3)
+        )
+        assertEquals(3, effects.bonusHp)
+
+        val gold = backgroundCreationEffects(
+            Background.OUTRIDER,
+            BackgroundRolls(4, 1),
+            FixedRandomSource(3)
+        )
+        assertEquals(30, gold.bonusGold)
+
+        val bonds = backgroundCreationEffects(
+            Background.OUTRIDER,
+            BackgroundRolls(6, 1),
+            FixedRandomSource(17)
+        )
+        assertEquals(17, bonds.secondBondRoll)
+    }
+
+    @Test
+    fun backgroundSecondaryRollsPersist() {
+        val rolled = RolledCharacter(
+            9, 11, 13, 5,
+            background = Background.OUTRIDER,
+            secondBondRoll = 17,
+            omenRoll = 9
+        )
+        val state = createCharacter("Aran", rolled)
+        assertEquals(17, state.campaign.profile.secondBondRoll)
+        assertEquals(9, state.campaign.profile.omenRoll)
+    }
+
+
+    @Test
+    fun startingGearCarriesMechanicalMetadata() {
+        val cutpurse = createCharacter("Patch", RolledCharacter(9, 11, 13, 5, Background.CUTPURSE))
+        val daggers = cutpurse.campaign.rules.inventory.first { it.id == "twin-daggers" }
+        assertEquals("d6+d6", daggers.damage)
+        assertEquals(setOf("paired"), daggers.tags)
+        assertEquals(1, cutpurse.campaign.rules.inventory.first { it.id == "padded-leather" }.armor)
+
+        val outrider = createCharacter("Rider", RolledCharacter(9, 11, 13, 5, Background.OUTRIDER))
+        assertEquals("d10", outrider.campaign.rules.inventory.first { it.id == "long-sword" }.damage)
+        assertEquals("d8", outrider.campaign.rules.inventory.first { it.id == "crossbow" }.damage)
+
+        val mountaineer = createCharacter("Bank", RolledCharacter(9, 11, 13, 5, Background.MOUNTEBANK))
+        assertEquals(setOf("capacity:+4", "bulky-when-pulled"), mountaineer.campaign.rules.inventory.first { it.id == "cart" }.tags)
+    }
+
+    @Test
+    fun backgroundCompanionsBecomeStructuredState() {
+        val fletch = rollCharacter(FixedRandomSource(7, d6Value = 2))
+        val state = createCharacter("Fletch", fletch)
+        assertEquals("falcon", state.campaign.profile.companions.single().id)
+
+        val ordinary = rollCharacter(FixedRandomSource(1, d6Value = 1))
+        val ordinaryState = createCharacter("Aran", ordinary)
+        assertEquals(emptyList(), ordinaryState.campaign.profile.companions)
     }
 
     @Test

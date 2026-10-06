@@ -67,6 +67,7 @@ class MainActivity : ComponentActivity() {
                                     val created = createCharacter(name.trim(), finalRolled)
                                     repository.save(created)
                                     state = created
+                                    screen = AppScreen.EXPLORATION
                                 }
                             )
                         }
@@ -205,6 +206,8 @@ private fun CharacterCreation(
                 Text("HP: " + rolled.hp)
                 Text("Ouro: " + rolled.gold + " po")
                 Text("Vínculo: resultado " + (rolled.bondRoll ?: 0) + "/20")
+                rolled.secondBondRoll?.let { Text("Segundo vínculo: resultado " + it + "/20") }
+                rolled.omenRoll?.let { Text("Omen: resultado " + it + "/20") }
                 Spacer(Modifier.height(8.dp))
                 Text("Você pode trocar quaisquer dois resultados:")
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -321,6 +324,11 @@ private fun CharacterSheet(
                 Button(onClick = onRest) { Text("Descansar") }
             }
             Spacer(Modifier.height(12.dp))
+            c.profile.backgroundRolls?.let { rolls ->
+                Text("Background: " + rolls.first + " e " + rolls.second)
+                c.profile.backgroundFeatures.forEach { Text("• " + backgroundOutcomeLabel(it)) }
+            }
+            c.profile.companions.forEach { Text("Companheiro: " + it.id + " — HP " + it.hp + "/" + it.maxHp) }
             Text("Inventário", style = MaterialTheme.typography.titleMedium)
             if (r.inventory.isEmpty()) Text("Nenhum item")
             Spacer(Modifier.height(4.dp))
@@ -331,7 +339,7 @@ private fun CharacterSheet(
         items(r.inventory, key = { it.id }) { item ->
             ListItem(
                 headlineContent = { Text(item.id) },
-                supportingContent = { Text(item.slotCost.toString() + if (item.slotCost == 1) " espaço" else " espaços") },
+                supportingContent = { Text(buildList { add(item.slotCost.toString() + if (item.slotCost == 1) " espaço" else " espaços"); item.damage?.let { add(it) }; item.armor.takeIf { it > 0 }?.let { add("Armor " + it) }; item.uses?.let { add(it.toString() + " usos") } }.joinToString(" • ")) },
                 trailingContent = { TextButton(onClick = { onRemoveItem(item.id) }) { Text("Remover") } }
             )
         }
@@ -400,6 +408,8 @@ private fun RulesScreen(onBack: () -> Unit) {
         }
     }
 }
+
+private fun backgroundOutcomeLabel(key: String): String = key.replace("_", " ").replaceFirstChar { it.uppercase() }
 
 private fun backgroundLabel(background: Background): String =
     when (background) {

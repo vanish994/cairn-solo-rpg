@@ -146,7 +146,7 @@ class GameActionResolverTest {
             9, 11, 13, 5,
             com.vanish994.cairnsolo.rules.Background.PROWLER,
             null,
-            29
+            age = 29
         )
         val result = resolver().resolve(state(), GameAction.CreateCharacter("Aran", rolled))
         assertEquals("Aran", result.state.campaign.character.name)
