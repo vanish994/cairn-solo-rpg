@@ -28,6 +28,17 @@ class CharacterGeneratorTest {
     }
 
     @Test
+    fun backgroundRollsAreRolledAndPersisted() {
+        val result = rollCharacter(FixedRandomSource(4))
+        assertEquals(4, result.backgroundRolls?.first)
+        assertEquals(4, result.backgroundRolls?.second)
+
+        val state = createCharacter("Aran", result)
+        assertEquals(4, state.campaign.profile.backgroundRolls?.first)
+        assertEquals(4, state.campaign.profile.backgroundRolls?.second)
+    }
+
+    @Test
     fun attributesCanBeSwappedAfterRolling() {
         val result = RolledCharacter(8, 12, 15, 4)
             .swapAttributes(AttributeSlot.STR, AttributeSlot.WIL)
