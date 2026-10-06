@@ -48,7 +48,8 @@ data class CampaignState(
     val exits: List<String> = listOf("investigar a luz", "seguir pela estrada", "procurar abrigo"),
     val log: List<String> = emptyList(),
     val guardianMessage: String = DEFAULT_GUARDIAN_PROLOGUE,
-    val guardianHistory: List<String> = emptyList()
+    val guardianHistory: List<String> = emptyList(),
+    val guardianInteractionId: String? = null
 )
 
 data class GameState(
@@ -85,6 +86,28 @@ data class GameState(
                 guardianHistory = (campaign.guardianHistory + "Você: $clean" + reply).takeLast(20),
                 log = (campaign.log + "Você declarou: $clean").takeLast(50),
                 turn = campaign.turn + 1
+            ),
+            updatedAtEpochMs = System.currentTimeMillis()
+        )
+    }
+
+    fun applyGuardianResponse(
+        narration: String,
+        sceneTitle: String,
+        sceneDescription: String,
+        interactionId: String? = null
+    ): GameState {
+        val clean = narration.trim()
+        require(clean.isNotEmpty())
+        return copy(
+            campaign = campaign.copy(
+                sceneTitle = sceneTitle.ifBlank { campaign.sceneTitle },
+                sceneDescription = sceneDescription.ifBlank { campaign.sceneDescription },
+                guardianMessage = clean,
+                guardianHistory = (campaign.guardianHistory + clean).takeLast(20),
+                log = (campaign.log + clean).takeLast(50),
+                turn = campaign.turn + 1,
+                guardianInteractionId = interactionId ?: campaign.guardianInteractionId
             ),
             updatedAtEpochMs = System.currentTimeMillis()
         )
