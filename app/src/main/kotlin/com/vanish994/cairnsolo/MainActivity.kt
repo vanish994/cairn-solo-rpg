@@ -3,6 +3,8 @@ package com.vanish994.cairnsolo
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -10,7 +12,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.shape.RoundedCornerShape
 import com.vanish994.cairnsolo.game.GameAction
 import com.vanish994.cairnsolo.game.GameActionResolver
 import com.vanish994.cairnsolo.game.GameState
@@ -25,7 +32,14 @@ class MainActivity : ComponentActivity() {
         val repository = LocalGameStateRepository(applicationContext)
 
         setContent {
-            MaterialTheme {
+            MaterialTheme(colorScheme = darkColorScheme(
+                primary = Color(0xFFD9A441),
+                onPrimary = Color(0xFF17120B),
+                secondary = Color(0xFF7A8F6A),
+                background = Color(0xFF0B0D0C),
+                surface = Color(0xFF121615),
+                onSurface = Color(0xFFE8E1D5)
+            )) {
                 var state by remember { mutableStateOf(repository.load()) }
                 var name by remember { mutableStateOf("") }
                 var rolled by remember { mutableStateOf<RolledCharacter?>(null) }
@@ -38,7 +52,7 @@ class MainActivity : ComponentActivity() {
                 }
                 var screen by remember { mutableStateOf(AppScreen.CHARACTER) }
 
-                Surface(Modifier.fillMaxSize()) {
+                Surface(Modifier.fillMaxSize(), color = Color(0xFF0B0D0C)) {
                     if (state == null) {
                         if (screen == AppScreen.RULES) {
                             RulesScreen(onBack = { screen = AppScreen.CHARACTER })
@@ -139,22 +153,37 @@ private fun ExplorationScreen(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         item {
-            Text("Exploração", style = MaterialTheme.typography.headlineMedium)
-            Text("Turno " + c.turn + " • " + sceneTypeLabel(c.sceneType))
-            Spacer(Modifier.height(16.dp))
-            Text(c.sceneTitle, style = MaterialTheme.typography.titleLarge)
-            Spacer(Modifier.height(8.dp))
-            Text(c.sceneDescription)
+            Text("CAIRN", style = MaterialTheme.typography.headlineMedium)
+            Text("Turno " + c.turn + " • " + sceneTypeLabel(c.sceneType), color = Color(0xFFD9A441))
+            Spacer(Modifier.height(12.dp))
+            Image(
+                painter = painterResource(R.drawable.cairn_old_road),
+                contentDescription = "Estrada antiga em pixel art",
+                modifier = Modifier.fillMaxWidth().aspectRatio(1.45f).clip(RoundedCornerShape(14.dp)),
+                contentScale = ContentScale.Crop
+            )
+            Spacer(Modifier.height(14.dp))
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = Color(0xFF121615),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Column(Modifier.padding(16.dp)) {
+                    Text(c.sceneTitle, style = MaterialTheme.typography.titleLarge)
+                    Spacer(Modifier.height(6.dp))
+                    Text(c.sceneDescription)
+                }
+            }
             Spacer(Modifier.height(16.dp))
             if (c.exits.isNotEmpty()) {
                 Text("Possibilidades: " + c.exits.joinToString(" • "))
                 Spacer(Modifier.height(12.dp))
             }
-            Button(onClick = { onAction(GameAction.ExploreContinue) }) { Text("Continuar") }
+            Button(modifier = Modifier.fillMaxWidth(), onClick = { onAction(GameAction.ExploreContinue) }) { Text("Continuar") }
             Spacer(Modifier.height(8.dp))
-            Button(onClick = { onAction(GameAction.ExploreInvestigate) }) { Text("Investigar") }
+            Button(modifier = Modifier.fillMaxWidth(), onClick = { onAction(GameAction.ExploreInvestigate) }) { Text("Investigar") }
             Spacer(Modifier.height(8.dp))
-            OutlinedButton(onClick = { onAction(GameAction.ExploreRest) }) { Text("Descansar") }
+            OutlinedButton(modifier = Modifier.fillMaxWidth(), onClick = { onAction(GameAction.ExploreRest) }) { Text("Descansar") }
             Spacer(Modifier.height(16.dp))
             OutlinedButton(onClick = onBack) { Text("Voltar à ficha") }
             Spacer(Modifier.height(16.dp))
@@ -291,10 +320,28 @@ private fun CharacterSheet(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         item {
-            Text(c.character.name, style = MaterialTheme.typography.headlineMedium)
-            Text("Turno " + c.turn + " • " + sceneTypeLabel(c.sceneType))
-            Text(c.sceneTitle, style = MaterialTheme.typography.titleLarge)
-            Text(c.sceneDescription)
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Image(
+                    painter = painterResource(R.drawable.cairn_jurandir_portrait),
+                    contentDescription = "Retrato pixel art do personagem",
+                    modifier = Modifier.size(88.dp).clip(RoundedCornerShape(12.dp)),
+                    contentScale = ContentScale.Crop
+                )
+                Spacer(Modifier.width(12.dp))
+                Column {
+                    Text(c.character.name, style = MaterialTheme.typography.headlineMedium)
+                    Text("Turno " + c.turn + " • " + sceneTypeLabel(c.sceneType), color = Color(0xFFD9A441))
+                    c.profile.background?.let { Text(backgroundLabel(it), color = Color(0xFFB7C3A4)) }
+                }
+            }
+            Spacer(Modifier.height(14.dp))
+            Surface(modifier = Modifier.fillMaxWidth(), color = Color(0xFF121615), shape = RoundedCornerShape(14.dp)) {
+                Column(Modifier.padding(16.dp)) {
+                    Text(c.sceneTitle, style = MaterialTheme.typography.titleLarge)
+                    Spacer(Modifier.height(6.dp))
+                    Text(c.sceneDescription)
+                }
+            }
             if (c.exits.isNotEmpty()) Text("Saídas: " + c.exits.joinToString(" • "))
             Spacer(Modifier.height(12.dp))
             Text("Pontos de vida: " + r.hp + "/" + r.maxHp)
@@ -318,10 +365,10 @@ private fun CharacterSheet(
                 Text("Vício: " + traitLabel(traits.vice))
             }
             Spacer(Modifier.height(12.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = onExplore) { Text("Explorar") }
-                Button(onClick = onDamage) { Text("Receber 2 de dano") }
-                Button(onClick = onRest) { Text("Descansar") }
+            Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(modifier = Modifier.fillMaxWidth(), onClick = onExplore) { Text("Explorar") }
+                Button(modifier = Modifier.fillMaxWidth(), onClick = onDamage) { Text("Receber 2 de dano") }
+                OutlinedButton(modifier = Modifier.fillMaxWidth(), onClick = onRest) { Text("Descansar") }
             }
             Spacer(Modifier.height(12.dp))
             c.profile.backgroundRolls?.let { rolls ->
