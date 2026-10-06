@@ -44,8 +44,24 @@ fun rollCharacter(random: RandomSource): RolledCharacter =
         str = random.d6() + random.d6() + random.d6(),
         dex = random.d6() + random.d6() + random.d6(),
         wil = random.d6() + random.d6() + random.d6(),
-        hp = random.d6()
+        hp = random.d6(),
+        background = Background.fromD20(random.d20()),
+        traits = rollTraits(random),
+        age = rollAge(random).years
     )
+
+fun RolledCharacter.swapAttributes(first: AttributeSlot, second: AttributeSlot): RolledCharacter {
+    require(first != second)
+    val values = listOf(str, dex, wil).toMutableList()
+    val firstIndex = first.ordinal
+    val secondIndex = second.ordinal
+    val temp = values[firstIndex]
+    values[firstIndex] = values[secondIndex]
+    values[secondIndex] = temp
+    return copy(str = values[0], dex = values[1], wil = values[2])
+}
+
+enum class AttributeSlot { STR, DEX, WIL }
 
 fun createCharacter(name: String, rolled: RolledCharacter): GameState {
     require(name.isNotBlank())
