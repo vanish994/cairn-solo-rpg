@@ -6,8 +6,6 @@ plugins {
 group = "com.vanish994"
 version = "0.1.0"
 
-repositories { mavenCentral() }
-
 dependencies {
     implementation("com.google.code.gson:gson:2.11.0")
     testImplementation(kotlin("test"))
