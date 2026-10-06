@@ -50,7 +50,7 @@ sealed interface RuleEvent {
     data class SaveResolved(val attribute: Attribute, val roll: Int, val success: Boolean) : RuleEvent
     data class DamageApplied(val rawDamage: Int, val armorAbsorbed: Int, val hpDamage: Int) : RuleEvent
     data class CriticalDamage(val excessDamage: Int, val strAfter: Int, val saveRoll: Int, val saveSuccess: Boolean) : RuleEvent
-    data class ScarTriggered(val scar: Scar, val hpLost: Int) : RuleEvent
+    data class ScarTriggered(val scar: Scar, val hpLost: Int, val detail: String) : RuleEvent
     data class InventoryChanged(val usedSlots: Int) : RuleEvent
     data class FatigueAdded(val amount: Int) : RuleEvent
     data class FatigueRecovered(val amount: Int) : RuleEvent
@@ -79,9 +79,23 @@ class RulesEngine(private val random: RandomSource) {
 
         if (remainingHp == 0) {
             val scar = Scar.entries[hpDamage.coerceIn(1, 12) - 1]
+            val detail = when (scar) {
+                Scar.LASTING -> "lasting_scar"
+                Scar.RATTLING -> "rattling_blow"
+                Scar.WALLOPED -> "walloped"
+                Scar.BROKEN_LIMB -> "broken_limb"
+                Scar.DISEASED -> "diseased"
+                Scar.HEAD_WOUND -> "reorienting_head_wound"
+                Scar.HAMSTRUNG -> "hamstrung"
+                Scar.DEAFENED -> "deafened"
+                Scar.RE_BRAINED -> "re_brained"
+                Scar.SUNDERED -> "sundered"
+                Scar.MORTAL_WOUND -> "mortal_wound"
+                Scar.DOOMED -> "doomed"
+            }
             return GameResult(
                 state.copy(hp = 0, scar = scar),
-                listOf(damageEvent, RuleEvent.ScarTriggered(scar, hpDamage))
+                listOf(damageEvent, RuleEvent.ScarTriggered(scar, hpDamage, detail))
             )
         }
 
