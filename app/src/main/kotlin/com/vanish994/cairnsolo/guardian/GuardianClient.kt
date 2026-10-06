@@ -79,6 +79,7 @@ class HttpGuardianClient(
             put("sceneDescription", c.sceneDescription)
             put("exits", JSONArray(c.exits))
             put("guardianMessage", c.guardianMessage)
+            put("guardianInteractionId", c.guardianInteractionId ?: JSONObject.NULL)
             put("guardianHistory", JSONArray(c.guardianHistory.takeLast(12)))
             put("stats", JSONObject().apply {
                 put("str", r.str)
