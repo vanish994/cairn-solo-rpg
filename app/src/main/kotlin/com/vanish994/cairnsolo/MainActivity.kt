@@ -101,7 +101,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-enum class AppScreen { CHARACTER, EXPLORATION }
+enum class AppScreen { CHARACTER, EXPLORATION, RULES }
 
 @Composable
 private fun ExplorationScreen(
