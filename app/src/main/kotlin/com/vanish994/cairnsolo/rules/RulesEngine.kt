@@ -12,7 +12,7 @@ data class CharacterState(
     val hp: Int, val maxHp: Int, val armor: Int,
     val inventory: List<InventoryItem> = emptyList(),
     val fatigue: Int = 0, val deprived: Boolean = false,
-    val critical: Boolean = false, val dead: Boolean = false, val scar: Int? = null
+    val critical: Boolean = false, val dead: Boolean = false, val scar: Scar? = null
 ) {
     init {
         require(str >= 0 && dex >= 0 && wil >= 0)
@@ -20,7 +20,7 @@ data class CharacterState(
         require(armor in 0..3)
         require(fatigue >= 0)
         require(inventory.sumOf { it.slotCost } + fatigue <= 10)
-        require(scar == null || scar in 1..12)
+        
     }
     fun attribute(attribute: Attribute): Int = when (attribute) {
         Attribute.STR -> str; Attribute.DEX -> dex; Attribute.WIL -> wil
@@ -44,11 +44,13 @@ class FixedRandomSource(private val d20Value: Int, private val d6Value: Int = 1)
     }
 }
 
+enum class Scar { LASTING, RATTLING, WALLOPED, BROKEN_LIMB, DISEASED, HEAD_WOUND, HAMSTRUNG, DEAFENED, RE_BRAINED, SUNDERED, MORTAL_WOUND, DOOMED }
+
 sealed interface RuleEvent {
     data class SaveResolved(val attribute: Attribute, val roll: Int, val success: Boolean) : RuleEvent
     data class DamageApplied(val rawDamage: Int, val armorAbsorbed: Int, val hpDamage: Int) : RuleEvent
     data class CriticalDamage(val excessDamage: Int, val strAfter: Int, val saveRoll: Int, val saveSuccess: Boolean) : RuleEvent
-    data class ScarTriggered(val scar: Int, val hpLost: Int) : RuleEvent
+    data class ScarTriggered(val scar: Scar, val hpLost: Int) : RuleEvent
     data class InventoryChanged(val usedSlots: Int) : RuleEvent
     data class FatigueAdded(val amount: Int) : RuleEvent
     data class FatigueRecovered(val amount: Int) : RuleEvent
@@ -76,7 +78,7 @@ class RulesEngine(private val random: RandomSource) {
         if (remainingHp > 0) return GameResult(state.copy(hp = remainingHp), listOf(damageEvent))
 
         if (remainingHp == 0) {
-            val scar = hpDamage.coerceIn(1, 12)
+            val scar = Scar.entries[hpDamage.coerceIn(1, 12) - 1]
             return GameResult(
                 state.copy(hp = 0, scar = scar),
                 listOf(damageEvent, RuleEvent.ScarTriggered(scar, hpDamage))
