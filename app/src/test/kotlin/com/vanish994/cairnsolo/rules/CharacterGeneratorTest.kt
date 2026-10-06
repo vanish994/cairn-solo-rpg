@@ -2,6 +2,7 @@ package com.vanish994.cairnsolo.rules
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import com.vanish994.cairnsolo.game.MJContext
@@ -27,6 +28,17 @@ class CharacterGeneratorTest {
     }
 
     @Test
+    fun backgroundRollsAreRolledAndPersisted() {
+        val result = rollCharacter(FixedRandomSource(4))
+        assertEquals(4, result.backgroundRolls?.first)
+        assertEquals(4, result.backgroundRolls?.second)
+
+        val state = createCharacter("Aran", result)
+        assertEquals(4, state.campaign.profile.backgroundRolls?.first)
+        assertEquals(4, state.campaign.profile.backgroundRolls?.second)
+    }
+
+    @Test
     fun attributesCanBeSwappedAfterRolling() {
         val result = RolledCharacter(8, 12, 15, 4)
             .swapAttributes(AttributeSlot.STR, AttributeSlot.WIL)
@@ -42,10 +54,34 @@ class CharacterGeneratorTest {
         assertEquals(5, state.campaign.rules.hp)
         assertEquals(5, state.campaign.rules.maxHp)
         assertEquals("Aran", state.campaign.character.name)
-        assertEquals(3, state.campaign.rules.inventory.size)
-        assertEquals(1, state.campaign.rules.inventory.count { it.id == "mochila" })
-        assertEquals(1, state.campaign.rules.inventory.count { it.id == "racoes-3-dias" })
-        assertEquals(1, state.campaign.rules.inventory.count { it.id == "tocha" })
+        assertEquals(0, state.campaign.rules.inventory.size)
+    }
+
+
+    @Test
+    fun aurifexUsesOfficialStartingGear() {
+        val state = createCharacter("Jazia", RolledCharacter(9, 11, 13, 5, Background.AURIFEX))
+        assertEquals(0, state.campaign.rules.armor)
+        assertEquals(
+            listOf("rations-3-uses", "lantern", "oil-can-6-uses", "needle-knife", "protective-gloves"),
+            state.campaign.rules.inventory.map { it.id }
+        )
+    }
+
+    @Test
+    fun cutpurseUsesOfficialGearAndOneArmor() {
+        val state = createCharacter("Patch", RolledCharacter(9, 11, 13, 5, Background.CUTPURSE))
+        assertEquals(1, state.campaign.rules.armor)
+        assertEquals(2, state.campaign.rules.inventory.first { it.id == "twin-daggers" }.slots)
+        assertEquals(0, state.campaign.rules.inventory.first { it.id == "black-outfit" }.slotCost)
+    }
+
+    @Test
+    fun everyBackgroundFitsTheTenSlotStartingInventory() {
+        for (background in Background.entries) {
+            val state = createCharacter("Tester", RolledCharacter(9, 11, 13, 5, background))
+            assertTrue(state.campaign.rules.usedSlots <= 10, background.displayName)
+        }
     }
 
     @Test
@@ -74,6 +110,31 @@ class CharacterGeneratorTest {
         val context = MJContext.from(createCharacter("Aran", rolled))
         assertEquals(31, context.profile.age)
         assertEquals(Background.PROWLER, context.profile.background)
+    }
+
+    @Test
+    fun backgroundTableRollsResolveToStableMechanicalKeys() {
+        val state = createCharacter(
+            "Aran",
+            RolledCharacter(
+                9, 11, 13, 5,
+                background = Background.AURIFEX,
+                backgroundRolls = BackgroundRolls(1, 6)
+            )
+        )
+        assertEquals(listOf("gold_scent", "homunculus"), state.campaign.profile.backgroundFeatures)
+    }
+
+    @Test
+    fun everyBackgroundHasTwelveCataloguedOutcomes() {
+        for (background in Background.entries) {
+            val outcomes = BACKGROUND_OUTCOME_KEYS[background]
+            assertEquals(12, outcomes?.size, background.displayName)
+            for (roll in 1..6) {
+                assertNotNull(backgroundOutcomes(background, BackgroundRolls(roll, roll)).first())
+                assertNotNull(backgroundOutcomes(background, BackgroundRolls(roll, roll)).second())
+            }
+        }
     }
 
     @Test
