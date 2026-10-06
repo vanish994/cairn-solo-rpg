@@ -11,11 +11,70 @@ class KotlinRandomSource(private val random: Random = Random.Default) : RandomSo
 }
 
 enum class Background(val id: Int, val displayName: String) {
-    AURIFEX(1, "Aurifex"), BARBER_SURGEON(2, "Barber-Surgeon"), BEAST_HANDLER(3, "Beast Handler"), BONEKEEPER(4, "Bonekeeper"), CUTPURSE(5, "Cutpurse"), FIELDWARDEN(6, "Fieldwarden"), FLETCHWIND(7, "Fletchwind"), FOUNDLING(8, "Foundling"), FUNGAL_FORAGER(9, "Fungal Forager"), GREENWISE(10, "Greenwise"), HALF_WITCH(11, "Half-Witch"), HEXENBANE(12, "Hexenbane"), JONGLEUR(13, "Jongleur"), KETTLEWRIGHT(14, "Kettlewright"), MARCHGUARD(15, "Marchguard"), MOUNTEBANK(16, "Mountebank"), OUTRIDER(17, "Outrider"), PROWLER(18, "Prowler"), RILL_RUNNER(19, "Rill Runner"), SCRIVENER(20, "Scrivener");
+    AURIFEX(1, "Aurifex"),
+    BARBER_SURGEON(2, "Barber-Surgeon"),
+    BEAST_HANDLER(3, "Beast Handler"),
+    BONEKEEPER(4, "Bonekeeper"),
+    CUTPURSE(5, "Cutpurse"),
+    FIELDWARDEN(6, "Fieldwarden"),
+    FLETCHWIND(7, "Fletchwind"),
+    FOUNDLING(8, "Foundling"),
+    FUNGAL_FORAGER(9, "Fungal Forager"),
+    GREENWISE(10, "Greenwise"),
+    HALF_WITCH(11, "Half Witch"),
+    HEXENBANE(12, "Hexenbane"),
+    JONGLEUR(13, "Jongleur"),
+    KETTLEWRIGHT(14, "Kettlewright"),
+    MARCHGUARD(15, "Marchguard"),
+    MOUNTEBANK(16, "Mountebank"),
+    OUTRIDER(17, "Outrider"),
+    PROWLER(18, "Prowler"),
+    RILL_RUNNER(19, "Rill Runner"),
+    SCRIVENER(20, "Scrivener");
 
     companion object {
         fun fromD20(roll: Int): Background = entries.first { it.id == roll }
     }
+}
+
+data class StartingGear(
+    val id: String,
+    val slots: Int = 1,
+    val petty: Boolean = false
+) {
+    fun toInventoryItem(): InventoryItem = InventoryItem(id = id, slots = slots, petty = petty)
+}
+
+fun startingGear(background: Background): List<StartingGear> = when (background) {
+    Background.AURIFEX -> listOf(g("rations-3-uses"), g("lantern"), g("oil-can-6-uses"), g("needle-knife"), g("protective-gloves", petty = true))
+    Background.BARBER_SURGEON -> listOf(g("rations-3-uses"), g("torch-3-uses"), g("amputation-knife"), g("bandages-3-uses"), g("leech-3-uses"), g("stained-medical-finery", petty = true))
+    Background.BEAST_HANDLER -> listOf(g("rations-3-uses"), g("torch-3-uses"), g("leather-whip"), g("soporific-darts"), g("lure"), g("rope-25ft"))
+    Background.BONEKEEPER -> listOf(g("rations-3-uses"), g("lantern"), g("oil-can-6-uses"), g("stake"), g("chains-10ft"))
+    Background.CUTPURSE -> listOf(g("rations-3-uses"), g("torch-3-uses"), g("twin-daggers", slots = 2), g("padded-leather"), g("lockpicks"), g("black-outfit", petty = true))
+    Background.FIELDWARDEN -> listOf(g("rations-3-uses"), g("torch-3-uses"), g("brigandine", slots = 2), g("sling"), g("hand-axe"), g("repellent-3-uses"))
+    Background.FLETCHWIND -> listOf(g("rations-3-uses"), g("torch-3-uses"), g("bow"), g("serrated-knife"), g("boiled-leather"), g("heartroot-salve"))
+    Background.FOUNDLING -> listOf(g("rations-3-uses"), g("torch-3-uses"), g("salt-pouch"), g("heirloom-amulet", petty = true), g("sling"), g("dagger"))
+    Background.FUNGAL_FORAGER -> listOf(g("rations-3-uses"), g("sharpened-trowel"), g("candle-helmet"), g("rope-25ft"), g("metal-pail"))
+    Background.GREENWISE -> listOf(g("rations-3-uses"), g("torch-3-uses"), g("iron-pot"), g("root-knife"), g("healing-salve"), g("twine-bauble", petty = true))
+    Background.HALF_WITCH -> listOf(g("rations-3-uses"), g("torch-3-uses"), g("spellbook"), g("iron-dagger"), g("herbs-pouch-3-uses"), g("ghillie-suit"))
+    Background.HEXENBANE -> listOf(g("rations-3-uses"), g("torch-3-uses"), g("vestments-of-the-order", petty = true), g("blessed-tinctures"), g("silver-knife"), g("crossbow", slots = 2))
+    Background.JONGLEUR -> listOf(g("rations-3-uses"), g("torch-3-uses"), g("costume"), g("simple-instrument"), g("lucky-jerkin"), g("sling"))
+    Background.KETTLEWRIGHT -> listOf(g("rations-3-uses"), g("torch-3-uses"), g("pincers"), g("roll-of-tin"), g("gloves", petty = true), g("hammer"))
+    Background.MARCHGUARD -> listOf(g("rations-3-uses"), g("lantern"), g("oil-can-6-uses"), g("long-sword", slots = 2), g("boiled-leather"))
+    Background.MOUNTEBANK -> listOf(g("rations-3-uses"), g("torch-3-uses"), g("cart", slots = 2), g("trick-playing-cards"), g("fancy-hat", petty = true), g("cane-sword"))
+    Background.OUTRIDER -> listOf(g("rations-3-uses"), g("torch-3-uses"), g("long-sword", slots = 2), g("leather-jerkin"), g("crossbow", slots = 2), g("spyglass"))
+    Background.PROWLER -> listOf(g("rations-3-uses"), g("torch-3-uses"), g("tarp"), g("boiled-leather"), g("short-sword"), g("spring-loaded-trap"))
+    Background.RILL_RUNNER -> listOf(g("rations-3-uses"), g("torch-3-uses"), g("water-shoes"), g("brigandine", slots = 2), g("compass"), g("dagger"))
+    Background.SCRIVENER -> listOf(g("rations-3-uses"), g("torch-3-uses"), g("quill-and-ink"), g("blank-book"), g("awl"), g("badge", petty = true))
+}
+
+private fun g(id: String, slots: Int = 1, petty: Boolean = false) = StartingGear(id, slots, petty)
+
+fun startingArmor(background: Background): Int = when (background) {
+    Background.CUTPURSE, Background.FIELDWARDEN, Background.FLETCHWIND,
+    Background.FUNGAL_FORAGER, Background.JONGLEUR, Background.MARCHGUARD,
+    Background.OUTRIDER, Background.PROWLER, Background.RILL_RUNNER -> 1
+    else -> 0
 }
 
 data class CharacterTraits(
@@ -85,8 +144,8 @@ fun createCharacter(name: String, rolled: RolledCharacter): GameState {
                 wil = rolled.wil,
                 hp = rolled.hp,
                 maxHp = rolled.hp,
-                armor = 0,
-                inventory = startingInventory()
+                armor = rolled.background?.let(::startingArmor) ?: 0,
+                inventory = rolled.background?.let(::startingGear)?.map(StartingGear::toInventoryItem) ?: emptyList()
             )
         )
     )
@@ -115,8 +174,4 @@ fun rollAge(random: RandomSource): CharacterAge =
     CharacterAge(random.d20() + random.d20() + 10)
 
 
-fun startingInventory(): List<InventoryItem> = listOf(
-    InventoryItem("mochila", slots = 1),
-    InventoryItem("racoes-3-dias", slots = 1),
-    InventoryItem("tocha", slots = 1)
-)
+
