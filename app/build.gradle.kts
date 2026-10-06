@@ -37,6 +37,9 @@ android {
         release {
             isMinifyEnabled = true
             isShrinkResources = true
+            // Test build only: sign the optimized release with the standard debug key.
+            // Do not use this signing configuration for a production release.
+            signingConfig = signingConfigs.getByName("debug")
             buildConfigField("String", "GUARDIAN_API_URL", "\"${project.findProperty("guardianApiUrl") ?: "https://cairn-guardian.onrender.com/guardian"}\"")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
         }
