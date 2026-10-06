@@ -17,6 +17,7 @@ object GameStatePersistenceCodec {
             put("campaignId", c.campaignId); put("characterId", c.character.id); put("characterName", c.character.name)
             put("profileAge", p.age?.toString() ?: ""); put("profileBackground", p.background?.name ?: "")
             put("profileGold", p.gold.toString()); put("profileBondRoll", p.bondRoll?.toString() ?: "")
+            p.backgroundRolls?.let { put("profileBackgroundRoll1", it.first.toString()); put("profileBackgroundRoll2", it.second.toString()) }
             p.traits?.let { t -> put("traitPhysique", t.physique); put("traitSkin", t.skin); put("traitHair", t.hair); put("traitFace", t.face); put("traitSpeech", t.speech); put("traitClothing", t.clothing); put("traitVirtue", t.virtue); put("traitVice", t.vice) }
             put("sceneId", c.sceneId); put("sceneType", c.sceneType.name); put("sceneTitle", c.sceneTitle)
             put("sceneDescription", c.sceneDescription); put("exits", c.exits.joinToString(SEPARATOR))
@@ -64,7 +65,8 @@ object GameStatePersistenceCodec {
             background = background,
             traits = traits,
             gold = int("profileGold", 0),
-            bondRoll = values["profileBondRoll"]?.toIntOrNull()
+            bondRoll = values["profileBondRoll"]?.toIntOrNull(),
+            backgroundRolls = values["profileBackgroundRoll1"]?.toIntOrNull()?.let { first -> values["profileBackgroundRoll2"]?.toIntOrNull()?.let { second -> runCatching { com.vanish994.cairnsolo.rules.BackgroundRolls(first, second) }.getOrNull() } }
         )
         val exits = string("exits").split(SEPARATOR).filter { it.isNotBlank() }
         val log = string("log").split(SEPARATOR).filter { it.isNotBlank() }
