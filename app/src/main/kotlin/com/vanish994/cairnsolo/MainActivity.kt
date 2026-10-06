@@ -116,7 +116,7 @@ private fun ExplorationScreen(
     ) {
         item {
             Text("Exploração", style = MaterialTheme.typography.headlineMedium)
-            Text("Turno " + c.turn + " • " + c.sceneType.name)
+            Text("Turno " + c.turn + " • " + sceneTypeLabel(c.sceneType))
             Spacer(Modifier.height(16.dp))
             Text(c.sceneTitle, style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.height(8.dp))
@@ -131,7 +131,7 @@ private fun ExplorationScreen(
             Button(onClick = { onAction(GameAction.ExploreInvestigate) }) { Text("Investigar") }
             Spacer(Modifier.height(8.dp))
             OutlinedButton(onClick = { onAction(GameAction.ExploreRest) }) {
-                Text("Solicitar descanso")
+                Text("Descansar")
             }
             Spacer(Modifier.height(16.dp))
             OutlinedButton(onClick = onBack) { Text("Voltar à ficha") }
@@ -163,8 +163,8 @@ private fun CharacterCreation(
         OutlinedTextField(name, onNameChange, label = { Text("Nome") }, singleLine = true)
         Spacer(Modifier.height(12.dp))
         if (rolled != null) {
-            Text("STR " + rolled.str + "   DEX " + rolled.dex + "   WIL " + rolled.wil)
-            Text("HP " + rolled.hp)
+            Text("FOR " + rolled.str + "   DES " + rolled.dex + "   VON " + rolled.wil)
+            Text("Pontos de vida: " + rolled.hp)
             Spacer(Modifier.height(8.dp))
         }
         OutlinedButton(onClick = onRoll) {
@@ -197,26 +197,26 @@ private fun CharacterSheet(
     ) {
         item {
             Text(c.character.name, style = MaterialTheme.typography.headlineMedium)
-            Text("Turno " + c.turn + " • " + c.sceneType.name)
+            Text("Turno " + c.turn + " • " + sceneTypeLabel(c.sceneType))
             Text(c.sceneTitle, style = MaterialTheme.typography.titleLarge)
             Text(c.sceneDescription)
             if (c.exits.isNotEmpty()) Text("Saídas: " + c.exits.joinToString(" • "))
             Spacer(Modifier.height(12.dp))
-            Text("HP " + r.hp + "/" + r.maxHp)
-            Text("STR " + r.str + "   DEX " + r.dex + "   WIL " + r.wil)
-            Text("Armor " + r.armor + "   Slots " + r.usedSlots + "/10")
+            Text("Pontos de vida: " + r.hp + "/" + r.maxHp)
+            Text("FOR " + r.str + "   DES " + r.dex + "   VON " + r.wil)
+            Text("Armadura " + r.armor + "   Espaços " + r.usedSlots + "/10")
             if (r.deprived) Text("Privado")
             if (r.critical) Text("Dano crítico")
-            if (r.scar != null) Text("Cicatriz: resultado " + r.scar)
+            if (r.scar != null) Text("Cicatriz: " + scarLabel(r.scar))
             Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = onExplore) { Text("Explorar") }
-                Button(onClick = onDamage) { Text("Dano 2") }
+                Button(onClick = onDamage) { Text("Receber 2 de dano") }
                 Button(onClick = onRest) { Text("Descansar") }
             }
             Spacer(Modifier.height(12.dp))
             Text("Inventário", style = MaterialTheme.typography.titleMedium)
-            if (r.inventory.isEmpty()) Text("Vazio")
+            if (r.inventory.isEmpty()) Text("Nenhum item")
             Spacer(Modifier.height(4.dp))
             Button(onClick = onAddItem, enabled = r.freeSlots > 0) { Text("Adicionar item") }
             Spacer(Modifier.height(8.dp))
@@ -225,7 +225,7 @@ private fun CharacterSheet(
         items(r.inventory, key = { it.id }) { item ->
             ListItem(
                 headlineContent = { Text(item.id) },
-                supportingContent = { Text(item.slotCost.toString() + " slot(s)") },
+                supportingContent = { Text(item.slotCost.toString() + if (item.slotCost == 1) " espaço" else " espaços") },
                 trailingContent = {
                     TextButton(onClick = { onRemoveItem(item.id) }) { Text("Remover") }
                 }
@@ -238,3 +238,29 @@ private fun CharacterSheet(
         }
     }
 }
+
+
+@Composable
+private fun sceneTypeLabel(type: com.vanish994.cairnsolo.game.SceneType): String =
+    when (type) {
+        com.vanish994.cairnsolo.game.SceneType.EXPLORATION -> "Exploração"
+        com.vanish994.cairnsolo.game.SceneType.SOCIAL -> "Conversa"
+        com.vanish994.cairnsolo.game.SceneType.COMBAT -> "Combate"
+        com.vanish994.cairnsolo.game.SceneType.MANAGEMENT -> "Gestão"
+    }
+
+private fun scarLabel(scar: com.vanish994.cairnsolo.rules.Scar): String =
+    when (scar) {
+        com.vanish994.cairnsolo.rules.Scar.LASTING -> "Cicatriz Duradoura"
+        com.vanish994.cairnsolo.rules.Scar.RATTLING -> "Golpe Chocante"
+        com.vanish994.cairnsolo.rules.Scar.WALLOPED -> "Sacudido"
+        com.vanish994.cairnsolo.rules.Scar.BROKEN_LIMB -> "Membro Quebrado"
+        com.vanish994.cairnsolo.rules.Scar.DISEASED -> "Doença"
+        com.vanish994.cairnsolo.rules.Scar.HEAD_WOUND -> "Ferimento Desorientador na Cabeça"
+        com.vanish994.cairnsolo.rules.Scar.HAMSTRUNG -> "Tendão Partido"
+        com.vanish994.cairnsolo.rules.Scar.DEAFENED -> "Ensurdecido"
+        com.vanish994.cairnsolo.rules.Scar.RE_BRAINED -> "Reconfiguração Mental"
+        com.vanish994.cairnsolo.rules.Scar.SUNDERED -> "Membro Estropiado"
+        com.vanish994.cairnsolo.rules.Scar.MORTAL_WOUND -> "Ferimento Mortal"
+        com.vanish994.cairnsolo.rules.Scar.DOOMED -> "Condenado"
+    }
