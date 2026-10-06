@@ -2,8 +2,21 @@ package com.vanish994.cairnsolo.rules
 
 enum class Attribute { STR, DEX, WIL }
 
-data class InventoryItem(val id: String, val slots: Int = 1, val petty: Boolean = false) {
-    init { require(slots >= 0); require(petty || slots > 0) }
+data class InventoryItem(
+    val id: String,
+    val slots: Int = 1,
+    val petty: Boolean = false,
+    val damage: String? = null,
+    val uses: Int? = null,
+    val armor: Int = 0,
+    val tags: Set<String> = emptySet()
+) {
+    init {
+        require(slots >= 0)
+        require(petty || slots > 0)
+        require(armor >= 0)
+        require(uses == null || uses > 0)
+    }
     val slotCost: Int get() = if (petty) 0 else slots
 }
 
