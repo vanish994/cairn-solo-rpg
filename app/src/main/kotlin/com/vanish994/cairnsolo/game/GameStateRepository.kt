@@ -27,6 +27,7 @@ class LocalGameStateRepository(context: Context) : GameStateRepository {
         e.putInt("hp", r.hp).putInt("maxHp", r.maxHp).putInt("armor", r.armor)
         e.putInt("fatigue", r.fatigue)
         e.putBoolean("deprived", r.deprived).putBoolean("critical", r.critical).putBoolean("dead", r.dead)
+        e.putString("scar", r.scar?.name)
         e.putInt("inventoryCount", r.inventory.size)
         r.inventory.forEachIndexed { i, item ->
             e.putString("item_"+i+"_id", item.id)
@@ -57,7 +58,8 @@ class LocalGameStateRepository(context: Context) : GameStateRepository {
             fatigue = prefs.getInt("fatigue", 0),
             deprived = prefs.getBoolean("deprived", false),
             critical = prefs.getBoolean("critical", false),
-            dead = prefs.getBoolean("dead", false)
+            dead = prefs.getBoolean("dead", false),
+            scar = prefs.getString("scar", null)?.let { com.vanish994.cairnsolo.rules.Scar.valueOf(it) }
         )
         return GameState(
             campaign = CampaignState(
