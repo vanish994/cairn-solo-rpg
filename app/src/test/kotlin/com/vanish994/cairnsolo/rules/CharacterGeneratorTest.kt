@@ -21,8 +21,6 @@ class CharacterGeneratorTest {
         assertEquals(5, state.campaign.rules.maxHp)
         assertEquals("Aran", state.campaign.character.name)
     }
-}
-
 
     @Test
     fun backgroundUsesD20Range() {
@@ -35,3 +33,4 @@ class CharacterGeneratorTest {
         assertFailsWith<NoSuchElementException> { Background.fromD20(0) }
         assertFailsWith<NoSuchElementException> { Background.fromD20(21) }
     }
+}
