@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
@@ -52,9 +53,12 @@ class MainActivity : ComponentActivity() {
                     )
                 }
                 var screen by remember { mutableStateOf(AppScreen.CHARACTER) }
+                var showStartScreen by remember { mutableStateOf(true) }
 
                 Surface(Modifier.fillMaxSize()) {
-                    if (state == null) {
+                    if (showStartScreen) {
+                        CairnStartScreen(onStart = { showStartScreen = false })
+                    } else if (state == null) {
                         if (screen == AppScreen.RULES) {
                             RulesScreen(onBack = { screen = AppScreen.CHARACTER })
                         } else {
@@ -146,6 +150,54 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun CairnStartScreen(onStart: () -> Unit) {
+    LaunchedEffect(Unit) {
+        delay(1200)
+    }
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Color(0xFF070707))
+            .clickable { onStart() }
+    ) {
+        Image(
+            painter = painterResource(R.drawable.cairn_title_art),
+            contentDescription = "Tela de abertura de Cairn Solo RPG",
+            contentScale = ContentScale.FillBounds,
+            modifier = Modifier.fillMaxSize()
+        )
+        Column(
+            Modifier.fillMaxSize().padding(horizontal = 28.dp, vertical = 36.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Spacer(Modifier.height(92.dp))
+            Text(
+                "CAIRN",
+                style = MaterialTheme.typography.displayLarge,
+                color = Color(0xFFE5DDCE)
+            )
+            Text(
+                "SOLO RPG",
+                style = MaterialTheme.typography.labelLarge,
+                color = Color(0xFFB66A25)
+            )
+            Spacer(Modifier.weight(1f))
+            Text(
+                "TOQUE PARA COMEÇAR",
+                style = MaterialTheme.typography.labelLarge,
+                color = Color(0xFFE5DDCE)
+            )
+            Spacer(Modifier.height(24.dp))
+            Text(
+                "by Vanish",
+                style = MaterialTheme.typography.labelMedium,
+                color = Color(0xFFE5DDCE).copy(alpha = 0.72f)
+            )
         }
     }
 }
