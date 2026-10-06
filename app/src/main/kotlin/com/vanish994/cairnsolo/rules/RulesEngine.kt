@@ -76,9 +76,7 @@ class RulesEngine(private val random: RandomSource) {
         if (remainingHp > 0) return GameResult(state.copy(hp = remainingHp), listOf(damageEvent))
 
         if (remainingHp == 0) {
-            val scar = random.d6().let { first ->
-                if (hpDamage > 6) 6 else hpDamage.coerceAtLeast(1)
-            }
+            val scar = hpDamage.coerceIn(1, 12)
             return GameResult(
                 state.copy(hp = 0, scar = scar),
                 listOf(damageEvent, RuleEvent.ScarTriggered(scar, hpDamage))
