@@ -12,7 +12,7 @@ data class CharacterState(
     val hp: Int, val maxHp: Int, val armor: Int,
     val inventory: List<InventoryItem> = emptyList(),
     val fatigue: Int = 0, val deprived: Boolean = false,
-    val critical: Boolean = false, val scar: Int? = null
+    val critical: Boolean = false, val dead: Boolean = false, val scar: Int? = null
 ) {
     init {
         require(str >= 0 && dex >= 0 && wil >= 0)
@@ -88,7 +88,7 @@ class RulesEngine(private val random: RandomSource) {
         val roll = random.d20()
         val success = when (roll) { 1 -> true; 20 -> false; else -> roll <= newStr }
         return GameResult(
-            state.copy(hp = 0, str = newStr, critical = true),
+            state.copy(hp = 0, str = newStr, critical = true, dead = !success),
             listOf(damageEvent, RuleEvent.CriticalDamage(excessDamage, newStr, roll, success))
         )
     }
@@ -100,7 +100,10 @@ class RulesEngine(private val random: RandomSource) {
 
     fun addItem(state: CharacterState, item: InventoryItem): GameResult {
         require(state.freeSlots >= item.slotCost)
-        val updated = state.copy(inventory = state.inventory + item)
+        val updated = state.copy(
+            inventory = state.inventory + item,
+            hp = if (state.freeSlots == item.slotCost) 0 else state.hp
+        )
         return GameResult(updated, listOf(RuleEvent.InventoryChanged(updated.usedSlots)))
     }
 
@@ -124,11 +127,16 @@ class RulesEngine(private val random: RandomSource) {
     fun markDeprived(state: CharacterState, deprived: Boolean): GameResult =
         GameResult(state.copy(deprived = deprived), emptyList())
 
+    fun stabilizeCritical(state: CharacterState): GameResult {
+        if (!state.critical || state.dead) return GameResult(state, emptyList())
+        return GameResult(state.copy(critical = false), emptyList())
+    }
+
     fun safeRest(state: CharacterState): GameResult {
         if (state.deprived) return GameResult(state, emptyList())
         val hpRecovered = state.maxHp - state.hp
         val fatigueRecovered = state.fatigue
-        val updated = state.copy(hp = state.maxHp, fatigue = 0, critical = false)
+        val updated = state.copy(hp = state.maxHp, fatigue = 0)
         return GameResult(updated, buildList {
             if (hpRecovered > 0) add(RuleEvent.HpRecovered(hpRecovered))
             if (fatigueRecovered > 0) add(RuleEvent.FatigueRecovered(fatigueRecovered))
