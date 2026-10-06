@@ -44,6 +44,9 @@ class MainActivity : ComponentActivity() {
                 var rolled by remember { mutableStateOf<RolledCharacter?>(null) }
                 var selectedBackground by remember { mutableStateOf<Background?>(null) }
                 var wardenNarrative by remember { mutableStateOf<String?>(null) }
+                var playerInput by remember { mutableStateOf("") }
+                var wardenStatus by remember { mutableStateOf("Warden local") }
+                var wardenLoading by remember { mutableStateOf(false) }
                 val coroutineScope = rememberCoroutineScope()
                 val aiProvider = remember { AIProviderFactory.create(BuildConfig.GEMINI_API_KEY) }
                 val actionResolver = remember {
@@ -54,6 +57,38 @@ class MainActivity : ComponentActivity() {
                 }
                 var screen by remember { mutableStateOf(AppScreen.CHARACTER) }
                 var showStartScreen by remember { mutableStateOf(true) }
+
+                fun requestWarden(promptState: GameState, input: String, mechanics: String) {
+                    coroutineScope.launch {
+                        wardenLoading = true
+                        wardenStatus = if (BuildConfig.GEMINI_API_KEY.isBlank()) "Warden local" else "Gemini pensando…"
+                        val outcome = aiProvider.narrate(
+                            WardenRequest(
+                                context = MJContext.from(promptState),
+                                playerInput = input,
+                                rulesEngineResult = mechanics
+                            )
+                        )
+                        outcome.onSuccess { response ->
+                            wardenNarrative = response.narrative
+                            wardenStatus = if (BuildConfig.GEMINI_API_KEY.isBlank()) "Warden local" else "Gemini ativo"
+                        }.onFailure { error ->
+                            wardenNarrative = WardenRequestFallback.narrative(promptState).narrative
+                            wardenStatus = "Gemini indisponível — usando modo local"
+                        }
+                        wardenLoading = false
+                    }
+                }
+
+                LaunchedEffect(screen) {
+                    if (screen == AppScreen.EXPLORATION && state != null && wardenNarrative == null) {
+                        requestWarden(
+                            promptState = state!!,
+                            input = "Observar a cena e apresentar o início da aventura.",
+                            mechanics = "Nenhum resultado mecânico novo."
+                        )
+                    }
+                }
 
                 Surface(Modifier.fillMaxSize()) {
                     if (showStartScreen) {
@@ -86,6 +121,7 @@ class MainActivity : ComponentActivity() {
                                     val created = createCharacter(name.trim(), finalRolled)
                                     repository.save(created)
                                     state = created
+                                    screen = AppScreen.EXPLORATION
                                 }
                             )
                         }
@@ -125,20 +161,22 @@ class MainActivity : ComponentActivity() {
                             AppScreen.EXPLORATION -> ExplorationScreen(
                                 state = current,
                                 wardenNarrative = wardenNarrative,
+                                wardenStatus = wardenStatus,
+                                wardenLoading = wardenLoading,
+                                playerInput = playerInput,
+                                onPlayerInputChange = { playerInput = it },
+                                onSubmitPlayerInput = {
+                                    val input = playerInput.trim()
+                                    if (input.isNotBlank() && !wardenLoading) {
+                                        playerInput = ""
+                                        requestWarden(current, input, "Nenhum resultado mecânico novo; interpretar apenas a ficção.")
+                                    }
+                                },
                                 onAction = { action ->
                                     val result = actionResolver.resolve(current, action)
                                     repository.save(result.state)
                                     state = result.state
-                                    coroutineScope.launch {
-                                        val request = WardenRequest(
-                                            context = MJContext.from(result.state),
-                                            playerInput = action.playerFacingLabel(),
-                                            rulesEngineResult = result.events.joinToString("\n")
-                                        )
-                                        wardenNarrative = aiProvider.narrate(request)
-                                            .getOrElse { WardenRequestFallback.narrative(result.state) }
-                                            .narrative
-                                    }
+                                    requestWarden(result.state, action.playerFacingLabel(), result.events.joinToString("\n"))
                                 },
                                 onBack = { screen = AppScreen.CHARACTER }
                             )
@@ -232,6 +270,11 @@ private val CAIRN_PROTAGONIST_SPRITES = listOf(
 private fun ExplorationScreen(
     state: GameState,
     wardenNarrative: String?,
+    wardenStatus: String,
+    wardenLoading: Boolean,
+    playerInput: String,
+    onPlayerInputChange: (String) -> Unit,
+    onSubmitPlayerInput: () -> Unit,
     onAction: (GameAction) -> Unit,
     onBack: () -> Unit
 ) {
@@ -246,8 +289,27 @@ private fun ExplorationScreen(
             Spacer(Modifier.height(16.dp))
             Text(c.sceneTitle, style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.height(8.dp))
-            Text("Warden", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+            Text(wardenStatus, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
             Text(wardenNarrative ?: c.sceneDescription)
+            Spacer(Modifier.height(16.dp))
+            OutlinedTextField(
+                value = playerInput,
+                onValueChange = onPlayerInputChange,
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("O que você faz?") },
+                placeholder = { Text("Descreva a ação do seu personagem…") },
+                minLines = 2,
+                maxLines = 4,
+                enabled = !wardenLoading
+            )
+            Spacer(Modifier.height(8.dp))
+            Button(
+                onClick = onSubmitPlayerInput,
+                modifier = Modifier.fillMaxWidth(),
+                enabled = playerInput.isNotBlank() && !wardenLoading
+            ) {
+                Text(if (wardenLoading) "O Guardião está pensando…" else "Enviar ao Guardião")
+            }
             Spacer(Modifier.height(16.dp))
             if (c.exits.isNotEmpty()) {
                 Text("Possibilidades: " + c.exits.joinToString(" • "))
