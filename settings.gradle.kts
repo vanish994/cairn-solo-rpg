@@ -16,3 +16,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "CairnSoloRPG"
 include(":app")
+include(":guardian-server")
