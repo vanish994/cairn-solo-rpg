@@ -34,7 +34,8 @@ data class RolledCharacter(
     val wil: Int,
     val hp: Int,
     val background: Background? = null,
-    val traits: CharacterTraits? = null
+    val traits: CharacterTraits? = null,
+    val age: Int? = null
 )
 
 fun rollCharacter(random: RandomSource): RolledCharacter =
@@ -57,7 +58,8 @@ fun createCharacter(name: String, rolled: RolledCharacter): GameState {
                 hp = rolled.hp,
                 maxHp = rolled.hp,
                 armor = 0
-            )
+            ),
+            profile = CharacterProfile(rolled.age, rolled.background, rolled.traits)
         )
     )
 }
