@@ -96,7 +96,7 @@ class RulesEngine(private val random: RandomSource) {
             }
             return GameResult(
                 state.copy(hp = 0, scar = scar),
-                listOf(damageEvent, RuleEvent.ScarTriggered(scar, hpDamage, detail))
+                listOf(damageEvent, RuleEvent.ScarTriggered(scar, hpDamage, detail, rolls))
             )
         }
 
