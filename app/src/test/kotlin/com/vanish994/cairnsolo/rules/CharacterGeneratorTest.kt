@@ -42,6 +42,10 @@ class CharacterGeneratorTest {
         assertEquals(5, state.campaign.rules.hp)
         assertEquals(5, state.campaign.rules.maxHp)
         assertEquals("Aran", state.campaign.character.name)
+        assertEquals(3, state.campaign.rules.inventory.size)
+        assertEquals(1, state.campaign.rules.inventory.count { it.id == "mochila" })
+        assertEquals(1, state.campaign.rules.inventory.count { it.id == "racoes-3-dias" })
+        assertEquals(1, state.campaign.rules.inventory.count { it.id == "tocha" })
     }
 
     @Test
@@ -50,7 +54,9 @@ class CharacterGeneratorTest {
             9, 11, 13, 5,
             background = Background.SCRIVENER,
             traits = CharacterTraits("Athletic", "Tanned", "Long", "Sharp", "Precise", "Frayed", "Cautious", "Greedy"),
-            age = 27
+            age = 27,
+            gold = 12,
+            bondRoll = 7
         )
         val state = createCharacter("  Aran  ", rolled)
         assertEquals("Aran", state.campaign.character.name)
@@ -58,6 +64,8 @@ class CharacterGeneratorTest {
         assertEquals(Background.SCRIVENER, state.campaign.profile.background)
         assertNotNull(state.campaign.profile.traits)
         assertEquals("Greedy", state.campaign.profile.traits?.vice)
+        assertEquals(12, state.campaign.profile.gold)
+        assertEquals(7, state.campaign.profile.bondRoll)
     }
 
     @Test
