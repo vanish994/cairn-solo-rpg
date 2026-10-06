@@ -43,7 +43,7 @@ class FixedRandomSource(private val d20Value: Int, private val d6Value: Int = 1,
         20 -> d20Value
         6 -> d6Value
         12 -> d12Value
-        else -> error("FixedRandomSource only supports d20 and d6")
+        else -> error("FixedRandomSource only supports d20, d6, and d12")
     }
 }
 
@@ -81,7 +81,9 @@ class RulesEngine(private val random: RandomSource) {
         if (remainingHp > 0) return GameResult(state.copy(hp = remainingHp), listOf(damageEvent))
 
         if (remainingHp == 0) {
-            val scarRoll = random.d12()
+            // Cairn 2e: the Scar result is determined by the HP lost in the attack,
+            // not by a separate d12 roll. The table has entries 1-12.
+            val scarRoll = hpDamage.coerceIn(1, 12)
             val scar = Scar.entries[scarRoll - 1]
             val detail = when (scar) {
                 Scar.LASTING -> "lasting_scar"
@@ -97,8 +99,18 @@ class RulesEngine(private val random: RandomSource) {
                 Scar.MORTAL_WOUND -> "mortal_wound"
                 Scar.DOOMED -> "doomed"
             }
+            val scarState = when (scar) {
+                Scar.WALLOPED -> state.copy(hp = 0, scar = scar, deprived = true)
+                Scar.DISEASED -> state.copy(hp = 0, scar = scar, diseased = true)
+                Scar.HAMSTRUNG -> state.copy(hp = 0, scar = scar, hamstrung = true)
+                Scar.DEAFENED -> state.copy(hp = 0, scar = scar, deafened = true)
+                Scar.SUNDERED -> state.copy(hp = 0, scar = scar, sundered = true)
+                Scar.MORTAL_WOUND -> state.copy(hp = 0, scar = scar, deprived = true, critical = true)
+                Scar.DOOMED -> state.copy(hp = 0, scar = scar, doomed = true)
+                else -> state.copy(hp = 0, scar = scar)
+            }
             return GameResult(
-                state.copy(hp = 0, scar = scar),
+                scarState,
                 listOf(damageEvent, RuleEvent.ScarTriggered(scar, hpDamage, detail, scarRoll))
             )
         }
