@@ -98,8 +98,8 @@ class RulesEngineTest {
             state(hp = 6, maxHp = 6, str = 1), 6
         )
         assertEquals(Scar.HEAD_WOUND, result.newState.scar)
-        assertEquals(18, result.newState.str)
-        assertEquals(18, result.newState.maxStr)
+        assertEquals(18, result.newState.wil)
+        assertEquals(18, result.newState.maxWil)
         assertEquals(Attribute.WIL, result.newState.scarAttribute)
     }
 
