@@ -124,12 +124,17 @@ class RulesEngine(private val random: RandomSource) {
 
     fun addFatigue(state: CharacterState, amount: Int = 1): GameResult {
         require(amount > 0)
-        val updated = if (state.freeSlots >= amount) {
-            state.copy(fatigue = state.fatigue + amount)
-        } else {
-            error("No free inventory slots for Fatigue; caller must resolve item drop")
+        require(state.freeSlots >= amount) {
+            "No free inventory slots for Fatigue; drop an item before adding Fatigue"
         }
-        return GameResult(updated, listOf(RuleEvent.FatigueAdded(amount), RuleEvent.InventoryChanged(updated.usedSlots)))
+        val updated = state.copy(fatigue = state.fatigue + amount)
+        return GameResult(
+            updated,
+            listOf(
+                RuleEvent.FatigueAdded(amount),
+                RuleEvent.InventoryChanged(updated.usedSlots)
+            )
+        )
     }
 
     fun markDeprived(state: CharacterState, deprived: Boolean): GameResult =
