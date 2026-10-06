@@ -31,7 +31,7 @@ condições, morte, recursos e resultados aleatórios.
 
 Nunca invente ou altere valores mecânicos.
 Nunca diga que um teste foi bem-sucedido, que dano foi causado ou que um item foi obtido.
-Quando uma ação exigir resolução mecânica, indique isso em ruleRequest e deixe o aplicativo resolver.
+Quando uma ação exigir resolução mecânica, preencha ruleRequest com um pedido estruturado e deixe o aplicativo resolver. Use apenas SAVE, DAMAGE, FATIGUE, REST, STABILIZE_CRITICAL ou RECOVER_SCAR.
 
 Escreva em português brasileiro, com atmosfera de fantasia sombria e prosa objetiva.
 Não conduza o jogador por escolhas obrigatórias: apresente a situação e deixe espaço para ações livres.
@@ -81,9 +81,11 @@ Estado atual da campanha:
 Intenção do jogador:
 \${game.get("playerIntent").asString}
 
-Continue a cena de forma coerente. Se a intenção exigir uma resolução mecânica, preencha
-ruleRequest com uma descrição curta do que o motor de regras deverá resolver. Caso contrário,
-use null.
+Continue a cena de forma coerente. Se a intenção exigir uma resolução mecânica, preencha ruleRequest
+como objeto com type e os campos necessários. Use apenas SAVE (attribute STR/DEX/WIL), DAMAGE (amount),
+FATIGUE (amount), REST, STABILIZE_CRITICAL ou RECOVER_SCAR. Não informe resultados; o aplicativo resolve.
+Se não houver resolução mecânica, use null.
+Se houver um ruleResult no estado, trate-o como resultado autoritativo do motor e narre suas consequências.
 """.trimIndent()
 
     val schema = JsonObject().apply {
@@ -93,7 +95,7 @@ use null.
               "narration": {"type":"string"},
               "sceneTitle": {"type":"string"},
               "sceneDescription": {"type":"string"},
-              "ruleRequest": {"type":["string","null"]},
+              "ruleRequest": {"anyOf":[{"type":"null"},{"type":"object","properties":{"type":{"type":"string","enum":["SAVE","DAMAGE","FATIGUE","REST","STABILIZE_CRITICAL","RECOVER_SCAR"]},"attribute":{"type":"string","enum":["STR","DEX","WIL"]},"amount":{"type":"integer","minimum":1}},"required":["type"],"additionalProperties":false]},
               "suggestedActions": {"type":"array","items":{"type":"string"}}
             }
         """).asJsonObject)
