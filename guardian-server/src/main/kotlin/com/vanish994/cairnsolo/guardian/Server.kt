@@ -14,7 +14,6 @@ import java.nio.charset.StandardCharsets
 
 private const val GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/interactions"
 private const val MODEL = "gemini-3.6-flash"
-private const val PORT = 8080
 
 private val gson = Gson()
 private val http = HttpClient.newBuilder().build()
@@ -41,7 +40,8 @@ A resposta DEVE ser somente o objeto JSON solicitado pelo schema.
 """
 
 fun main() {
-    val server = HttpServer.create(InetSocketAddress("0.0.0.0", PORT), 0)
+    val port = System.getenv("PORT")?.toIntOrNull() ?: 8080
+    val server = HttpServer.create(InetSocketAddress("0.0.0.0", port), 0)
     server.createContext("/health") { exchange ->
         respond(exchange, 200, """{"status":"ok","service":"cairn-guardian"}""")
     }
@@ -64,7 +64,7 @@ fun main() {
     }
     server.executor = null
     server.start()
-    println("Cairn Guardian server listening on :$PORT")
+    println("Cairn Guardian server listening on :$port")
 }
 
 private fun validateRequest(request: JsonObject) {
