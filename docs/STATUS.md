@@ -6,9 +6,9 @@
 
 ## Gate atual
 
-**Gate 1 — Motor de Regras Cairn**
+**Gate 2 — Campanha e exploração**
 
-Status: 🟡 Rules Engine base implementado; GameState, criação de personagem e persistência local implementados
+Status: 🟡 exploração inicial funcional; contrato de ações centralizado; CI validado
 
 ## Gate 0 — Concluído
 
@@ -18,9 +18,9 @@ Status: 🟡 Rules Engine base implementado; GameState, criação de personagem 
 - Manifesto e Activity de entrada.
 - Tela inicial mínima do Cairn Solo RPG.
 - Configuração de build debug.
-- GitHub Actions validando `assembleDebug`.
+- GitHub Actions validando `testDebugUnitTest` e `assembleDebug`.
 - Build debug confirmado com sucesso no GitHub Actions.
-- Artefato `cairn-solo-rpg-debug` gerado e disponível.
+- Artefato `cairn-solo-rpg-debug` configurado para upload.
 - Correção aplicada para alinhar Java/Kotlin em JVM 17.
 
 ## Base normativa definida
@@ -37,25 +37,27 @@ A Cairn Barebones Edition poderá ser usada posteriormente como referência de a
 Decisão registrada em:
 `docs/decisions/ADR-006-cairn-2e.md`
 
-## Gate 1 — Implementação
+## Arquitetura
 
 O núcleo deverá ser independente de Android e Gemini.
-
-Arquitetura:
 
 ```text
 GameAction
     ↓
-Rules Engine
+GameActionResolver
+    ↓
+Rules Engine / domínio
     ↓
 GameResult
-    ├── newState
+    ├── state
     └── events
 ```
 
 O RNG será isolável para testes. O GameState só poderá mudar por operações válidas do domínio.
 
-Primeiro escopo:
+## Gate 1 — Motor de regras
+
+Implementado como base determinística:
 
 - atributos;
 - saves;
@@ -64,17 +66,51 @@ Primeiro escopo:
 - Armor;
 - inventário/slots;
 - Fatigue/Deprivation;
-- condições;
 - Critical Damage;
 - Scars;
 - recuperação;
-- regras essenciais de combate e magia.
+- persistência do estado;
+- RNG injetável.
 
-Cada regra implementada deverá ter referência à seção normativa correspondente e testes automatizados.
+A criação de personagem possui a base de rolagens 3d6/1d6, Backgrounds, Traits e Age, mas ainda será expandida e validada como fluxo completo.
 
-## Próximo passo
+Pendências do Gate 1:
+- persistência completa de efeitos individuais de Cicatrizes;
+- validação normativa detalhada de todas as recuperações;
+- catálogo de equipamento/backgrounds;
+- regras avançadas de combate e magia.
 
-Completar a persistência com testes de round-trip e avançar para inventário/equipamentos de personagem e fluxo de campanha.
+## Gate 2 — exploração inicial
+
+- [x] Tipos de cena.
+- [x] Estado de cena persistente.
+- [x] Diário de campanha persistente.
+- [x] Motor determinístico de exploração.
+- [x] Ação CONTINUE com RNG injetável.
+- [x] Ação INVESTIGATE com RNG injetável.
+- [x] Testes unitários do motor de exploração.
+- [x] Tela própria de exploração.
+- [x] `GameAction` independente da UI.
+- [x] `GameActionResolver` como entrada central da campanha.
+- [x] `GameResult` com estado + eventos.
+- [x] Eventos de exploração traduzidos para contrato estável.
+- [x] Descanso da exploração resolvido pelo `RulesEngine`, em vez de apenas emitir um pedido.
+- [x] Testes do descanso através do contrato de ações.
+- [x] CI executado com sucesso após a correção do teste de CharacterGenerator.
+
+### Decisão arquitetural atual
+
+A tela de exploração não modifica regras diretamente. Ela envia `GameAction`; o `GameActionResolver` decide qual operação de domínio executar; o resultado persistido é o estado autorizado pelo domínio.
+
+O descanso de exploração agora usa `RulesEngine.safeRest()`. Isso evita criar uma segunda implementação de descanso dentro do motor de exploração.
+
+### Próximo incremento
+
+- adicionar ações mecânicas de personagem ao mesmo contrato (`ApplyDamage`, `AddItem`, `RemoveItem`, etc.);
+- eliminar chamadas diretas do `RulesEngine` pela UI;
+- criar testes de round-trip da persistência;
+- consolidar o estado de campanha e remover duplicidade entre `CampaignState` e `CampaignRuntime`;
+- preparar um DTO de contexto autorizado para o futuro MJ, sem Gemini ainda.
 
 ## Regras para agentes
 
@@ -86,69 +122,13 @@ Completar a persistência com testes de round-trip e avançar para inventário/e
 - Não misturar regras da 1e com a 2e sem decisão explícita.
 - Não inventar regras ausentes na fonte normativa.
 - Preferir implementação mecânica a texto hardcoded da fonte.
+- Toda alteração relevante deve ter testes automatizados quando houver comportamento determinístico verificável.
+- Uma etapa só é considerada validada após execução real do CI.
 
-## Última atualização
+## Última validação
 
-Base normativa fixada em Cairn 2e e registrada no ADR-006. Gate 1 pronto para implementação.
-
-## Incremento atual — GameState
-
-- [x] GameState separado do Rules Engine.
-- [x] CampaignState e identidade do personagem.
-- [x] Criação inicial de personagem.
-- [x] Persistência local com SharedPreferences.
-- [x] Restauração da campanha ao abrir o aplicativo.
-- [x] Operações de dano/descanso atualizando e salvando o GameState.
-- [x] Testes básicos do GameState.
-
-## Incremento atual — personagem e estado de combate
-
-- [x] Criação baseada nas rolagens 3d6 por atributo e 1d6 de HP da 2e.
-- [x] RNG real isolado do motor de regras.
-- [x] Dano exato a 0 gera resultado de Cicatriz; dano além de 0 entra em Dano Crítico.
-- [x] Estado crítico e resultado de salvamento crítico persistidos.
-- [x] Inventário funcional na interface.
-- [x] Persistência de campanha ampliada para o estado de morte.
-- [x] Descanso não remove automaticamente o estado crítico; estabilização é operação separada.
-
-A criação de personagem ainda será expandida com Antecedente/Traços e tabelas oficiais antes de ser considerada completa.
-
-## Revisão normativa — Gate 1
-
-A implementação foi revisada contra o Core Rules e Character Creation oficiais da Cairn 2e. O motor agora possui RNG d20/d6 isolável, geração 3d6/1d6, estado crítico/morte, resultado tipado de Cicatriz e persistência da Cicatriz. A cobertura de testes foi ampliada para esses casos. A tabela completa de efeitos de cada Cicatriz e regras avançadas de magia/recuperação ainda serão implementadas como operações de domínio antes do fechamento definitivo do Gate 1.
-
-
-## Continuação do Gate 1
-
-Concluídas as correções de capacidade de inventário e Fatigue, estrutura persistente inicial para efeitos de Cicatrizes, testes adicionais e início do Character Builder com a tabela oficial de Backgrounds da 2e. O fechamento definitivo do Gate 1 permanece condicionado à validação completa de recuperação, efeitos individuais de Cicatrizes e execução confirmada da suíte no CI.
-
-
-## Gate 1 — fechamento técnico
-
-O núcleo determinístico agora cobre Saves, Armor, dano, dano crítico, estado crítico/morte, inventário, Fatigue, Deprivation, descanso, persistência do estado, RNG injetável e a base do Character Builder. A geração de personagem inclui Background, Traits e Age conforme a Character Creation da Cairn 2e. A resolução de HP exatamente em 0 usa uma rolagem d12 para selecionar a Cicatriz, em vez de derivar o resultado do dano.
-
-Pendências deliberadamente fora do fechamento do núcleo: catálogo de equipamento/backgrounds detalhado e conteúdo específico de combate que dependa de itens. Essas partes ficam para a camada de conteúdo/campanha, mantendo o Rules Engine independente de conteúdo narrativo.
-
-
-## Gate 2 — exploração inicial
-
-- [x] Tipos de cena.
-- [x] Estado de cena persistente.
-- [x] Diário de campanha persistente.
-- [x] Motor determinístico de exploração.
-- [x] Ação CONTINUE com destinos determinados pelo RNG injetável.
-- [x] Ação INVESTIGATE com resultado determinístico.
-- [x] Testes unitários do motor de exploração.
-- [x] Primeiro fluxo de exploração conectado à UI.
-
-Próximo incremento: separar ações de exploração da tela de personagem e preparar o contrato de entrada/saída que será consumido futuramente pelo MJ.
-
-## Gate 2 — contrato de ações
-
-- [x] `GameAction` representa intenções do jogador sem depender da UI.
-- [x] `GameActionResolver` centraliza a entrada da campanha.
-- [x] `GameResult` expõe novo estado + eventos para a camada narrativa.
-- [x] Eventos de exploração são traduzidos para um contrato estável de campanha.
-- [x] Testes unitários cobrem CONTINUE e INVESTIGATE através do novo contrato.
-
-O contrato foi criado sem Gemini e sem permitir que narrativa altere o estado mecânico. A próxima etapa é mover a interação de exploração para uma tela própria e conectar a UI exclusivamente a `GameActionResolver`.
+Workflow GitHub Actions **Android Build #68**:
+- `testDebugUnitTest`: sucesso.
+- 26 testes concluídos.
+- 0 falhas.
+- Build do projeto: sucesso.
