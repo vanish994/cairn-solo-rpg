@@ -140,25 +140,26 @@ class CharacterGeneratorTest {
 
     @Test
     fun directBackgroundCreationEffectsAreResolved() {
-        val fieldwarden = createCharacter(
-            "Field",
-            RolledCharacter(
-                9, 11, 13, 5,
-                background = Background.FIELDWARDEN,
-                backgroundRolls = BackgroundRolls(6, 1)
-            )
+        val effects = backgroundCreationEffects(
+            Background.FIELDWARDEN,
+            BackgroundRolls(6, 1),
+            FixedRandomSource(3)
         )
-        assertEquals(5, fieldwarden.campaign.rules.maxHp)
+        assertEquals(3, effects.bonusHp)
 
-        val outrider = createCharacter(
-            "Rider",
-            RolledCharacter(
-                9, 11, 13, 5,
-                background = Background.OUTRIDER,
-                backgroundRolls = BackgroundRolls(4, 1)
-            )
+        val gold = backgroundCreationEffects(
+            Background.OUTRIDER,
+            BackgroundRolls(4, 1),
+            FixedRandomSource(3)
         )
-        assertEquals(0, outrider.campaign.profile.gold)
+        assertEquals(30, gold.bonusGold)
+
+        val bonds = backgroundCreationEffects(
+            Background.OUTRIDER,
+            BackgroundRolls(6, 1),
+            FixedRandomSource(17)
+        )
+        assertEquals(17, bonds.secondBondRoll)
     }
 
     @Test
