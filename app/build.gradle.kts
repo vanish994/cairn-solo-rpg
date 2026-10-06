@@ -5,6 +5,11 @@ plugins {
 }
 
 android {
+    val geminiApiKey = providers.gradleProperty("GEMINI_API_KEY")
+        .orElse(providers.environmentVariable("GEMINI_API_KEY"))
+        .orElse("")
+        .get()
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -23,9 +28,11 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
+        buildConfigField("String", "GEMINI_API_KEY", "\"${geminiApiKey.replace("\\", "\\\\").replace("\"", "\\\"")}\"")
     }
 
     buildFeatures {
+        buildConfig = true
         compose = true
     }
 
@@ -45,6 +52,7 @@ dependencies {
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.activity:activity-compose:1.10.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
+    implementation("com.google.genai:google-genai:1.75.0")
 
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")

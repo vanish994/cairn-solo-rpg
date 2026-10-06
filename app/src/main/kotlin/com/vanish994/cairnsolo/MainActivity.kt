@@ -19,11 +19,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import com.vanish994.cairnsolo.ai.AIProviderFactory
+import com.vanish994.cairnsolo.ai.WardenRequest
 import com.vanish994.cairnsolo.game.GameAction
 import com.vanish994.cairnsolo.game.GameActionResolver
 import com.vanish994.cairnsolo.game.GameState
 import com.vanish994.cairnsolo.game.ExplorationEngine
 import com.vanish994.cairnsolo.game.LocalGameStateRepository
+import com.vanish994.cairnsolo.game.MJContext
+import kotlinx.coroutines.launch
 import com.vanish994.cairnsolo.rules.*
 import kotlin.random.Random
 
@@ -38,6 +42,9 @@ class MainActivity : ComponentActivity() {
                 var name by remember { mutableStateOf("") }
                 var rolled by remember { mutableStateOf<RolledCharacter?>(null) }
                 var selectedBackground by remember { mutableStateOf<Background?>(null) }
+                var wardenNarrative by remember { mutableStateOf<String?>(null) }
+                val coroutineScope = rememberCoroutineScope()
+                val aiProvider = remember { AIProviderFactory.create(BuildConfig.GEMINI_API_KEY) }
                 val actionResolver = remember {
                     GameActionResolver(
                         exploration = ExplorationEngine(KotlinRandomSource()),
@@ -113,10 +120,21 @@ class MainActivity : ComponentActivity() {
 
                             AppScreen.EXPLORATION -> ExplorationScreen(
                                 state = current,
+                                wardenNarrative = wardenNarrative,
                                 onAction = { action ->
                                     val result = actionResolver.resolve(current, action)
                                     repository.save(result.state)
                                     state = result.state
+                                    coroutineScope.launch {
+                                        val request = WardenRequest(
+                                            context = MJContext.from(result.state),
+                                            playerInput = action.playerFacingLabel(),
+                                            rulesEngineResult = result.events.joinToString("\n")
+                                        )
+                                        wardenNarrative = aiProvider.narrate(request)
+                                            .getOrElse { WardenRequestFallback.narrative(result.state) }
+                                            .narrative
+                                    }
                                 },
                                 onBack = { screen = AppScreen.CHARACTER }
                             )
@@ -134,6 +152,22 @@ class MainActivity : ComponentActivity() {
 
 enum class AppScreen { CHARACTER, EXPLORATION, RULES }
 
+private fun GameAction.playerFacingLabel(): String = when (this) {
+    GameAction.ExploreContinue -> "Continuar pela cena"
+    GameAction.ExploreInvestigate -> "Investigar a situação"
+    GameAction.ExploreRest -> "Descansar"
+    else -> toString()
+}
+
+private object WardenRequestFallback {
+    fun narrative(state: GameState): com.vanish994.cairnsolo.ai.WardenResponse =
+        com.vanish994.cairnsolo.ai.WardenResponse(
+            narrative = state.campaign.sceneDescription,
+            suggestedActions = state.campaign.exits.take(3),
+            intent = null
+        )
+}
+
 private val CAIRN_PROTAGONIST_SPRITES = listOf(
     R.drawable.cairn_protagonist_01,
     R.drawable.cairn_protagonist_02,
@@ -145,6 +179,7 @@ private val CAIRN_PROTAGONIST_SPRITES = listOf(
 @Composable
 private fun ExplorationScreen(
     state: GameState,
+    wardenNarrative: String?,
     onAction: (GameAction) -> Unit,
     onBack: () -> Unit
 ) {
@@ -159,7 +194,8 @@ private fun ExplorationScreen(
             Spacer(Modifier.height(16.dp))
             Text(c.sceneTitle, style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.height(8.dp))
-            Text(c.sceneDescription)
+            Text("Warden", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+            Text(wardenNarrative ?: c.sceneDescription)
             Spacer(Modifier.height(16.dp))
             if (c.exits.isNotEmpty()) {
                 Text("Possibilidades: " + c.exits.joinToString(" • "))

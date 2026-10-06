@@ -136,6 +136,27 @@ Nunca faça commit de:
 
 Use `.env.example` ou configuração equivalente apenas com nomes de variáveis.
 
+## Protótipo Gemini direto no APK
+
+O protótipo inclui `GeminiFlashLiteProvider` usando o SDK oficial `google-genai`.
+Ele é selecionado somente quando uma chave é injetada na configuração do build;
+sem chave, o app usa `MockAIProvider` e continua funcionando offline.
+
+Para um APK local de teste (a chave ficará embutida no APK e pode ser extraída):
+
+```bash
+export GEMINI_API_KEY="sua-chave-de-desenvolvimento"
+gradle -PGEMINI_API_KEY="$GEMINI_API_KEY" assembleDebug
+```
+
+O provider envia ao Gemini apenas o contexto de leitura, a ação do jogador e o
+resultado já autorizado pelo `Rules Engine`. A resposta precisa ser JSON válido
+com `narrative`, `suggested_actions` e `intent`; respostas inválidas ou falhas
+de rede usam o fallback local e nunca alteram o `GameState`.
+
+Este modo é exclusivo para prototipagem privada. Para distribuição, mova a
+chamada para um backend e não inclua a chave no APK.
+
 ## Estado atual
 
 **Gate 0 concluído. Gate 1 pronto para iniciar.**
