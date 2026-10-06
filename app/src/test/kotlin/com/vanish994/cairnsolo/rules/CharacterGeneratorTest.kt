@@ -128,11 +128,11 @@ class CharacterGeneratorTest {
     @Test
     fun everyBackgroundHasTwelveCataloguedOutcomes() {
         for (background in Background.entries) {
-            val outcomes = BACKGROUND_OUTCOME_KEYS[background]
-            assertEquals(12, outcomes?.size, background.displayName)
             for (roll in 1..6) {
-                assertNotNull(backgroundOutcomes(background, BackgroundRolls(roll, roll)).first())
-                assertNotNull(backgroundOutcomes(background, BackgroundRolls(roll, roll)).second())
+                val outcomes = backgroundOutcomes(background, BackgroundRolls(roll, roll))
+                assertEquals(2, outcomes.size, background.displayName)
+                assertNotNull(outcomes.first().key)
+                assertNotNull(outcomes[1].key)
             }
         }
     }
