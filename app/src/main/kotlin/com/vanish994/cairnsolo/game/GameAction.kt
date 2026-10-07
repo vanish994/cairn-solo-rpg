@@ -4,6 +4,10 @@ import com.vanish994.cairnsolo.rules.AttackMode
 import com.vanish994.cairnsolo.rules.Attribute
 import com.vanish994.cairnsolo.rules.CharacterState
 import com.vanish994.cairnsolo.rules.CombatRules
+import com.vanish994.cairnsolo.rules.DowntimeAction
+import com.vanish994.cairnsolo.rules.DungeonAction
+import com.vanish994.cairnsolo.rules.Season
+import com.vanish994.cairnsolo.rules.WildernessAction
 import com.vanish994.cairnsolo.rules.InventoryItem
 import com.vanish994.cairnsolo.rules.RandomSource
 import com.vanish994.cairnsolo.rules.RuleEvent
@@ -29,6 +33,19 @@ sealed interface GameAction {
     data class BeginCombat(val opponentId: String, val opponent: CharacterState, val opponentWeapon: WeaponProfile = WeaponProfile("unarmed", "d4")) : GameAction
     data class CombatAttack(val weapon: WeaponProfile? = null, val mode: AttackMode = AttackMode.NORMAL) : GameAction
     data object EndCombat : GameAction
+    data class CastSpell(val itemId: String, val requiresWilSave: Boolean = false, val failure: com.vanish994.cairnsolo.rules.SpellFailureConsequence = com.vanish994.cairnsolo.rules.SpellFailureConsequence.NONE, val dropItemIdForFatigue: String? = null) : GameAction
+    data class Purchase(val itemId: String) : GameAction
+    data class PerformDowntime(val action: DowntimeAction) : GameAction
+    data class AddDowntimeMilestone(val milestone: com.vanish994.cairnsolo.rules.Milestone) : GameAction
+    data class StartTravel(val destination: String) : GameAction
+    data class WildernessAct(val action: WildernessAction, val participants: Int = 1) : GameAction
+    data class RollWeather(val season: Season) : GameAction
+    data class DungeonAct(val action: DungeonAction) : GameAction
+    data object LightTorch : GameAction
+    data object LightLantern : GameAction
+    data object ExtinguishLight : GameAction
+    data object StartDungeonPanic : GameAction
+    data object OvercomeDungeonPanic : GameAction
 }
 
 data class GameResult(val state: GameState, val events: List<GameEvent>)
@@ -49,12 +66,23 @@ sealed interface GameEvent {
     data class CombatStarted(val opponentId: String, val round: Int, val playerCanAct: Boolean) : GameEvent
     data class CombatAttackResolved(val opponentId: String, val round: Int, val playerDamage: DamageResolved, val enemyDamage: DamageResolved?, val playerCanAct: Boolean) : GameEvent
     data class CombatEnded(val opponentId: String, val victory: Boolean) : GameEvent
+    data class SpellResolved(val spellId: String, val itemId: String) : GameEvent
+    data class PurchaseResolved(val itemId: String, val goldRemaining: Int) : GameEvent
+    data class DowntimeResolved(val action: com.vanish994.cairnsolo.rules.DowntimeActionType) : GameEvent
+    data class WildernessResolved(val action: WildernessAction) : GameEvent
+    data class DungeonResolved(val action: com.vanish994.cairnsolo.rules.DungeonActionKind) : GameEvent
+    data class RuleNotice(val summary: String) : GameEvent
 }
 
 class GameActionResolver(
     private val exploration: ExplorationEngine,
     private val rules: RulesEngine,
-    private val combat: CombatRules = CombatRules(rules.random)
+    private val combat: CombatRules = CombatRules(rules.random),
+    private val magic: com.vanish994.cairnsolo.rules.MagicRules = com.vanish994.cairnsolo.rules.MagicRules(rules),
+    private val marketplace: com.vanish994.cairnsolo.rules.MarketplaceRules = com.vanish994.cairnsolo.rules.MarketplaceRules(),
+    private val downtime: com.vanish994.cairnsolo.rules.DowntimeRules = com.vanish994.cairnsolo.rules.DowntimeRules(rules),
+    private val dungeon: com.vanish994.cairnsolo.rules.DungeonRules = com.vanish994.cairnsolo.rules.DungeonRules(rules.random, rules),
+    private val wilderness: com.vanish994.cairnsolo.rules.WildernessRules = com.vanish994.cairnsolo.rules.WildernessRules(rules.random, rules)
 ) {
     fun resolve(state: GameState, action: GameAction): GameResult = when (action) {
         is GameAction.CreateCharacter -> {
@@ -62,7 +90,11 @@ class GameActionResolver(
             val world = WorldGenerator(rules.random).generate(
                 WorldSeed(action.name.trim(), action.rolled.background?.name ?: "uma fronteira desconhecida")
             )
-            val withWorld = created.copy(campaign = created.campaign.copy(worldState = world))
+            val withWorld = created.copy(campaign = created.campaign.copy(
+                worldState = world,
+                wilderness = com.vanish994.cairnsolo.rules.WildernessState(world.currentLocationId),
+                dungeon = world.dungeons.firstOrNull()?.let { com.vanish994.cairnsolo.rules.DungeonState(it.id) }
+            ))
             GameResult(withWorld, listOf(GameEvent.CharacterCreated(withWorld.campaign.character.id)))
         }
         GameAction.ExploreContinue -> exploration.resolve(state, ExplorationAction.CONTINUE).toGameResult()
@@ -105,6 +137,67 @@ class GameActionResolver(
         is GameAction.BeginCombat -> beginCombat(state, action)
         is GameAction.CombatAttack -> combatAttack(state, action)
         GameAction.EndCombat -> endCombat(state)
+        is GameAction.CastSpell -> castSpell(state, action)
+        is GameAction.Purchase -> purchase(state, action)
+        is GameAction.PerformDowntime -> performDowntime(state, action)
+        is GameAction.AddDowntimeMilestone -> GameResult(state.copy(campaign = state.campaign.copy(downtime = downtime.addMilestone(state.campaign.downtime, action.milestone))), listOf(GameEvent.RuleNotice("Marco de downtime adicionado: ${action.milestone.id}")))
+        is GameAction.StartTravel -> GameResult(state.copy(campaign = state.campaign.copy(wilderness = wilderness.startTravel(state.campaign.wilderness ?: error("Wilderness state not initialized"), action.destination), turn = state.campaign.turn + 1)), listOf(GameEvent.RuleNotice("Viagem iniciada para ${action.destination}")))
+        is GameAction.WildernessAct -> wildernessAct(state, action)
+        is GameAction.RollWeather -> rollWeather(state, action)
+        is GameAction.DungeonAct -> dungeonAct(state, action)
+        GameAction.LightTorch -> dungeonLight(state) { dungeon.lightTorch(it) }
+        GameAction.LightLantern -> dungeonLight(state) { dungeon.lightLantern(it) }
+        GameAction.ExtinguishLight -> dungeonLight(state) { dungeon.extinguish(it) }
+        GameAction.StartDungeonPanic -> dungeonTurn(state, dungeon.startPanic(state.campaign.dungeon ?: error("Dungeon state not initialized"), state.campaign.rules))
+        GameAction.OvercomeDungeonPanic -> dungeonTurn(state, dungeon.overcomePanic(state.campaign.dungeon ?: error("Dungeon state not initialized"), state.campaign.rules))
+    }
+
+    private fun castSpell(state: GameState, action: GameAction.CastSpell): GameResult {
+        val result = magic.cast(state.campaign.rules, action.itemId, action.requiresWilSave, action.failure, action.dropItemIdForFatigue)
+        return GameResult(state.withRules(result.state), listOf(GameEvent.SpellResolved(result.spell.id, action.itemId)))
+    }
+
+    private fun purchase(state: GameState, action: GameAction.Purchase): GameResult {
+        val result = marketplace.purchase(state.campaign.rules, state.campaign.profile.gold, action.itemId)
+        val profile = state.campaign.profile.copy(gold = result.goldRemaining)
+        return GameResult(state.withRules(result.state).copy(campaign = state.withRules(result.state).campaign.copy(profile = profile)), listOf(GameEvent.PurchaseResolved(action.itemId, result.goldRemaining)))
+    }
+
+    private fun performDowntime(state: GameState, action: GameAction.PerformDowntime): GameResult {
+        val current = state.campaign.downtime.copy(gold = state.campaign.profile.gold)
+        val result = downtime.perform(current, state.campaign.rules, action.action)
+        val profile = state.campaign.profile.copy(gold = result.state.gold)
+        val next = state.withRules(result.character).copy(campaign = state.withRules(result.character).campaign.copy(downtime = result.state, profile = profile))
+        return GameResult(next, listOf(GameEvent.DowntimeResolved(action.action.type)))
+    }
+
+    private fun wildernessAct(state: GameState, action: GameAction.WildernessAct): GameResult {
+        val current = state.campaign.wilderness ?: error("Wilderness state not initialized")
+        val result = wilderness.act(current, state.campaign.rules, action.action, action.participants)
+        val next = state.withRules(result.character).copy(campaign = state.withRules(result.character).campaign.copy(wilderness = result.state))
+        return GameResult(next, listOf(GameEvent.WildernessResolved(action.action)))
+    }
+
+    private fun rollWeather(state: GameState, action: GameAction.RollWeather): GameResult {
+        val current = state.campaign.wilderness ?: error("Wilderness state not initialized")
+        val (next, event) = wilderness.rollWeather(action.season, current)
+        return GameResult(state.copy(campaign = state.campaign.copy(wilderness = next, turn = state.campaign.turn + 1)), listOf(GameEvent.RuleNotice(event.toString())))
+    }
+
+    private fun dungeonAct(state: GameState, action: GameAction.DungeonAct): GameResult {
+        val current = state.campaign.dungeon ?: error("Dungeon state not initialized")
+        return dungeonTurn(state, dungeon.resolveTurn(current, state.campaign.rules, action))
+    }
+
+    private fun dungeonTurn(state: GameState, result: com.vanish994.cairnsolo.rules.DungeonTurnResult): GameResult {
+        val next = state.withRules(result.character).copy(campaign = state.withRules(result.character).campaign.copy(dungeon = result.state))
+        return GameResult(next, listOf(GameEvent.DungeonResolved(com.vanish994.cairnsolo.rules.DungeonActionKind.OTHER)))
+    }
+
+    private fun dungeonLight(state: GameState, operation: (com.vanish994.cairnsolo.rules.DungeonState) -> com.vanish994.cairnsolo.rules.DungeonLightResult): GameResult {
+        val current = state.campaign.dungeon ?: error("Dungeon state not initialized")
+        val result = operation(current)
+        return GameResult(state.copy(campaign = state.campaign.copy(dungeon = result.state, turn = state.campaign.turn + 1)), result.events.map { GameEvent.RuleNotice(it.toString()) })
     }
 
     private fun resolveRest(state: GameState): GameResult {

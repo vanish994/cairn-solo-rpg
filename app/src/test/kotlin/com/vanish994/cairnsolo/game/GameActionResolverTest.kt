@@ -6,6 +6,13 @@ import com.vanish994.cairnsolo.rules.RulesEngine
 import com.vanish994.cairnsolo.rules.Scar
 import com.vanish994.cairnsolo.rules.ScarRecovery
 import com.vanish994.cairnsolo.rules.WeaponProfile
+import com.vanish994.cairnsolo.rules.MagicItems
+import com.vanish994.cairnsolo.rules.DowntimeAction
+import com.vanish994.cairnsolo.rules.DowntimeActionType
+import com.vanish994.cairnsolo.rules.DungeonAction
+import com.vanish994.cairnsolo.rules.DungeonActionKind
+import com.vanish994.cairnsolo.rules.WildernessAction
+import com.vanish994.cairnsolo.rules.WildernessState
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -166,6 +173,43 @@ class GameActionResolverTest {
         assertTrue(result.state.campaign.guardianMessage.contains("seguir em direção à luz"))
         assertTrue(result.state.campaign.log.last().contains("seguir em direção à luz"))
         assertTrue(result.events.isEmpty())
+    }
+
+    @Test
+    fun magicMarketplaceDowntimeDungeonAndWildernessUseResolverState() {
+        val random = FixedRandomSource(d20Value = 10, d6Value = 6)
+        val template = state()
+        val base = template.copy(campaign = template.campaign.copy(
+            profile = CharacterProfile(gold = 20),
+            rules = template.campaign.rules.copy(inventory = listOf(MagicItems.scroll("scroll-1", "detect-magic"))),
+            dungeon = com.vanish994.cairnsolo.rules.DungeonState("crypt", safeLocation = true, light = com.vanish994.cairnsolo.rules.DungeonLight.TORCH),
+            wilderness = WildernessState("village", rations = 2)
+        ))
+        val resolver = GameActionResolver(ExplorationEngine(random), RulesEngine(random))
+        val cast = resolver.resolve(base, GameAction.CastSpell("scroll-1"))
+        assertTrue(cast.state.campaign.rules.inventory.isEmpty())
+        val bought = resolver.resolve(cast.state, GameAction.Purchase("dagger"))
+        assertEquals(15, bought.state.campaign.profile.gold)
+        val rested = resolver.resolve(bought.state, GameAction.PerformDowntime(DowntimeAction(DowntimeActionType.FOLLOW_LEAD)))
+        assertEquals(1, rested.state.campaign.downtime.completedActions)
+        val dungeon = resolver.resolve(rested.state, GameAction.DungeonAct(DungeonAction(DungeonActionKind.MOVE)))
+        assertEquals(1, dungeon.state.campaign.dungeon?.turn)
+        val wild = resolver.resolve(dungeon.state, GameAction.WildernessAct(WildernessAction.MAKE_CAMP))
+        assertEquals(1, wild.state.campaign.wilderness?.rations)
+    }
+
+    @Test
+    fun newCampaignInitializesTravelAndDungeonStateAndPersistsThem() {
+        val random = FixedRandomSource(d20Value = 10, d6Value = 3)
+        val created = GameActionResolver(ExplorationEngine(random), RulesEngine(random)).resolve(
+            state(), GameAction.CreateCharacter("Mara", com.vanish994.cairnsolo.rules.RolledCharacter(10, 10, 10, 6, null, null))
+        ).state
+        assertTrue(created.campaign.wilderness != null)
+        assertTrue(created.campaign.dungeon != null)
+        val restored = GameStatePersistenceCodec.decode(GameStatePersistenceCodec.encode(created))!!
+        assertEquals(created.campaign.wilderness, restored.campaign.wilderness)
+        assertEquals(created.campaign.dungeon, restored.campaign.dungeon)
+        assertEquals(created.campaign.downtime, restored.campaign.downtime)
     }
 
     @Test

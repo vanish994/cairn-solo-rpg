@@ -5,6 +5,14 @@ import com.vanish994.cairnsolo.rules.CharacterState
 import com.vanish994.cairnsolo.rules.CharacterTraits
 import com.vanish994.cairnsolo.rules.InventoryItem
 import com.vanish994.cairnsolo.rules.Scar
+import com.vanish994.cairnsolo.rules.DowntimeCost
+import com.vanish994.cairnsolo.rules.Milestone
+import com.vanish994.cairnsolo.rules.DungeonLight
+import com.vanish994.cairnsolo.rules.PathType
+import com.vanish994.cairnsolo.rules.TravelDistance
+import com.vanish994.cairnsolo.rules.Terrain
+import com.vanish994.cairnsolo.rules.Weather
+import com.vanish994.cairnsolo.rules.Watch
 
 object GameStatePersistenceCodec {
     private const val SEPARATOR = "\u001F"
@@ -33,6 +41,10 @@ object GameStatePersistenceCodec {
                 put("combatStr", o.str.toString()); put("combatDex", o.dex.toString()); put("combatWil", o.wil.toString()); put("combatHp", o.hp.toString()); put("combatMaxHp", o.maxHp.toString()); put("combatArmor", o.armor.toString())
             }
             c.worldState?.let { world -> WorldStatePersistenceCodec.encode(world).forEach { (key, value) -> put("world_$key", value) } }
+            c.dungeon?.let { d -> put("dungeonLocation", d.locationId); put("dungeonTurn", d.turn.toString()); put("dungeonCycles", d.cyclesInLocation.toString()); put("dungeonLight", d.light.name); put("dungeonTorches", d.torchIgnitionsRemaining.toString()); put("dungeonOil", d.lanternOilUses.toString()); put("dungeonSafe", d.safeLocation.toString()); put("dungeonDanger", d.dangerPresent.toString()); put("dungeonPanicked", d.panicked.toString()) }
+            c.wilderness?.let { w -> put("wildCurrent", w.currentPoint); put("wildDestination", w.destinationPoint ?: ""); put("wildWatches", w.remainingWatches.toString()); put("wildWatch", w.watch.name); put("wildPath", w.path.name); put("wildDistance", w.distance.name); put("wildTerrain", w.terrain.name); put("wildWeather", w.weather.name); put("wildNight", w.nightTravel.toString()); put("wildLost", w.lost.toString()); put("wildRations", w.rations.toString()); put("wildDeprived", w.deprived.toString()); put("wildExtreme", w.previousWeatherWasExtreme.toString()) }
+            put("downtimeSafe", c.downtime.safe.toString()); put("downtimeRecovery", c.downtime.inRecovery.toString()); put("downtimeGold", c.downtime.gold.toString()); put("downtimeReputation", c.downtime.reputation.toString()); put("downtimeResources", c.downtime.resources.joinToString(SEPARATOR)); put("downtimeCompleted", c.downtime.completedActions.toString()); put("milestoneCount", c.downtime.milestones.size.toString())
+            c.downtime.milestones.forEachIndexed { i, m -> put("milestone_$i", listOf(m.id, m.goal, m.total, m.progress, costType(m.cost), costValue(m.cost)).joinToString(SEPARATOR)) }
             put("canonLocationCount", c.worldCanon.locations.size.toString())
             c.worldCanon.locations.forEachIndexed { i, x -> put("canonLocation_${i}", listOf(x.id, x.name, x.description, x.status.name, x.firstSeenTurn).joinToString(SEPARATOR)) }
             put("canonNpcCount", c.worldCanon.npcs.size.toString())
@@ -126,6 +138,10 @@ object GameStatePersistenceCodec {
                 round = int("combatRound", 1), playerCanAct = bool("combatPlayerCanAct", true)
             )
         }
+        val dungeon = values["dungeonLocation"]?.takeIf { it.isNotBlank() }?.let { DungeonState(it, int("dungeonTurn", 0), int("dungeonCycles", 0), runCatching { DungeonLight.valueOf(string("dungeonLight", DungeonLight.DARK.name)) }.getOrDefault(DungeonLight.DARK), int("dungeonTorches", 3), int("dungeonOil", 0), bool("dungeonSafe", false), bool("dungeonDanger", false), bool("dungeonPanicked", false)) }
+        val wilderness = values["wildCurrent"]?.takeIf { it.isNotBlank() }?.let { com.vanish994.cairnsolo.rules.WildernessState(it, nullableString("wildDestination"), int("wildWatches", 0), runCatching { Watch.valueOf(string("wildWatch", Watch.MORNING.name)) }.getOrDefault(Watch.MORNING), runCatching { PathType.valueOf(string("wildPath", PathType.ROAD.name)) }.getOrDefault(PathType.ROAD), runCatching { TravelDistance.valueOf(string("wildDistance", TravelDistance.SHORT.name)) }.getOrDefault(TravelDistance.SHORT), runCatching { Terrain.valueOf(string("wildTerrain", Terrain.EASY.name)) }.getOrDefault(Terrain.EASY), runCatching { Weather.valueOf(string("wildWeather", Weather.NICE.name)) }.getOrDefault(Weather.NICE), bool("wildNight", false), bool("wildLost", false), int("wildRations", 0), bool("wildDeprived", false), bool("wildExtreme", false)) }
+        val milestones = (0 until int("milestoneCount", 0)).mapNotNull { i -> string("milestone_$i").split(SEPARATOR).takeIf { it.size >= 6 }?.let { x -> runCatching { Milestone(x[0], x[1], x[2].toInt(), x[3].toInt(), decodeCost(x[4], x[5])) }.getOrNull() } }
+        val downtime = com.vanish994.cairnsolo.rules.DowntimeState(bool("downtimeSafe", true), bool("downtimeRecovery", false), int("downtimeGold", int("profileGold", 0)), int("downtimeReputation", 0), string("downtimeResources").split(SEPARATOR).filter { it.isNotBlank() }.toSet(), milestones, int("downtimeCompleted", 0))
         val worldState = WorldStatePersistenceCodec.decode(values)
         return GameState(
             campaign = CampaignState(
@@ -136,10 +152,17 @@ object GameStatePersistenceCodec {
                 guardianMessage = string("guardianMessage", DEFAULT_GUARDIAN_PROLOGUE),
                 guardianHistory = string("guardianHistory").split(SEPARATOR).filter { it.isNotBlank() },
                 combat = combat,
+                dungeon = dungeon,
+                wilderness = wilderness,
+                downtime = downtime,
                 worldState = worldState,
                 worldCanon = WorldCanon(locations, npcs, items, quests, discoveries),
                 history = history
             ), updatedAtEpochMs = long("updatedAt", 0L)
         )
     }
+
+    private fun costType(cost: DowntimeCost): String = when (cost) { DowntimeCost.None -> "NONE"; is DowntimeCost.Gold -> "GOLD"; is DowntimeCost.Resource -> "RESOURCE"; is DowntimeCost.Reputation -> "REPUTATION"; is DowntimeCost.Loss -> "LOSS" }
+    private fun costValue(cost: DowntimeCost): String = when (cost) { DowntimeCost.None -> ""; is DowntimeCost.Gold -> cost.amount.toString(); is DowntimeCost.Resource -> cost.id; is DowntimeCost.Reputation -> cost.amount.toString(); is DowntimeCost.Loss -> cost.resourceId }
+    private fun decodeCost(type: String, value: String): DowntimeCost = when (type) { "GOLD" -> DowntimeCost.Gold(value.toInt()); "RESOURCE" -> DowntimeCost.Resource(value); "REPUTATION" -> DowntimeCost.Reputation(value.toInt()); "LOSS" -> DowntimeCost.Loss(value); else -> DowntimeCost.None }
 }
