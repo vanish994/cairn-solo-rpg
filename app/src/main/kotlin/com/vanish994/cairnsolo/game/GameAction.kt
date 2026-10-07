@@ -59,7 +59,11 @@ class GameActionResolver(
     fun resolve(state: GameState, action: GameAction): GameResult = when (action) {
         is GameAction.CreateCharacter -> {
             val created = com.vanish994.cairnsolo.rules.createCharacter(action.name, action.rolled)
-            GameResult(created, listOf(GameEvent.CharacterCreated(created.campaign.character.id)))
+            val world = WorldGenerator(rules.random).generate(
+                WorldSeed(action.name.trim(), action.rolled.background?.name ?: "uma fronteira desconhecida")
+            )
+            val withWorld = created.copy(campaign = created.campaign.copy(worldState = world))
+            GameResult(withWorld, listOf(GameEvent.CharacterCreated(withWorld.campaign.character.id)))
         }
         GameAction.ExploreContinue -> exploration.resolve(state, ExplorationAction.CONTINUE).toGameResult()
         GameAction.ExploreInvestigate -> exploration.resolve(state, ExplorationAction.INVESTIGATE).toGameResult()

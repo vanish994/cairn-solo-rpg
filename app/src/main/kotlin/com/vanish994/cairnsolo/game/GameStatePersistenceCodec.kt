@@ -32,6 +32,7 @@ object GameStatePersistenceCodec {
                 put("combatWeaponId", fight.opponentWeapon.id); put("combatWeaponDamage", fight.opponentWeapon.damage ?: "")
                 put("combatStr", o.str.toString()); put("combatDex", o.dex.toString()); put("combatWil", o.wil.toString()); put("combatHp", o.hp.toString()); put("combatMaxHp", o.maxHp.toString()); put("combatArmor", o.armor.toString())
             }
+            c.worldState?.let { world -> WorldStatePersistenceCodec.encode(world).forEach { (key, value) -> put("world_$key", value) } }
             put("canonLocationCount", c.worldCanon.locations.size.toString())
             c.worldCanon.locations.forEachIndexed { i, x -> put("canonLocation_${i}", listOf(x.id, x.name, x.description, x.status.name, x.firstSeenTurn).joinToString(SEPARATOR)) }
             put("canonNpcCount", c.worldCanon.npcs.size.toString())
@@ -125,6 +126,7 @@ object GameStatePersistenceCodec {
                 round = int("combatRound", 1), playerCanAct = bool("combatPlayerCanAct", true)
             )
         }
+        val worldState = WorldStatePersistenceCodec.decode(values)
         return GameState(
             campaign = CampaignState(
                 campaignId = string("campaignId"), character = CharacterIdentity(string("characterId"), string("characterName", "Aventureiro")),
@@ -134,6 +136,7 @@ object GameStatePersistenceCodec {
                 guardianMessage = string("guardianMessage", DEFAULT_GUARDIAN_PROLOGUE),
                 guardianHistory = string("guardianHistory").split(SEPARATOR).filter { it.isNotBlank() },
                 combat = combat,
+                worldState = worldState,
                 worldCanon = WorldCanon(locations, npcs, items, quests, discoveries),
                 history = history
             ), updatedAtEpochMs = long("updatedAt", 0L)

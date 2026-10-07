@@ -59,6 +59,7 @@ data class CampaignState(
     val guardianHistory: List<String> = emptyList(),
     val guardianInteractionId: String? = null,
     val combat: CombatState? = null,
+    val worldState: WorldState? = null,
     val worldCanon: WorldCanon = WorldCanon(),
     val history: List<CampaignHistoryEntry> = emptyList()
 )
