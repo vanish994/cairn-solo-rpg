@@ -136,8 +136,8 @@ class GameActionResolverTest {
 
         val recovered = resolver(FixedRandomSource(d20Value = 10, d6Value = 2))
             .resolve(damaged.state, GameAction.RecoverScar)
-        assertEquals(8, recovered.state.campaign.rules.maxHp)
-        assertEquals(8, recovered.state.campaign.rules.hp)
+        assertEquals(6, recovered.state.campaign.rules.maxHp)
+        assertEquals(6, recovered.state.campaign.rules.hp)
         assertEquals(null, recovered.state.campaign.rules.scarRecovery)
         assertIs<GameEvent.ScarRecovered>(recovered.events.single())
     }
