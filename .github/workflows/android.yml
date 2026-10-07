@@ -52,7 +52,7 @@ jobs:
             fi
             sleep 1
           done
-          guardian-server/scripts/integration-test.sh "$GUARDIAN_BASE_URL"
+          bash guardian-server/scripts/integration-test.sh "$GUARDIAN_BASE_URL"
 
       - name: Build optimized release APK
         run: gradle :app:assembleRelease
