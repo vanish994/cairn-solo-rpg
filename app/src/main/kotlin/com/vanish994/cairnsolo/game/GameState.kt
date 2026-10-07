@@ -49,6 +49,7 @@ const val DEFAULT_GUARDIAN_PROLOGUE =
 
 data class CampaignState(
     val campaignId: String = UUID.randomUUID().toString(),
+    val campaignSeed: String = UUID.randomUUID().toString(),
     val character: CharacterIdentity,
     val rules: CharacterState,
     val profile: CharacterProfile = CharacterProfile(),

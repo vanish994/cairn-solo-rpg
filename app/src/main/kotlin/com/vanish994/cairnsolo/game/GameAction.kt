@@ -121,8 +121,13 @@ class GameActionResolver(
     fun resolve(state: GameState, action: GameAction): GameResult = when (action) {
         is GameAction.CreateCharacter -> {
             val created = com.vanish994.cairnsolo.rules.createCharacter(action.name, action.rolled)
+            val campaignSeed = created.campaign.campaignSeed
             val world = WorldGenerator(rules.random).generate(
-                WorldSeed(action.name.trim(), action.rolled.background?.name ?: "uma fronteira desconhecida")
+                WorldSeed(
+                    action.name.trim(),
+                    action.rolled.background?.name ?: "uma fronteira desconhecida",
+                    narrativeSeed = campaignSeed
+                )
             )
             val withWorld = created.copy(campaign = created.campaign.copy(
                 worldState = world,

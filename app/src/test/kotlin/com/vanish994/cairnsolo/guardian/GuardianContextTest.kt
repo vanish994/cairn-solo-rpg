@@ -21,11 +21,13 @@ class GuardianContextTest {
         val context = GuardianContextBuilder.from(base.copy(campaign = base.campaign.copy(worldState = world)))
 
         assertEquals("Mara", context.character.name)
+        assertEquals(base.campaign.campaignSeed, context.campaignSeed)
         assertEquals("prologue", context.scene.id)
         assertNotNull(context.world)
         assertTrue(context.canon.locations.isEmpty())
         assertTrue(context.growth.evidence.isEmpty())
         assertTrue(context.recentHistory.isEmpty())
+        assertTrue(context.recentNarrative.isEmpty())
         assertFalse(context.character.combat != null)
     }
 
@@ -63,5 +65,15 @@ class GuardianContextTest {
         assertTrue("DEPRIVED" in character.conditions)
         assertTrue("FATIGUE:2" in character.conditions)
         assertTrue("CRITICAL" in character.conditions)
+    }
+
+    @Test
+    fun contextCarriesRecentNarrativeWithoutRawGameState() {
+        val base = newCharacter("Mara", 10, 11, 12)
+        val state = base.recordGuardianIntent("examinar a ponte")
+        val context = GuardianContextBuilder.from(state)
+        assertEquals(listOf("Você: examinar a ponte"), context.recentNarrative)
+        assertTrue(context.toJson().has("campaignSeed"))
+        assertTrue(context.toJson().has("recentNarrative"))
     }
 }

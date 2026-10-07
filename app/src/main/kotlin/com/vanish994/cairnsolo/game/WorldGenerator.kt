@@ -1,9 +1,18 @@
 package com.vanish994.cairnsolo.game
 
 import com.vanish994.cairnsolo.rules.RandomSource
+import java.util.UUID
 
-data class WorldSeed(val campaignName: String, val concept: String, val startingPoint: String = "starting-settlement") {
-    init { require(campaignName.isNotBlank()); require(concept.isNotBlank()); require(startingPoint.isNotBlank()) }
+data class WorldSeed(
+    val campaignName: String,
+    val concept: String,
+    val startingPoint: String = "starting-settlement",
+    val narrativeSeed: String = UUID.randomUUID().toString()
+) {
+    init {
+        require(campaignName.isNotBlank()); require(concept.isNotBlank()); require(startingPoint.isNotBlank())
+        require(narrativeSeed.isNotBlank())
+    }
 }
 
 data class WorldState(

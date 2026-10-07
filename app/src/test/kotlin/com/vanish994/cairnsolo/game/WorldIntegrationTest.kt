@@ -23,6 +23,7 @@ class WorldIntegrationTest {
         assertEquals("Mara", world.campaignName)
         assertEquals(world.settlements.first().id, world.currentLocationId)
         assertTrue(world.factions.size in 2..5)
+        assertTrue(result.state.campaign.campaignSeed.isNotBlank())
     }
 
     @Test
@@ -50,6 +51,13 @@ class WorldIntegrationTest {
         )
         val restored = assertNotNull(GameStatePersistenceCodec.decode(GameStatePersistenceCodec.encode(original)))
         assertEquals(world, restored.campaign.worldState)
+    }
+
+    @Test
+    fun campaignSeedRoundTripPreservesNarrativeIdentity() {
+        val original = newCharacter("Mara", 10, 10, 10)
+        val restored = assertNotNull(GameStatePersistenceCodec.decode(GameStatePersistenceCodec.encode(original)))
+        assertEquals(original.campaign.campaignSeed, restored.campaign.campaignSeed)
     }
 
     @Test

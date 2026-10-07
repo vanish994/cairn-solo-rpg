@@ -30,6 +30,7 @@ private fun guardianMapJson(value: Map<String, Any?>): JSONObject = JSONObject()
 /** Visão pública e deliberadamente menor que GameState. O Guardian recebe somente este contrato. */
 data class GuardianContext(
     val campaignId: String,
+    val campaignSeed: String,
     val turn: Long,
     val character: GuardianCharacterContext,
     val scene: GuardianSceneContext,
@@ -37,10 +38,12 @@ data class GuardianContext(
     val canon: GuardianCanonContext,
     val growth: GuardianGrowthContext,
     val recentHistory: List<GuardianHistoryContext>,
+    val recentNarrative: List<String>,
     val availableActions: List<String>
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("campaignId", campaignId)
+        put("campaignSeed", campaignSeed)
         put("turn", turn)
         put("character", character.toJson())
         put("scene", scene.toJson())
@@ -48,6 +51,7 @@ data class GuardianContext(
         put("canon", canon.toJson())
         put("growth", growth.toJson())
         put("recentHistory", guardianArray(recentHistory.map { it.toJson() }))
+        put("recentNarrative", guardianArray(recentNarrative))
         put("availableActions", guardianArray(availableActions))
     }
 }
@@ -187,6 +191,7 @@ data class GuardianHistoryContext(val id: String, val turn: Long, val type: Stri
 object GuardianContextBuilder {
     private const val MAX_CANON_ENTRIES = 50
     private const val MAX_HISTORY = 12
+    private const val MAX_NARRATIVE = 24
     private const val MAX_GROWTH_ENTRIES = 12
 
     fun from(state: GameState): GuardianContext {
@@ -194,6 +199,7 @@ object GuardianContextBuilder {
         val rules = campaign.rules
         return GuardianContext(
             campaignId = campaign.campaignId,
+            campaignSeed = campaign.campaignSeed,
             turn = campaign.turn,
             character = character(campaign.character.name, rules, campaign.profile.gold, campaign.combat),
             scene = GuardianSceneContext(campaign.sceneId, campaign.sceneType.name, campaign.sceneTitle, campaign.sceneDescription, campaign.exits.take(20), campaign.guardianMessage),
@@ -201,6 +207,7 @@ object GuardianContextBuilder {
             canon = canon(campaign.worldCanon),
             growth = growth(campaign.growth),
             recentHistory = campaign.history.takeLast(MAX_HISTORY).map(::history),
+            recentNarrative = campaign.guardianHistory.takeLast(MAX_NARRATIVE),
             availableActions = campaign.exits.take(20)
         )
     }

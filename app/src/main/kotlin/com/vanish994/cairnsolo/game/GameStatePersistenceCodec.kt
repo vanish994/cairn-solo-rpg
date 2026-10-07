@@ -24,7 +24,7 @@ object GameStatePersistenceCodec {
         val r = c.rules
         val p = c.profile
         return buildMap {
-            put("campaignId", c.campaignId); put("characterId", c.character.id); put("characterName", c.character.name)
+            put("campaignId", c.campaignId); put("campaignSeed", c.campaignSeed); put("characterId", c.character.id); put("characterName", c.character.name)
             put("profileAge", p.age?.toString() ?: ""); put("profileBackground", p.background?.name ?: "")
             put("profileGold", p.gold.toString()); put("profileBondRoll", p.bondRoll?.toString() ?: "")
             put("profileSecondBondRoll", p.secondBondRoll?.toString() ?: ""); put("profileOmenRoll", p.omenRoll?.toString() ?: "")
@@ -158,7 +158,7 @@ object GameStatePersistenceCodec {
         val worldState = WorldStatePersistenceCodec.decode(values)
         return GameState(
             campaign = CampaignState(
-                campaignId = string("campaignId"), character = CharacterIdentity(string("characterId"), string("characterName", "Aventureiro")),
+                campaignId = string("campaignId"), campaignSeed = string("campaignSeed", string("campaignId")), character = CharacterIdentity(string("characterId"), string("characterName", "Aventureiro")),
                 rules = rules, profile = profile, sceneId = string("sceneId", "prologue"), sceneType = sceneType,
                 sceneTitle = string("sceneTitle", "Prologue"), sceneDescription = string("sceneDescription", "A aventura começa."),
                 exits = exits, log = log, turn = long("turn", 0L),

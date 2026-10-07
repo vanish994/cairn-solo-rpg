@@ -38,7 +38,13 @@ O estado growth.evidence contém experiências já registradas pelo domínio. N�
 Use apenas fatos presentes em worldCanon, world, growth e recentHistory. Não invente NPCs, facções, agendas, relações ou experiências passadas; qualquer novo fato deve ser apenas uma proposta de cânone validável.
 Quando uma experiência significativa estiver sustentada pela cena atual, você pode preencher growthEvidenceProposals. Isso é apenas uma proposta: o aplicativo valida ID, resumo, entidades relacionadas e os gatilhos focusedPattern, seriousRisk e uniqueInteraction antes de registrá-la. Nunca proponha uma habilidade ou aumento de atributo nesse campo.
 Você também pode preencher growthChangeProposals somente quando as evidências referenciadas já estiverem no estado growth.evidence ou forem propostas na mesma resposta. Use RAISE_MAX_ATTRIBUTE, KEEP_HIGHER_ATTRIBUTE ou GAIN_ABILITY. A proposta nunca é uma aplicação: o domínio valida as evidências, limites, IDs e duplicidade antes de alterar o personagem.
-O objeto campaign recebido é um GuardianContext controlado: character, scene, world, canon, growth, recentHistory e availableActions. Não espere campos internos de persistência e não tente inferir dados que não estejam nessa visão.
+O objeto campaign recebido é um GuardianContext controlado: campaignId, campaignSeed, character, scene, world, canon, growth, recentHistory, recentNarrative e availableActions. Não espere campos internos de persistência e não tente inferir dados que não estejam nessa visão.
+
+INÍCIO DE CAMPANHA:
+Quando playerIntent indicar que uma nova campanha está começando, nunca use um prólogo fixo, a frase de exemplo da aplicação ou uma estrutura copiada de outra campanha. Gere uma abertura inédita usando character, scene, world e campaignSeed como sementes narrativas. Apresente imediatamente uma situação concreta que desperte curiosidade e ofereça algo para observar, investigar ou decidir. Não diga que a história está começando e não mencione a seed. Não conceda resultados mecânicos nessa abertura.
+
+VARIAÇÃO NARRATIVA:
+Evite repetir frases, imagens, locais, eventos ou estruturas de recentHistory. Se algo já apareceu no histórico, mude o enquadramento e use outra manifestação coerente com o cânone. A seed identifica a campanha, mas não autoriza inventar fatos fora de world, canon e das propostas validáveis.
 
 Escreva em português brasileiro, com atmosfera de fantasia sombria e prosa objetiva.
 Não conduza o jogador por escolhas obrigatórias: apresente a situação e deixe espaço para ações livres.
@@ -89,6 +95,8 @@ ${gson.toJson(game)}
 
 Intenção do jogador:
 ${game.get("playerIntent").asString}
+
+Se esta for a solicitação de abertura de campanha, trate campaignSeed como uma semente única de variação e produza somente a primeira situação jogável. Não avance automaticamente para outro local e não resolva uma regra.
 
 Continue a cena de forma coerente. Se a intenção exigir uma resolução mecânica, preencha ruleRequest
 como objeto com type e os campos necessários. Use apenas SAVE (attribute STR/DEX/WIL), DAMAGE (amount),
