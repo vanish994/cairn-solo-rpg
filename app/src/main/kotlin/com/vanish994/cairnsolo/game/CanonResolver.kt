@@ -44,7 +44,12 @@ class CanonResolver {
                 turn = state.campaign.turn,
                 type = HistoryEventType.CANON_UPDATED,
                 summary = "Cânone atualizado: ${proposal.id}.",
-                source = HistorySource.GUARDIAN,
+                source = when (proposal.source) {
+                    CanonSource.PLAYER -> HistorySource.PLAYER
+                    CanonSource.GUARDIAN -> HistorySource.GUARDIAN
+                    CanonSource.RULES_ENGINE -> HistorySource.RULES_ENGINE
+                    CanonSource.NPC, CanonSource.SYSTEM -> HistorySource.SYSTEM
+                },
                 relatedEntityIds = listOf(proposal.id) + proposal.relatedEntityIds
             )
         }

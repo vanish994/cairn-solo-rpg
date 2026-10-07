@@ -46,4 +46,13 @@ class CanonResolverTest {
         assertEquals(state.campaign.worldCanon, restored?.campaign?.worldCanon)
         assertEquals(state.campaign.history, restored?.campaign?.history)
     }
+
+    @Test
+    fun historyPreservesProposalSource() {
+        val state = CanonResolver().apply(
+            newCharacter("Mara", 10, 10, 10),
+            listOf(CanonProposal.AddDiscovery("player-sign", "Uma marca deixada pelo jogador.", CanonStatus.CONFIRMED, CanonSource.PLAYER))
+        )
+        assertEquals(HistorySource.PLAYER, state.campaign.history.single().source)
+    }
 }
