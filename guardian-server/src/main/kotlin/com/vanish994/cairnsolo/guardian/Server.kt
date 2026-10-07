@@ -13,7 +13,7 @@ import java.net.http.HttpResponse
 import java.nio.charset.StandardCharsets
 
 private const val GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/interactions"
-private const val MODEL = "gemini-3.6-flash"
+private const val MODEL = "gemini-3.5-flash-lite"
 
 private val gson = Gson()
 private val http = HttpClient.newBuilder().build()
