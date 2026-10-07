@@ -76,10 +76,10 @@ private fun validateRequest(request: JsonObject) {
 private fun callGemini(apiKey: String, game: JsonObject): JsonObject {
     val input = """
 Estado atual da campanha:
-\${gson.toJson(game)}
+${gson.toJson(game)}
 
 Intenção do jogador:
-\${game.get("playerIntent").asString}
+${game.get("playerIntent").asString}
 
 Continue a cena de forma coerente. Se a intenção exigir uma resolução mecânica, preencha ruleRequest
 como objeto com type e os campos necessários. Use apenas SAVE (attribute STR/DEX/WIL), DAMAGE (amount),
@@ -95,7 +95,7 @@ Se houver um ruleResult no estado, trate-o como resultado autoritativo do motor 
               "narration": {"type":"string"},
               "sceneTitle": {"type":"string"},
               "sceneDescription": {"type":"string"},
-              "ruleRequest": {"anyOf":[{"type":"null"},{"type":"object","properties":{"type":{"type":"string","enum":["SAVE","DAMAGE","FATIGUE","REST","STABILIZE_CRITICAL","RECOVER_SCAR"]},"attribute":{"type":"string","enum":["STR","DEX","WIL"]},"amount":{"type":"integer","minimum":1}},"required":["type"],"additionalProperties":false]},
+              "ruleRequest": {"anyOf":[{"type":"null"},{"type":"object","properties":{"type":{"type":"string","enum":["SAVE","DAMAGE","FATIGUE","REST","STABILIZE_CRITICAL","RECOVER_SCAR"]},"attribute":{"type":"string","enum":["STR","DEX","WIL"]},"amount":{"type":"integer","minimum":1}},"required":["type"],"additionalProperties":false}]},
               "suggestedActions": {"type":"array","items":{"type":"string"}}
             }
         """).asJsonObject)
@@ -138,7 +138,7 @@ Se houver um ruleResult no estado, trate-o como resultado autoritativo do motor 
 
     val response = http.send(request, HttpResponse.BodyHandlers.ofString())
     if (response.statusCode() !in 200..299) {
-        error("Gemini HTTP \${response.statusCode()}: \${response.body().take(500)}")
+        error("Gemini HTTP ${response.statusCode}: ${response.body().take(500)}")
     }
 
     val root = JsonParser.parseString(response.body()).asJsonObject
