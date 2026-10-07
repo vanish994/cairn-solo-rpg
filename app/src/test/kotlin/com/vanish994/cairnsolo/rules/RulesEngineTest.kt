@@ -263,3 +263,63 @@ class RulesEngineTest {
         assertEquals(10, result.newState.freeSlots)
     }
 }
+
+
+class RecoveryRulesTest {
+    private fun state(
+        hp: Int = 6,
+        maxHp: Int = 6,
+        inventory: List<InventoryItem> = emptyList(),
+        fatigue: Int = 0,
+        deprived: Boolean = false,
+        deprivedDays: Int = 0
+    ) = CharacterState(10, 10, 10, hp, maxHp, 0, inventory, fatigue, deprived, deprivedDays = deprivedDays)
+
+    @Test
+    fun quickRestRecoversHpButDoesNotRemoveFatigue() {
+        val result = RulesEngine(FixedRandomSource(1)).quickRest(state(hp = 2, fatigue = 2))
+        assertEquals(6, result.newState.hp)
+        assertEquals(2, result.newState.fatigue)
+        assertIs<RuleEvent.HpRecovered>(result.events.single())
+    }
+
+    @Test
+    fun deprivedCharacterCannotRecoverFromQuickRestOrSafeRest() {
+        val engine = RulesEngine(FixedRandomSource(1))
+        val deprived = state(hp = 2, fatigue = 2, deprived = true, deprivedDays = 1)
+        assertEquals(deprived, engine.quickRest(deprived).newState)
+        assertEquals(deprived, engine.safeRest(deprived).newState)
+    }
+
+    @Test
+    fun deprivationAddsFatigueOnlyAfterTheFirstDay() {
+        val engine = RulesEngine(FixedRandomSource(1))
+        val firstDay = engine.markDeprived(state(), true).newState
+        assertEquals(1, firstDay.deprivedDays)
+        val secondDay = engine.advanceDeprivation(firstDay, 1)
+        assertEquals(1, secondDay.newState.fatigue)
+        assertEquals(2, secondDay.newState.deprivedDays)
+        assertIs<RuleEvent.FatigueAdded>(secondDay.events.first())
+    }
+
+    @Test
+    fun forcedFatigueRequiresDroppingAnItemWhenInventoryIsFull() {
+        val inventory = List(10) { InventoryItem("item-$it") }
+        val engine = RulesEngine(FixedRandomSource(1))
+        val result = engine.addFatigue(state(inventory = inventory), 1, dropItemId = "item-9")
+        assertEquals(1, result.newState.fatigue)
+        assertEquals(9, result.newState.inventory.size)
+        assertEquals(10, result.newState.usedSlots)
+        assertIs<RuleEvent.ItemDropped>(result.events.first())
+    }
+
+    @Test
+    fun wallopedRecoveryUsesD6AsNewMaximumOnlyWhenHigher() {
+        val engine = RulesEngine(FixedRandomSource(4))
+        val damaged = engine.applyDamage(state(hp = 3), 3).newState
+        val recovered = engine.recoverScar(damaged).newState
+        assertEquals(6, recovered.maxHp)
+        assertEquals(6, recovered.hp)
+        assertFalse(recovered.deprived)
+    }
+}

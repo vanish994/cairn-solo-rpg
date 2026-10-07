@@ -24,7 +24,7 @@ data class CharacterState(
     val str: Int, val dex: Int, val wil: Int,
     val hp: Int, val maxHp: Int, val armor: Int,
     val inventory: List<InventoryItem> = emptyList(),
-    val fatigue: Int = 0, val deprived: Boolean = false,
+    val fatigue: Int = 0, val deprived: Boolean = false, val deprivedDays: Int = 0,
     val critical: Boolean = false, val dead: Boolean = false, val scar: Scar? = null, val maxStr: Int = str, val maxDex: Int = dex, val maxWil: Int = wil, val lastingScar: String? = null, val brokenLimb: String? = null, val scarRecovery: ScarRecovery? = null, val scarAttribute: Attribute? = null, val sundered: Boolean = false, val deafened: Boolean = false, val diseased: Boolean = false, val hamstrung: Boolean = false, val doomed: Boolean = false
 ) {
     init {
@@ -32,6 +32,7 @@ data class CharacterState(
         require(hp >= 0 && maxHp >= 0 && hp <= maxHp)
         require(armor in 0..3)
         require(fatigue >= 0)
+        require(deprivedDays >= 0)
         require(maxStr >= str && maxDex >= dex && maxWil >= wil)
         require(inventory.sumOf { it.slotCost } + fatigue <= 10)
         
@@ -73,6 +74,7 @@ sealed interface RuleEvent {
     data class CriticalDamage(val excessDamage: Int, val strAfter: Int, val saveRoll: Int, val saveSuccess: Boolean) : RuleEvent
     data class ScarTriggered(val scar: Scar, val hpLost: Int, val detail: String, val roll: Int) : RuleEvent
     data class InventoryChanged(val usedSlots: Int) : RuleEvent
+    data class ItemDropped(val itemId: String) : RuleEvent
     data class FatigueAdded(val amount: Int) : RuleEvent
     data class FatigueRecovered(val amount: Int) : RuleEvent
     data class HpRecovered(val amount: Int) : RuleEvent
@@ -141,7 +143,7 @@ class RulesEngine(val random: RandomSource) {
                     val success = saveSucceeds(roll, state.wil)
                     state.copy(hp = 0, scar = scar, sundered = true, maxWil = if (success) state.maxWil + random.d6() else state.maxWil)
                 }
-                Scar.MORTAL_WOUND -> state.copy(hp = 0, scar = scar, deprived = true, critical = true, scarRecovery = ScarRecovery.MORTAL_WOUND)
+            Scar.MORTAL_WOUND -> state.copy(hp = 0, scar = scar, deprived = true, deprivedDays = 1, critical = true, scarRecovery = ScarRecovery.MORTAL_WOUND)
                 Scar.DOOMED -> state.copy(hp = 0, scar = scar, doomed = true)
             }
             return GameResult(
@@ -182,11 +184,11 @@ class RulesEngine(val random: RandomSource) {
             ScarRecovery.MORTAL_WOUND -> random.d6() + random.d6()
         }
         val updated = when (recovery) {
-            ScarRecovery.WALLOPED -> { val newMaxHp = state.maxHp + roll; state.copy(hp = newMaxHp, deprived = false, maxHp = newMaxHp, scarRecovery = null) }
+            ScarRecovery.WALLOPED -> { val newMaxHp = maxOf(state.maxHp, roll); state.copy(hp = newMaxHp, deprived = false, deprivedDays = 0, maxHp = newMaxHp, scarRecovery = null) }
             ScarRecovery.BROKEN_LIMB -> { val newMaxHp = maxOf(state.maxHp, roll); state.copy(hp = newMaxHp, maxHp = newMaxHp, brokenLimb = null, scarRecovery = null) }
             ScarRecovery.DISEASED -> { val newMaxHp = maxOf(state.maxHp, roll); state.copy(hp = newMaxHp, maxHp = newMaxHp, diseased = false, scarRecovery = null) }
             ScarRecovery.HAMSTRUNG -> state.copy(hp = state.maxHp, maxDex = maxOf(state.maxDex, roll), hamstrung = false, scarRecovery = null)
-            ScarRecovery.MORTAL_WOUND -> state.copy(hp = roll, deprived = false, critical = false, maxHp = roll, scarRecovery = null)
+            ScarRecovery.MORTAL_WOUND -> state.copy(hp = roll, deprived = false, deprivedDays = 0, critical = false, maxHp = roll, scarRecovery = null)
         }
         return GameResult(updated, emptyList())
     }
@@ -222,23 +224,40 @@ class RulesEngine(val random: RandomSource) {
         return GameResult(updated, listOf(RuleEvent.InventoryChanged(updated.usedSlots)))
     }
 
-    fun addFatigue(state: CharacterState, amount: Int = 1): GameResult {
+    fun addFatigue(state: CharacterState, amount: Int = 1, dropItemId: String? = null): GameResult {
         require(amount > 0)
-        require(state.freeSlots >= amount) {
-            "No free inventory slots for Fatigue; drop an item before adding Fatigue"
+        var working = state
+        val events = mutableListOf<RuleEvent>()
+        repeat(amount) {
+            if (working.freeSlots <= 0) {
+                val itemId = dropItemId ?: error("No free inventory slots for Fatigue; choose an item to drop")
+                val index = working.inventory.indexOfFirst { it.id == itemId }
+                require(index >= 0) { "Cannot drop missing item: $itemId" }
+                working = working.copy(inventory = working.inventory.toMutableList().also { it.removeAt(index) })
+                events += RuleEvent.ItemDropped(itemId)
+            }
+            working = working.copy(fatigue = working.fatigue + 1)
         }
-        val updated = state.copy(fatigue = state.fatigue + amount)
+        val updated = working
+        events += RuleEvent.FatigueAdded(amount)
+        events += RuleEvent.InventoryChanged(updated.usedSlots)
         return GameResult(
             updated,
-            listOf(
-                RuleEvent.FatigueAdded(amount),
-                RuleEvent.InventoryChanged(updated.usedSlots)
-            )
+            events
         )
     }
 
     fun markDeprived(state: CharacterState, deprived: Boolean): GameResult =
-        GameResult(state.copy(deprived = deprived), emptyList())
+        GameResult(state.copy(deprived = deprived, deprivedDays = if (deprived) maxOf(1, state.deprivedDays) else 0), emptyList())
+
+    /** Avança dias de necessidade não atendida; o primeiro dia não gera Fatigue. */
+    fun advanceDeprivation(state: CharacterState, days: Int, dropItemId: String? = null): GameResult {
+        require(days >= 0)
+        if (!state.deprived || days == 0) return GameResult(state, emptyList())
+        val fatigueDays = (state.deprivedDays + days - 1).coerceAtLeast(0)
+        val fatigue = addFatigue(state.copy(deprivedDays = state.deprivedDays + days), fatigueDays, dropItemId)
+        return fatigue.copy(newState = fatigue.newState.copy(deprived = true, deprivedDays = state.deprivedDays + days))
+    }
 
     fun stabilizeCritical(state: CharacterState): GameResult {
         if (!state.critical || state.dead) return GameResult(state, emptyList())
@@ -254,5 +273,12 @@ class RulesEngine(val random: RandomSource) {
             if (hpRecovered > 0) add(RuleEvent.HpRecovered(hpRecovered))
             if (fatigueRecovered > 0) add(RuleEvent.FatigueRecovered(fatigueRecovered))
         })
+    }
+
+    /** Descanso breve com água: recupera HP, mas não remove Fatigue. */
+    fun quickRest(state: CharacterState): GameResult {
+        if (state.deprived) return GameResult(state, emptyList())
+        val recovered = state.maxHp - state.hp
+        return GameResult(state.copy(hp = state.maxHp), if (recovered > 0) listOf(RuleEvent.HpRecovered(recovered)) else emptyList())
     }
 }

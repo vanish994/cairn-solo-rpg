@@ -48,7 +48,7 @@ object GameStatePersistenceCodec {
             put("str", r.str.toString()); put("dex", r.dex.toString()); put("wil", r.wil.toString())
             put("maxStr", r.maxStr.toString()); put("maxDex", r.maxDex.toString()); put("maxWil", r.maxWil.toString())
             put("hp", r.hp.toString()); put("maxHp", r.maxHp.toString()); put("armor", r.armor.toString()); put("fatigue", r.fatigue.toString())
-            put("deprived", r.deprived.toString()); put("critical", r.critical.toString()); put("dead", r.dead.toString())
+            put("deprived", r.deprived.toString()); put("deprivedDays", r.deprivedDays.toString()); put("critical", r.critical.toString()); put("dead", r.dead.toString())
             put("scar", r.scar?.name ?: ""); put("lastingScar", r.lastingScar ?: ""); put("brokenLimb", r.brokenLimb ?: ""); put("scarRecovery", r.scarRecovery?.name ?: ""); put("scarAttribute", r.scarAttribute?.name ?: "")
             put("sundered", r.sundered.toString()); put("deafened", r.deafened.toString()); put("diseased", r.diseased.toString())
             put("hamstrung", r.hamstrung.toString()); put("doomed", r.doomed.toString()); put("inventoryCount", r.inventory.size.toString())
@@ -83,7 +83,7 @@ object GameStatePersistenceCodec {
         val rules = CharacterState(
             str = int("str", 10), dex = int("dex", 10), wil = int("wil", 10),
             hp = int("hp", 6), maxHp = int("maxHp", 6), armor = int("armor", 0),
-            inventory = inventory, fatigue = int("fatigue", 0), deprived = bool("deprived", false),
+            inventory = inventory, fatigue = int("fatigue", 0), deprived = bool("deprived", false), deprivedDays = int("deprivedDays", 0),
             critical = bool("critical", false), dead = bool("dead", false),
             scar = nullableString("scar")?.let { runCatching { Scar.valueOf(it) }.getOrNull() },
             maxStr = int("maxStr", int("str", 10)), maxDex = int("maxDex", int("dex", 10)), maxWil = int("maxWil", int("wil", 10)),
