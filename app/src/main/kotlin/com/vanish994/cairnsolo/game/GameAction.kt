@@ -14,6 +14,7 @@ import com.vanish994.cairnsolo.rules.RuleEvent
 import com.vanish994.cairnsolo.rules.RolledCharacter
 import com.vanish994.cairnsolo.rules.RulesEngine
 import com.vanish994.cairnsolo.rules.WeaponProfile
+import com.vanish994.cairnsolo.rules.MoraleOutcome
 
 sealed interface GameAction {
     data class CreateCharacter(val name: String, val rolled: RolledCharacter) : GameAction
@@ -46,6 +47,11 @@ sealed interface GameAction {
     data object ExtinguishLight : GameAction
     data object StartDungeonPanic : GameAction
     data object OvercomeDungeonPanic : GameAction
+    data object RollReaction : GameAction
+    data class CheckMorale(val morale: Int, val failureOutcome: MoraleOutcome = MoraleOutcome.RETREAT) : GameAction
+    data class HireHireling(val entryId: String, val hirelingId: String, val name: String, val loyalty: Int = 7, val morale: Int = 7) : GameAction
+    data object PayHirelings : GameAction
+    data class CheckHirelingMorale(val hirelingId: String, val failureOutcome: MoraleOutcome = MoraleOutcome.RETREAT) : GameAction
 }
 
 data class GameResult(val state: GameState, val events: List<GameEvent>)
@@ -72,6 +78,9 @@ sealed interface GameEvent {
     data class WildernessResolved(val action: WildernessAction) : GameEvent
     data class DungeonResolved(val action: com.vanish994.cairnsolo.rules.DungeonActionKind) : GameEvent
     data class RuleNotice(val summary: String) : GameEvent
+    data class ReactionResolved(val roll: Int, val disposition: com.vanish994.cairnsolo.rules.ReactionDisposition) : GameEvent
+    data class MoraleResolved(val roll: Int, val morale: Int, val outcome: MoraleOutcome) : GameEvent
+    data class HirelingResolved(val hirelingId: String, val outcome: String, val goldRemaining: Int? = null) : GameEvent
 }
 
 class GameActionResolver(
@@ -82,7 +91,10 @@ class GameActionResolver(
     private val marketplace: com.vanish994.cairnsolo.rules.MarketplaceRules = com.vanish994.cairnsolo.rules.MarketplaceRules(),
     private val downtime: com.vanish994.cairnsolo.rules.DowntimeRules = com.vanish994.cairnsolo.rules.DowntimeRules(rules),
     private val dungeon: com.vanish994.cairnsolo.rules.DungeonRules = com.vanish994.cairnsolo.rules.DungeonRules(rules.random, rules),
-    private val wilderness: com.vanish994.cairnsolo.rules.WildernessRules = com.vanish994.cairnsolo.rules.WildernessRules(rules.random, rules)
+    private val wilderness: com.vanish994.cairnsolo.rules.WildernessRules = com.vanish994.cairnsolo.rules.WildernessRules(rules.random, rules),
+    private val reactions: com.vanish994.cairnsolo.rules.ReactionRules = com.vanish994.cairnsolo.rules.ReactionRules(rules.random),
+    private val morale: com.vanish994.cairnsolo.rules.MoraleRules = com.vanish994.cairnsolo.rules.MoraleRules(rules.random),
+    private val hirelingRules: com.vanish994.cairnsolo.rules.HirelingRules = com.vanish994.cairnsolo.rules.HirelingRules(morale)
 ) {
     fun resolve(state: GameState, action: GameAction): GameResult = when (action) {
         is GameAction.CreateCharacter -> {
@@ -150,6 +162,41 @@ class GameActionResolver(
         GameAction.ExtinguishLight -> dungeonLight(state) { dungeon.extinguish(it) }
         GameAction.StartDungeonPanic -> dungeonTurn(state, dungeon.startPanic(state.campaign.dungeon ?: error("Dungeon state not initialized"), state.campaign.rules))
         GameAction.OvercomeDungeonPanic -> dungeonTurn(state, dungeon.overcomePanic(state.campaign.dungeon ?: error("Dungeon state not initialized"), state.campaign.rules))
+        GameAction.RollReaction -> {
+            val result = reactions.roll()
+            GameResult(state.copy(campaign = state.campaign.copy(turn = state.campaign.turn + 1)), listOf(GameEvent.ReactionResolved(result.roll, result.disposition)))
+        }
+        is GameAction.CheckMorale -> {
+            val result = morale.check(action.morale, action.failureOutcome)
+            GameResult(state.copy(campaign = state.campaign.copy(turn = state.campaign.turn + 1)), listOf(GameEvent.MoraleResolved(result.roll, result.morale, result.outcome)))
+        }
+        is GameAction.HireHireling -> hireHireling(state, action)
+        GameAction.PayHirelings -> payHirelings(state)
+        is GameAction.CheckHirelingMorale -> checkHirelingMorale(state, action)
+    }
+
+    private fun hireHireling(state: GameState, action: GameAction.HireHireling): GameResult {
+        val entry = com.vanish994.cairnsolo.rules.MarketplaceCatalog.find(action.entryId) ?: error("Unknown Marketplace entry: ${action.entryId}")
+        require(state.campaign.profile.gold >= entry.priceGp) { "Insufficient gold" }
+        require(state.campaign.hirelings.none { it.id == action.hirelingId }) { "Hireling id already exists" }
+        val hireling = hirelingRules.hire(entry, action.hirelingId, action.name, action.loyalty, action.morale)
+        val gold = state.campaign.profile.gold - entry.priceGp
+        val next = state.copy(campaign = state.campaign.copy(profile = state.campaign.profile.copy(gold = gold), hirelings = state.campaign.hirelings + hireling, turn = state.campaign.turn + 1))
+        return GameResult(next, listOf(GameEvent.HirelingResolved(hireling.id, "HIRED", gold)))
+    }
+
+    private fun payHirelings(state: GameState): GameResult {
+        val result = hirelingRules.payWages(state.campaign.hirelings, state.campaign.profile.gold)
+        val next = state.copy(campaign = state.campaign.copy(profile = state.campaign.profile.copy(gold = result.goldRemaining), turn = state.campaign.turn + 1))
+        return GameResult(next, result.events.map { GameEvent.HirelingResolved(it.hirelingId, "WAGES_PAID", result.goldRemaining) })
+    }
+
+    private fun checkHirelingMorale(state: GameState, action: GameAction.CheckHirelingMorale): GameResult {
+        val hireling = state.campaign.hirelings.firstOrNull { it.id == action.hirelingId } ?: error("Unknown hireling: ${action.hirelingId}")
+        val result = hirelingRules.checkMorale(hireling, action.failureOutcome)
+        val nextHirelings = state.campaign.hirelings.map { if (it.id == hireling.id) result.hireling else it }
+        val next = state.copy(campaign = state.campaign.copy(hirelings = nextHirelings, turn = state.campaign.turn + 1))
+        return GameResult(next, listOf(GameEvent.MoraleResolved(result.result.roll, result.result.morale, result.result.outcome), GameEvent.HirelingResolved(hireling.id, result.result.outcome.name)))
     }
 
     private fun castSpell(state: GameState, action: GameAction.CastSpell): GameResult {

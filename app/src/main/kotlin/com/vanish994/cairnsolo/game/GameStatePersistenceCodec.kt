@@ -14,6 +14,7 @@ import com.vanish994.cairnsolo.rules.TravelDistance
 import com.vanish994.cairnsolo.rules.Terrain
 import com.vanish994.cairnsolo.rules.Weather
 import com.vanish994.cairnsolo.rules.Watch
+import com.vanish994.cairnsolo.rules.HirelingState
 
 object GameStatePersistenceCodec {
     private const val SEPARATOR = "\u001F"
@@ -46,6 +47,8 @@ object GameStatePersistenceCodec {
             c.wilderness?.let { w -> put("wildCurrent", w.currentPoint); put("wildDestination", w.destinationPoint ?: ""); put("wildWatches", w.remainingWatches.toString()); put("wildWatch", w.watch.name); put("wildPath", w.path.name); put("wildDistance", w.distance.name); put("wildTerrain", w.terrain.name); put("wildWeather", w.weather.name); put("wildNight", w.nightTravel.toString()); put("wildLost", w.lost.toString()); put("wildRations", w.rations.toString()); put("wildDeprived", w.deprived.toString()); put("wildExtreme", w.previousWeatherWasExtreme.toString()) }
             put("downtimeSafe", c.downtime.safe.toString()); put("downtimeRecovery", c.downtime.inRecovery.toString()); put("downtimeGold", c.downtime.gold.toString()); put("downtimeReputation", c.downtime.reputation.toString()); put("downtimeResources", c.downtime.resources.joinToString(SEPARATOR)); put("downtimeCompleted", c.downtime.completedActions.toString()); put("milestoneCount", c.downtime.milestones.size.toString())
             c.downtime.milestones.forEachIndexed { i, m -> put("milestone_$i", listOf(m.id, m.goal, m.total, m.progress, costType(m.cost), costValue(m.cost)).joinToString(SEPARATOR)) }
+            put("hirelingCount", c.hirelings.size.toString())
+            c.hirelings.forEachIndexed { i, h -> put("hireling_$i", listOf(h.id, h.name, h.role, h.wageGp, h.loyalty, h.morale, h.active, h.injured).joinToString(SEPARATOR)) }
             put("canonLocationCount", c.worldCanon.locations.size.toString())
             c.worldCanon.locations.forEachIndexed { i, x -> put("canonLocation_${i}", listOf(x.id, x.name, x.description, x.status.name, x.firstSeenTurn).joinToString(SEPARATOR)) }
             put("canonNpcCount", c.worldCanon.npcs.size.toString())
@@ -143,6 +146,7 @@ object GameStatePersistenceCodec {
         val wilderness = values["wildCurrent"]?.takeIf { it.isNotBlank() }?.let { com.vanish994.cairnsolo.rules.WildernessState(it, nullableString("wildDestination"), int("wildWatches", 0), runCatching { Watch.valueOf(string("wildWatch", Watch.MORNING.name)) }.getOrDefault(Watch.MORNING), runCatching { PathType.valueOf(string("wildPath", PathType.ROAD.name)) }.getOrDefault(PathType.ROAD), runCatching { TravelDistance.valueOf(string("wildDistance", TravelDistance.SHORT.name)) }.getOrDefault(TravelDistance.SHORT), runCatching { Terrain.valueOf(string("wildTerrain", Terrain.EASY.name)) }.getOrDefault(Terrain.EASY), runCatching { Weather.valueOf(string("wildWeather", Weather.NICE.name)) }.getOrDefault(Weather.NICE), bool("wildNight", false), bool("wildLost", false), int("wildRations", 0), bool("wildDeprived", false), bool("wildExtreme", false)) }
         val milestones = (0 until int("milestoneCount", 0)).mapNotNull { i -> string("milestone_$i").split(SEPARATOR).takeIf { it.size >= 6 }?.let { x -> runCatching { Milestone(x[0], x[1], x[2].toInt(), x[3].toInt(), decodeCost(x[4], x[5])) }.getOrNull() } }
         val downtime = com.vanish994.cairnsolo.rules.DowntimeState(bool("downtimeSafe", true), bool("downtimeRecovery", false), int("downtimeGold", int("profileGold", 0)), int("downtimeReputation", 0), string("downtimeResources").split(SEPARATOR).filter { it.isNotBlank() }.toSet(), milestones, int("downtimeCompleted", 0))
+        val hirelings = (0 until int("hirelingCount", 0)).mapNotNull { i -> string("hireling_$i").split(SEPARATOR).takeIf { it.size >= 8 }?.let { x -> runCatching { HirelingState(x[0], x[1], x[2], x[3].toInt(), x[4].toInt(), x[5].toInt(), x[6].toBoolean(), x[7].toBoolean()) }.getOrNull() } }
         val worldState = WorldStatePersistenceCodec.decode(values)
         return GameState(
             campaign = CampaignState(
@@ -156,6 +160,7 @@ object GameStatePersistenceCodec {
                 dungeon = dungeon,
                 wilderness = wilderness,
                 downtime = downtime,
+                hirelings = hirelings,
                 worldState = worldState,
                 worldCanon = WorldCanon(locations, npcs, items, quests, discoveries),
                 history = history

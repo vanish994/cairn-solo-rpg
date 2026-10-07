@@ -6,6 +6,7 @@ import com.vanish994.cairnsolo.rules.CharacterTraits
 import com.vanish994.cairnsolo.rules.DowntimeState
 import com.vanish994.cairnsolo.rules.DungeonState
 import com.vanish994.cairnsolo.rules.WildernessState
+import com.vanish994.cairnsolo.rules.HirelingState
 import java.util.UUID
 
 data class CharacterIdentity(val id: String = UUID.randomUUID().toString(), val name: String) {
@@ -65,6 +66,7 @@ data class CampaignState(
     val dungeon: DungeonState? = null,
     val wilderness: WildernessState? = null,
     val downtime: DowntimeState = DowntimeState(),
+    val hirelings: List<HirelingState> = emptyList(),
     val worldState: WorldState? = null,
     val worldCanon: WorldCanon = WorldCanon(),
     val history: List<CampaignHistoryEntry> = emptyList()
