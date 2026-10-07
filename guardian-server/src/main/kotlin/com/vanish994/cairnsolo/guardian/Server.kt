@@ -97,6 +97,7 @@ Intenção do jogador:
 ${game.get("playerIntent").asString}
 
 Se esta for a solicitação de abertura de campanha, trate campaignSeed como uma semente única de variação e produza somente a primeira situação jogável. Não avance automaticamente para outro local e não resolva uma regra.
+Se playerIntent começar com CONTINUAR_NARRATIVA, isso é um comando interno da interface, não uma fala ou decisão do jogador. Não o mencione na narração, não o inclua como diálogo e avance a situação atual organicamente no mesmo local.
 
 Continue a cena de forma coerente. Se a intenção exigir uma resolução mecânica, preencha ruleRequest
 como objeto com type e os campos necessários. Use apenas SAVE (attribute STR/DEX/WIL), DAMAGE (amount),

@@ -208,7 +208,41 @@ class MainActivity : ComponentActivity() {
                                             .onFailure { error ->
                                                 guardianError = error.message
                                                     ?: "Não foi possível resolver esta regra."
-                                            }
+                                        }
+                                    }
+                                },
+                                onContinueScene = {
+                                    if (!guardianLoading && pendingRule == null && lastResolution == null) {
+                                        guardianFlow = GuardianFlow.GUARDIAN_THINKING
+                                        guardianLoading = true
+                                        guardianError = null
+                                        scope.launch {
+                                            guardianClient.narrate(
+                                                current,
+                                                "CONTINUAR_NARRATIVA: desenvolva a situação atual sem registrar uma decisão do jogador, " +
+                                                    "sem repetir a última frase e sem mudar de local automaticamente."
+                                            )
+                                                .onSuccess { response ->
+                                                    val narrated = current.applyGuardianResponse(
+                                                        narration = response.narration,
+                                                        sceneTitle = response.sceneTitle,
+                                                        sceneDescription = response.sceneDescription,
+                                                        interactionId = response.interactionId
+                                                    )
+                                                    val next = actionResolver.resolve(
+                                                        narrated,
+                                                        GameAction.ApplyCanonProposals(response.canonProposals)
+                                                    ).state
+                                                    repository.save(next)
+                                                    state = next
+                                                    guardianFlow = GuardianFlow.EXPLORATION
+                                                }
+                                                .onFailure { error ->
+                                                    guardianError = error.message ?: "O Guardião não pôde continuar a cena."
+                                                    guardianFlow = GuardianFlow.EXPLORATION
+                                                }
+                                            guardianLoading = false
+                                        }
                                     }
                                 },
                                 onContinueNarrative = {
@@ -494,6 +528,7 @@ private fun ExplorationScreen(
     pendingRule: GuardianRuleRequest?,
     lastResolution: GuardianRuleResolution?,
     onResolveRule: () -> Unit,
+    onContinueScene: () -> Unit,
     onContinueNarrative: () -> Unit,
     onGuardianIntent: (String) -> Unit,
     onBack: () -> Unit
@@ -637,9 +672,7 @@ private fun ExplorationScreen(
                 "Continuar narrativa",
                 Modifier.weight(1f),
                 onClick = {
-                    if (pendingRule == null && lastResolution == null && !guardianLoading) {
-                        onGuardianIntent("Continue a narrativa a partir da situação atual, sem mudar de local automaticamente.")
-                    }
+                    onContinueScene()
                 }
             )
             ActionButton(
