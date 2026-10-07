@@ -8,7 +8,20 @@ import com.vanish994.cairnsolo.rules.CharacterState
 import org.json.JSONArray
 import org.json.JSONObject
 
-private fun guardianMapJson(value: Map<String, Any?>): JSONObject = JSONObject(value)
+private fun guardianMapJson(value: Map<String, Any?>): JSONObject = JSONObject().apply {
+    value.forEach { (key, item) ->
+        put(key, when (item) {
+            is Map<*, *> -> guardianMapJson(item.entries.associate { it.key.toString() to it.value })
+            is List<*> -> JSONArray(item.map { nested ->
+                when (nested) {
+                    is Map<*, *> -> guardianMapJson(nested.entries.associate { it.key.toString() to it.value })
+                    else -> nested ?: JSONObject.NULL
+                }
+            })
+            else -> item ?: JSONObject.NULL
+        })
+    }
+}
 
 /** Visão pública e deliberadamente menor que GameState. O Guardian recebe somente este contrato. */
 data class GuardianContext(
