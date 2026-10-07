@@ -44,7 +44,7 @@ class GuardianContextTest {
         assertEquals(12, context.recentHistory.size)
         assertTrue(context.character.combat == null)
         assertEquals(18L, context.recentHistory.first().turn)
-        assertEquals(30L, context.recentHistory.last().turn)
+        assertEquals(29L, context.recentHistory.last().turn)
     }
 
     @Test
