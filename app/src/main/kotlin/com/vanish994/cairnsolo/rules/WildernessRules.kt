@@ -6,7 +6,6 @@ enum class TravelDistance(val penalty: Int) { SHORT(1), MEDIUM(2), LONG(3) }
 enum class Terrain(val penalty: Int) { EASY(0), TOUGH(1), PERILOUS(2) }
 enum class Weather(val penalty: Int) { NICE(0), FAIR(0), UNPLEASANT(1), INCLEMENT(1), EXTREME(1), CATASTROPHIC(99) }
 enum class Season { SPRING, SUMMER, FALL, WINTER }
-en
 data class WildernessState(
     val currentPoint: String,
     val destinationPoint: String? = null,
