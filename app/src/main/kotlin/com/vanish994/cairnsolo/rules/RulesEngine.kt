@@ -50,14 +50,15 @@ interface RandomSource {
     fun d12(): Int = roll(12)
 }
 
-class FixedRandomSource(private val d20Value: Int, private val d6Value: Int = 1, private val d12Value: Int = 1, private val d4Value: Int = 1, private val d10Value: Int = 1) : RandomSource {
-    init { require(d20Value in 1..20); require(d6Value in 1..6); require(d12Value in 1..12); require(d4Value in 1..4); require(d10Value in 1..10) }
+class FixedRandomSource(private val d20Value: Int, private val d6Value: Int = 1, private val d12Value: Int = 1, private val d4Value: Int = 1, private val d10Value: Int = 1, private val d8Value: Int = 1) : RandomSource {
+    init { require(d20Value in 1..20); require(d6Value in 1..6); require(d12Value in 1..12); require(d4Value in 1..4); require(d10Value in 1..10); require(d8Value in 1..8) }
     override fun roll(sides: Int): Int = when (sides) {
         20 -> d20Value
         6 -> d6Value
         12 -> d12Value
         4 -> d4Value
         10 -> d10Value
+        8 -> d8Value
         else -> error("FixedRandomSource only supports d4, d6, d10, d12, and d20")
     }
 }
@@ -203,7 +204,11 @@ class RulesEngine(private val random: RandomSource) {
 
     fun addItem(state: CharacterState, item: InventoryItem): GameResult {
         require(state.freeSlots >= item.slotCost)
-        val updated = state.copy(inventory = state.inventory + item)
+        val updatedInventory = state.inventory + item
+        val updated = state.copy(
+            inventory = updatedInventory,
+            hp = if (updatedInventory.sumOf { it.slotCost } + state.fatigue == 10) 0 else state.hp
+        )
         return GameResult(
             updated,
             listOf(RuleEvent.InventoryChanged(updated.usedSlots))
