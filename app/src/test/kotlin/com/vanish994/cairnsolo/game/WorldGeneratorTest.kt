@@ -17,7 +17,7 @@ class WorldGeneratorTest {
 
     @Test
     fun generatedWorldContainsPlayableStartingStructure() {
-        val world = WorldGenerator(FixedRandomSource(1, d6Value = 3, d20Value = 1)).generate(seed)
+        val world = WorldGenerator(FixedRandomSource(d20Value = 1, d6Value = 3)).generate(seed)
         assertEquals("As Cinzas de Vald", world.campaignName)
         assertEquals(seed.startingPoint, world.currentLocationId)
         assertTrue(world.settlements.isNotEmpty())
@@ -30,7 +30,7 @@ class WorldGeneratorTest {
 
     @Test
     fun factionsHaveThreeToFiveProgressiveGoalsAndObstacles() {
-        val world = WorldGenerator(FixedRandomSource(6, d6Value = 6, d20Value = 20)).generate(seed)
+        val world = WorldGenerator(FixedRandomSource(d20Value = 20, d6Value = 6)).generate(seed)
         assertTrue(world.factions.size in 2..5)
         assertTrue(world.factions.all { it.goals.size in 3..5 && it.obstacle.isNotBlank() })
         assertTrue(world.threats.size >= 2)
@@ -39,7 +39,7 @@ class WorldGeneratorTest {
 
     @Test
     fun startingDungeonIsAttachedToStartingSettlement() {
-        val world = WorldGenerator(FixedRandomSource(2, d6Value = 2, d20Value = 4)).generate(seed)
+        val world = WorldGenerator(FixedRandomSource(d20Value = 4, d6Value = 2)).generate(seed)
         val dungeon = world.dungeons.single()
         assertEquals(world.currentLocationId, dungeon.entranceLocationId)
         assertEquals(false, dungeon.discovered)
