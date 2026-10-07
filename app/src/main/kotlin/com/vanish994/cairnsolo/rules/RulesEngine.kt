@@ -81,7 +81,7 @@ sealed interface RuleEvent {
 data class SaveResult(val newState: CharacterState, val events: List<RuleEvent>, val roll: Int, val success: Boolean)
 data class GameResult(val newState: CharacterState, val events: List<RuleEvent>)
 
-class RulesEngine(private val random: RandomSource) {
+class RulesEngine(val random: RandomSource) {
     fun save(state: CharacterState, attribute: Attribute): SaveResult {
         val roll = random.d20()
         val value = state.attribute(attribute)

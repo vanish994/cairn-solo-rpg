@@ -30,6 +30,9 @@ object FeedbackMapper {
             is GameEvent.SaveResolved -> saveMessage(event.attribute, event.roll, event.success) to if (event.success) FeedbackType.SUCCESS else FeedbackType.FAILURE
             GameEvent.CriticalStabilized -> "A condição crítica foi estabilizada." to FeedbackType.SUCCESS
             is GameEvent.ScarRecovered -> "Cicatriz recuperada: " + event.scar.toDisplayName() + "." to FeedbackType.SUCCESS
+            is GameEvent.CombatStarted -> "Combate iniciado contra ${event.opponentId}; rodada ${event.round}." to FeedbackType.INFO
+            is GameEvent.CombatAttackResolved -> "Rodada ${event.round}: ataque e contra-ataque resolvidos." to FeedbackType.DAMAGE
+            is GameEvent.CombatEnded -> if (event.victory) "Combate vencido contra ${event.opponentId}." to FeedbackType.SUCCESS else "Combate encerrado." to FeedbackType.WARNING
         }
         return FeedbackEntry(id = idFor(event, turn), message = mapped.first, type = mapped.second, turn = turn)
     }

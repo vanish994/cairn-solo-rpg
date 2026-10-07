@@ -5,6 +5,7 @@ import com.vanish994.cairnsolo.rules.FixedRandomSource
 import com.vanish994.cairnsolo.rules.RulesEngine
 import com.vanish994.cairnsolo.rules.Scar
 import com.vanish994.cairnsolo.rules.ScarRecovery
+import com.vanish994.cairnsolo.rules.WeaponProfile
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -179,5 +180,47 @@ class GameActionResolverTest {
         val event = assertIs<GameEvent.RestCompleted>(result.events.single())
         assertEquals(0, event.hpRecovered)
         assertEquals(0, event.fatigueRecovered)
+    }
+}
+
+
+class CombatGameActionResolverTest {
+    private fun state(hp: Int = 6): GameState = GameState(
+        campaign = CampaignState(
+            character = CharacterIdentity(name = "Tester"),
+            rules = CharacterState(10, 10, 10, hp, 6, 0)
+        )
+    )
+
+    private fun resolver(random: FixedRandomSource): GameActionResolver =
+        GameActionResolver(ExplorationEngine(random), RulesEngine(random))
+
+    @Test
+    fun combatFlowUsesDexInitiativeThenResolvesAttackAndEndsOnOpponentZeroHp() {
+        val enemy = CharacterState(4, 4, 4, 6, 6, 0)
+        val started = resolver(FixedRandomSource(10, d8Value = 6)).resolve(
+            state(), GameAction.BeginCombat("wolf", enemy, WeaponProfile("bite", "d4"))
+        )
+        assertTrue(started.state.campaign.combat?.playerCanAct == true)
+        assertIs<GameEvent.CombatStarted>(started.events.first())
+
+        val attacked = resolver(FixedRandomSource(10, d8Value = 6)).resolve(
+            started.state, GameAction.CombatAttack(WeaponProfile("sword", "d8"))
+        )
+        assertEquals(null, attacked.state.campaign.combat)
+        assertIs<GameEvent.CombatEnded>(attacked.events.last())
+        assertTrue((attacked.events.last() as GameEvent.CombatEnded).victory)
+    }
+
+    @Test
+    fun failedFirstDexSaveLetsEnemyActAndAdvancesToRoundTwo() {
+        val enemy = CharacterState(4, 4, 4, 6, 6, 0)
+        val result = resolver(FixedRandomSource(20)).resolve(
+            state(), GameAction.BeginCombat("wolf", enemy)
+        )
+        assertEquals(2, result.state.campaign.combat?.round)
+        assertTrue(result.state.campaign.combat?.playerCanAct == true)
+        assertEquals(5, result.state.campaign.rules.hp)
+        assertIs<GameEvent.CombatAttackResolved>(result.events.last())
     }
 }

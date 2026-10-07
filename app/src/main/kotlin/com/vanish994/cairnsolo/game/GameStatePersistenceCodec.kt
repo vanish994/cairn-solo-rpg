@@ -26,6 +26,12 @@ object GameStatePersistenceCodec {
             put("sceneDescription", c.sceneDescription); put("exits", c.exits.joinToString(SEPARATOR))
             put("log", c.log.joinToString(SEPARATOR)); put("turn", c.turn.toString())
             put("guardianMessage", c.guardianMessage); put("guardianHistory", c.guardianHistory.joinToString(SEPARATOR))
+            c.combat?.let { fight ->
+                val o = fight.opponent
+                put("combatOpponentId", fight.opponentId); put("combatRound", fight.round.toString()); put("combatPlayerCanAct", fight.playerCanAct.toString())
+                put("combatWeaponId", fight.opponentWeapon.id); put("combatWeaponDamage", fight.opponentWeapon.damage ?: "")
+                put("combatStr", o.str.toString()); put("combatDex", o.dex.toString()); put("combatWil", o.wil.toString()); put("combatHp", o.hp.toString()); put("combatMaxHp", o.maxHp.toString()); put("combatArmor", o.armor.toString())
+            }
             put("canonLocationCount", c.worldCanon.locations.size.toString())
             c.worldCanon.locations.forEachIndexed { i, x -> put("canonLocation_${i}", listOf(x.id, x.name, x.description, x.status.name, x.firstSeenTurn).joinToString(SEPARATOR)) }
             put("canonNpcCount", c.worldCanon.npcs.size.toString())
@@ -111,6 +117,14 @@ object GameStatePersistenceCodec {
         val quests = (0 until int("canonQuestCount", 0)).mapNotNull { i -> fields("canonQuest_${i}").takeIf { it.size >= 5 }?.let { x -> runCatching { CanonQuest(x[0], x[1], x[2], x[3], x[4].toLong()) }.getOrNull() } }
         val discoveries = (0 until int("canonDiscoveryCount", 0)).mapNotNull { i -> fields("canonDiscovery_${i}").takeIf { it.size >= 5 }?.let { x -> runCatching { CanonDiscovery(x[0], x[1], CanonStatus.valueOf(x[2]), CanonSource.valueOf(x[3]), x[4].toLong()) }.getOrNull() } }
         val history = (0 until int("historyCount", 0)).mapNotNull { i -> fields("history_${i}").takeIf { it.size >= 6 }?.let { x -> runCatching { CampaignHistoryEntry(x[0], x[1].toLong(), HistoryEventType.valueOf(x[2]), x[3], HistorySource.valueOf(x[4]), x[5].split(",").filter { it.isNotBlank() }) }.getOrNull() } }
+        val combat = values["combatOpponentId"]?.takeIf { it.isNotBlank() }?.let { opponentId ->
+            CombatState(
+                opponentId = opponentId,
+                opponent = CharacterState(int("combatStr", 1), int("combatDex", 1), int("combatWil", 1), int("combatHp", 1), int("combatMaxHp", 1), int("combatArmor", 0)),
+                opponentWeapon = com.vanish994.cairnsolo.rules.WeaponProfile(string("combatWeaponId", "unarmed"), nullableString("combatWeaponDamage") ?: "d4"),
+                round = int("combatRound", 1), playerCanAct = bool("combatPlayerCanAct", true)
+            )
+        }
         return GameState(
             campaign = CampaignState(
                 campaignId = string("campaignId"), character = CharacterIdentity(string("characterId"), string("characterName", "Aventureiro")),
@@ -119,6 +133,7 @@ object GameStatePersistenceCodec {
                 exits = exits, log = log, turn = long("turn", 0L),
                 guardianMessage = string("guardianMessage", DEFAULT_GUARDIAN_PROLOGUE),
                 guardianHistory = string("guardianHistory").split(SEPARATOR).filter { it.isNotBlank() },
+                combat = combat,
                 worldCanon = WorldCanon(locations, npcs, items, quests, discoveries),
                 history = history
             ), updatedAtEpochMs = long("updatedAt", 0L)

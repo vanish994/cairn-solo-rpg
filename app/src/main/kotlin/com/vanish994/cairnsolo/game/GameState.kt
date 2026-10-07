@@ -11,6 +11,14 @@ data class CharacterIdentity(val id: String = UUID.randomUUID().toString(), val 
 
 data class CompanionState(val id: String, val hp: Int, val maxHp: Int, val armor: Int = 0, val str: Int = 0, val dex: Int = 0, val wil: Int = 0, val slots: Int = 0, val tags: Set<String> = emptySet())
 
+data class CombatState(
+    val opponentId: String,
+    val opponent: com.vanish994.cairnsolo.rules.CharacterState,
+    val opponentWeapon: com.vanish994.cairnsolo.rules.WeaponProfile = com.vanish994.cairnsolo.rules.WeaponProfile("unarmed", "d4"),
+    val round: Int = 1,
+    val playerCanAct: Boolean = true
+)
+
 data class CharacterProfile(
     val age: Int? = null,
     val background: Background? = null,
@@ -50,6 +58,7 @@ data class CampaignState(
     val guardianMessage: String = DEFAULT_GUARDIAN_PROLOGUE,
     val guardianHistory: List<String> = emptyList(),
     val guardianInteractionId: String? = null,
+    val combat: CombatState? = null,
     val worldCanon: WorldCanon = WorldCanon(),
     val history: List<CampaignHistoryEntry> = emptyList()
 )
