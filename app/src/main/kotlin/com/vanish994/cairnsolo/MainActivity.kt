@@ -113,38 +113,11 @@ class MainActivity : ComponentActivity() {
                                     repository.save(created)
                                     state = created
                                     screen = AppScreen.EXPLORATION
-                                    guardianFlow = GuardianFlow.GUARDIAN_THINKING
-                                    guardianLoading = true
+                                    guardianFlow = GuardianFlow.EXPLORATION
+                                    guardianLoading = false
                                     guardianError = null
-                                    scope.launch {
-                                        guardianClient.narrate(
-                                            created,
-                                            "INÍCIO DE CAMPANHA: gere uma abertura inédita para esta campanha. " +
-                                                "Use a personagem, o local, o mundo e a campaignSeed recebida. " +
-                                                "Apresente uma situação concreta com algo para observar ou decidir; " +
-                                                "não use prólogo fixo, não diga que a história está começando e não mude de local automaticamente."
-                                        )
-                                            .onSuccess { response ->
-                                                val narrated = created.applyGuardianResponse(
-                                                    narration = response.narration,
-                                                    sceneTitle = response.sceneTitle,
-                                                    sceneDescription = response.sceneDescription,
-                                                    interactionId = response.interactionId
-                                                )
-                                                val next = actionResolver.resolve(
-                                                    narrated,
-                                                    GameAction.ApplyCanonProposals(response.canonProposals)
-                                                ).state
-                                                repository.save(next)
-                                                state = next
-                                                guardianFlow = GuardianFlow.EXPLORATION
-                                            }
-                                            .onFailure { error ->
-                                                guardianError = error.message ?: "A abertura do Guardião não pôde ser carregada."
-                                                guardianFlow = GuardianFlow.EXPLORATION
-                                            }
-                                        guardianLoading = false
-                                    }
+                                    pendingRule = null
+                                    lastResolution = null
                                 }
                             )
                         }
