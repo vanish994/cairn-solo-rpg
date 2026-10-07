@@ -1,13 +1,16 @@
 package com.vanish994.cairnsolo.guardian
 
+import com.vanish994.cairnsolo.game.CampaignHistoryEntry
+import com.vanish994.cairnsolo.game.HistoryEventType
+import com.vanish994.cairnsolo.game.HistorySource
 import com.vanish994.cairnsolo.game.WorldGenerator
 import com.vanish994.cairnsolo.game.WorldSeed
 import com.vanish994.cairnsolo.game.newCharacter
 import com.vanish994.cairnsolo.rules.FixedRandomSource
-import org.json.JSONObject
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class GuardianContextTest {
@@ -15,50 +18,50 @@ class GuardianContextTest {
     fun contextContainsOnlyControlledSections() {
         val base = newCharacter("Mara", 10, 11, 12)
         val world = WorldGenerator(FixedRandomSource(d6Value = 3, d20Value = 10)).generate(WorldSeed("camp", "ruínas"))
-        val json = GuardianContextBuilder.from(base.copy(campaign = base.campaign.copy(worldState = world))).toJson()
+        val context = GuardianContextBuilder.from(base.copy(campaign = base.campaign.copy(worldState = world)))
 
-        assertTrue(json.has("character"))
-        assertTrue(json.has("scene"))
-        assertTrue(json.has("canon"))
-        assertTrue(json.has("growth"))
-        assertTrue(json.has("recentHistory"))
-        assertTrue(json.has("world"))
-        assertFalse(json.has("rules"))
-        assertFalse(json.has("profile"))
-        assertFalse(json.has("combatState"))
-        assertFalse(json.has("history"))
-        assertFalse(json.has("worldState"))
-        assertFalse(json.has("campaign"))
+        assertEquals("Mara", context.character.name)
+        assertEquals("prologue", context.scene.id)
+        assertNotNull(context.world)
+        assertTrue(context.canon.locations.isEmpty())
+        assertTrue(context.growth.evidence.isEmpty())
+        assertTrue(context.recentHistory.isEmpty())
+        assertFalse(context.character.combat != null)
     }
 
     @Test
     fun contextLimitsNarrativeCollectionsAndDoesNotExposeOpponentStats() {
         val base = newCharacter("Mara", 10, 11, 12)
         val history = (0 until 30).map { index ->
-            com.vanish994.cairnsolo.game.CampaignHistoryEntry(
-                "h-$index", index.toLong(), com.vanish994.cairnsolo.game.HistoryEventType.NARRATION,
-                "evento $index", com.vanish994.cairnsolo.game.HistorySource.SYSTEM
+            CampaignHistoryEntry(
+                "h-$index", index.toLong(), HistoryEventType.NARRATION,
+                "evento $index", HistorySource.SYSTEM
             )
         }
         val state = base.copy(campaign = base.campaign.copy(history = history))
-        val json = GuardianContextBuilder.from(state).toJson()
-        assertEquals(12, json.getJSONArray("recentHistory").length())
-        assertFalse(json.getJSONObject("character").has("opponent"))
-        assertFalse(json.getJSONObject("character").has("rules"))
+        val context = GuardianContextBuilder.from(state)
+
+        assertEquals(12, context.recentHistory.size)
+        assertTrue(context.character.combat == null)
+        assertEquals(18L, context.recentHistory.first().turn)
+        assertEquals(30L, context.recentHistory.last().turn)
     }
 
     @Test
-    fun contextSerializesControlledStatsAndConditions() {
-        val base = newCharacter("Mara", 10, 11, 12).copy(
-            campaign = newCharacter("Mara", 10, 11, 12).campaign.copy(
-                rules = newCharacter("Mara", 10, 11, 12).campaign.rules.copy(deprived = true, fatigue = 2, critical = true)
+    fun contextContainsControlledStatsAndConditions() {
+        val original = newCharacter("Mara", 10, 11, 12)
+        val state = original.copy(
+            campaign = original.campaign.copy(
+                rules = original.campaign.rules.copy(deprived = true, fatigue = 2, critical = true)
             )
         )
-        val character = GuardianContextBuilder.from(base).toJson().getJSONObject("character")
-        val stats = character.getJSONObject("stats")
-        assertEquals(10, stats.getInt("str"))
-        assertTrue(character.getJSONArray("conditions").toString().contains("DEPRIVED"))
-        assertTrue(character.getJSONArray("conditions").toString().contains("FATIGUE:2"))
-        assertTrue(character.getJSONArray("conditions").toString().contains("CRITICAL"))
+        val character = GuardianContextBuilder.from(state).character
+
+        assertEquals(10, character.str)
+        assertEquals(11, character.dex)
+        assertEquals(12, character.wil)
+        assertTrue("DEPRIVED" in character.conditions)
+        assertTrue("FATIGUE:2" in character.conditions)
+        assertTrue("CRITICAL" in character.conditions)
     }
 }
