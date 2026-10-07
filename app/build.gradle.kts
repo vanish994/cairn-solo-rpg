@@ -21,12 +21,28 @@ android {
         applicationId = "com.vanish994.cairnsolo"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.2.0"
     }
 
     buildFeatures {
         compose = true
+        buildConfig = true
+    }
+
+    buildTypes {
+        debug {
+            buildConfigField("String", "GUARDIAN_API_URL", "\"${project.findProperty("guardianApiUrl") ?: "https://cairn-guardian.onrender.com/guardian"}\"")
+        }
+        release {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            // Test build only: sign the optimized release with the standard debug key.
+            // Do not use this signing configuration for a production release.
+            signingConfig = signingConfigs.getByName("debug")
+            buildConfigField("String", "GUARDIAN_API_URL", "\"${project.findProperty("guardianApiUrl") ?: "https://cairn-guardian.onrender.com/guardian"}\"")
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
+        }
     }
 
     packaging {
@@ -38,19 +54,14 @@ android {
 
 dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2024.12.01")
-
     implementation(composeBom)
-    androidTestImplementation(composeBom)
-
     implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.activity:activity-compose:1.10.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
-
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
-
     debugImplementation("androidx.compose.ui:ui-tooling")
-
     testImplementation(kotlin("test"))
 }

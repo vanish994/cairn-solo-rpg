@@ -8,6 +8,7 @@ import com.vanish994.cairnsolo.rules.ScarRecovery
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 class GameActionResolverTest {
     private fun state(
@@ -146,13 +147,24 @@ class GameActionResolverTest {
             9, 11, 13, 5,
             com.vanish994.cairnsolo.rules.Background.PROWLER,
             null,
-            29
+            age = 29
         )
         val result = resolver().resolve(state(), GameAction.CreateCharacter("Aran", rolled))
         assertEquals("Aran", result.state.campaign.character.name)
         assertEquals(29, result.state.campaign.profile.age)
         assertEquals(com.vanish994.cairnsolo.rules.Background.PROWLER, result.state.campaign.profile.background)
         assertIs<GameEvent.CharacterCreated>(result.events.single())
+    }
+
+    @Test
+    fun guardianIntentIsRecordedWithoutChangingRules() {
+        val before = state(hp = 6, maxHp = 6)
+        val result = resolver().resolve(before, GameAction.GuardianIntent("seguir em direção à luz"))
+        assertEquals(6, result.state.campaign.rules.hp)
+        assertEquals(1L, result.state.campaign.turn)
+        assertTrue(result.state.campaign.guardianMessage.contains("seguir em direção à luz"))
+        assertTrue(result.state.campaign.log.last().contains("seguir em direção à luz"))
+        assertTrue(result.events.isEmpty())
     }
 
     @Test
