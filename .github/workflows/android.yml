@@ -2,7 +2,9 @@ name: Android Build
 
 on:
   push:
-    branches: ["feat/cairn-visual-guardian-v1", "feat/interactive-roll-flow"]
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
   workflow_dispatch:
 
 concurrency:
@@ -70,4 +72,4 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-# Force a fresh test APK from the current Guardian branch state.
+# Build and validate the current main branch; manual dispatch remains available for testing.
