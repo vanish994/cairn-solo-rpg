@@ -45,7 +45,7 @@ data class CharacterProfile(
 }
 
 const val DEFAULT_GUARDIAN_PROLOGUE =
-    "A chuva cai sobre as pedras antigas enquanto você atravessa a estrada abandonada. Há três dias, nenhum viajante retorna desta região. Os moradores da última aldeia evitaram falar sobre o assunto. Agora, entre as árvores, uma luz aparece. Então um sino toca — uma única vez. Você chegou ao lugar onde sua história começa."
+    "Antes de a estrada revelar seu primeiro perigo, diga ao Guardião quem você é nesta história — sua profissão, passado, propósito ou apenas a ideia que carrega consigo. O resto do mundo será descoberto em jogo."
 
 data class CampaignState(
     val campaignId: String = UUID.randomUUID().toString(),
@@ -56,9 +56,9 @@ data class CampaignState(
     val sceneId: String = "prologue",
     val turn: Long = 0L,
     val sceneType: SceneType = SceneType.EXPLORATION,
-    val sceneTitle: String = "Prologue",
-    val sceneDescription: String = "A estrada está silenciosa. O sino acabou de tocar.",
-    val exits: List<String> = listOf("investigar a luz", "seguir pela estrada", "procurar abrigo"),
+    val sceneTitle: String = "Quem é você?",
+    val sceneDescription: String = "Defina o papel do seu aventureiro na história. O mundo reagirá àquilo que você trouxer para ele.",
+    val exits: List<String> = emptyList(),
     val log: List<String> = emptyList(),
     val guardianMessage: String = DEFAULT_GUARDIAN_PROLOGUE,
     val guardianHistory: List<String> = emptyList(),
