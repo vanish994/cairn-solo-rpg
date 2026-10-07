@@ -11,6 +11,7 @@ import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.nio.charset.StandardCharsets
+import java.util.concurrent.Executors
 
 private const val GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/interactions"
 private const val MODEL = "gemini-3.5-flash-lite"
@@ -68,7 +69,9 @@ fun main() {
             respond(exchange, 500, gson.toJson(mapOf("error" to (e.message ?: "guardian_error"))))
         }
     }
-    server.executor = null
+    // O request /guardian pode aguardar a API Gemini por dezenas de segundos.
+    // Um executor compartilhado impede que essa espera bloqueie o health check do Render.
+    server.executor = Executors.newFixedThreadPool(4)
     server.start()
     println("Cairn Guardian server listening on :$port")
 }

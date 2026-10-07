@@ -16,10 +16,21 @@ payload='{"playerIntent":"Observo a porta e procuro uma forma segura de abri-la.
 
 response_file="$(mktemp)"
 trap 'rm -f "$response_file"' EXIT
-status="$(curl --silent --show-error --output "$response_file" --write-out '%{http_code}' \
-  -H 'Content-Type: application/json' \
-  -X POST "$BASE_URL/guardian" \
-  --data "$payload")"
+status="000"
+for attempt in {1..5}; do
+  status="$(curl --silent --show-error --output "$response_file" --write-out '%{http_code}' \
+    --connect-timeout 10 --max-time 60 \
+    -H 'Content-Type: application/json' \
+    -X POST "$BASE_URL/guardian" \
+    --data "$payload" || true)"
+  if [[ "$status" == "200" || "$status" == "400" || "$status" == "401" || "$status" == "403" || "$status" == "404" || "$status" == "405" || "$status" == "500" ]]; then
+    break
+  fi
+  if [[ "$attempt" != "5" ]]; then
+    echo "guardian: transient HTTP status $status, retrying ($attempt/5)" >&2
+    sleep 5
+  fi
+done
 
 if [[ "$status" != "200" ]]; then
   echo "guardian: unexpected HTTP status $status" >&2
