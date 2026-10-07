@@ -33,6 +33,39 @@ data class GrowthEvidenceProposal(
     val uniqueInteraction: Boolean = false
 )
 
+/** Contrato externo: a mudança só é aplicada depois que o domínio valida as evidências. */
+data class GrowthChangeProposal(
+    val id: String,
+    val evidenceIds: List<String>,
+    val changeType: String,
+    val attribute: String? = null,
+    val amount: Int? = null,
+    val candidate: Int? = null,
+    val abilityId: String? = null,
+    val abilityName: String? = null,
+    val abilityDescription: String? = null,
+    val abilityCost: String? = null,
+    val rationale: String
+) {
+    fun toDomain(): GrowthProposal {
+        val change = when (changeType.uppercase()) {
+            "RAISE_MAX_ATTRIBUTE" -> GrowthChange.RaiseMaxAttribute(parseAttribute(), amount ?: 1)
+            "KEEP_HIGHER_ATTRIBUTE" -> GrowthChange.KeepHigherAttribute(parseAttribute(), candidate ?: error("Growth candidate is required"))
+            "GAIN_ABILITY" -> GrowthChange.GainAbility(
+                abilityId ?: error("Ability id is required"),
+                abilityName ?: error("Ability name is required"),
+                abilityDescription ?: error("Ability description is required"),
+                abilityCost
+            )
+            else -> error("Unknown Growth change type: $changeType")
+        }
+        return GrowthProposal(id, evidenceIds, change, rationale)
+    }
+
+    private fun parseAttribute(): Attribute = runCatching { Attribute.valueOf(attribute?.uppercase() ?: "") }
+        .getOrElse { error("Growth attribute must be STR, DEX or WIL") }
+}
+
 sealed interface GrowthChange {
     data class RaiseMaxAttribute(val attribute: Attribute, val amount: Int = 1) : GrowthChange {
         init { require(amount > 0) }
@@ -105,6 +138,8 @@ class GrowthResolver {
         )
         return state.copy(campaign = state.campaign.copy(growth = nextGrowth, history = (state.campaign.history + history).takeLast(500), turn = state.campaign.turn + 1))
     }
+
+    fun applyProposal(state: GameState, proposal: GrowthChangeProposal): GrowthResolution = apply(state, proposal.toDomain())
 
     fun apply(state: GameState, proposal: GrowthProposal): GrowthResolution {
         require(proposal.id !in state.campaign.growth.appliedProposalIds) { "Growth proposal already applied" }

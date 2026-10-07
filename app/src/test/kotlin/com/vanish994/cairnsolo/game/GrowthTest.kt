@@ -6,6 +6,7 @@ import com.vanish994.cairnsolo.rules.RulesEngine
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertIs
 
 class GrowthTest {
     private fun evidence(id: String, pattern: Boolean = false, risk: Boolean = false, unique: Boolean = false) = GrowthEvidence(
@@ -59,6 +60,39 @@ class GrowthTest {
         val applied = actions.resolve(recorded, GameAction.ApplyGrowth(GrowthProposal("relic-bond", listOf("relic"), GrowthChange.GainAbility("plant-speech", "Fala das Plantas", "Pode compreender sinais simples de plantas e animais.", "Requer contato com a floresta."), "A relação contínua com a relíquia."))).state
         assertEquals("plant-speech", applied.campaign.growth.abilities.single().id)
         assertEquals(10, applied.campaign.rules.wil)
+    }
+
+    @Test
+    fun guardianChangeProposalRaisesAttributeOnlyWithAcceptedEvidence() {
+        val base = newCharacter("Mara", 10, 10, 10)
+        val actions = GameActionResolver(ExplorationEngine(FixedRandomSource(10)), RulesEngine(FixedRandomSource(10)))
+        val withEvidence = actions.resolve(base, GameAction.RecordGrowthEvidenceProposal(
+            GrowthEvidenceProposal("trial", "Mara enfrentou o risco e persistiu.", seriousRisk = true, focusedPattern = true)
+        )).state
+        val result = actions.resolve(withEvidence, GameAction.ApplyGrowthChangeProposal(
+            GrowthChangeProposal("raise-wil", listOf("trial"), "RAISE_MAX_ATTRIBUTE", attribute = "WIL", amount = 1, rationale = "A experiência sustentou a mudança.")
+        ))
+        assertEquals(11, result.state.campaign.rules.wil)
+        assertEquals(11, result.state.campaign.rules.maxWil)
+        assertIs<GameEvent.GrowthApplied>(result.events.single())
+    }
+
+    @Test
+    fun guardianChangeProposalCanGrantAbilityAndRejectsMissingEvidence() {
+        val base = newCharacter("Mara", 10, 10, 10)
+        val actions = GameActionResolver(ExplorationEngine(FixedRandomSource(10)), RulesEngine(FixedRandomSource(10)))
+        assertFailsWith<IllegalStateException> {
+            actions.resolve(base, GameAction.ApplyGrowthChangeProposal(
+                GrowthChangeProposal("invalid", listOf("missing"), "GAIN_ABILITY", abilityId = "stone-skin", abilityName = "Pele de Pedra", abilityDescription = "Resiste a perigos", rationale = "Sem evidência não vale.")
+            ))
+        }
+        val evidence = actions.resolve(base, GameAction.RecordGrowthEvidenceProposal(
+            GrowthEvidenceProposal("stone-trial", "Mara sobreviveu ao colapso.", seriousRisk = true, uniqueInteraction = true)
+        )).state
+        val result = actions.resolve(evidence, GameAction.ApplyGrowthChangeProposal(
+            GrowthChangeProposal("stone-growth", listOf("stone-trial"), "GAIN_ABILITY", abilityId = "stone-skin", abilityName = "Pele de Pedra", abilityDescription = "Resiste a perigos", rationale = "A sobrevivência deixou uma marca.")
+        ))
+        assertEquals("stone-skin", result.state.campaign.growth.abilities.single().id)
     }
 
     @Test

@@ -7,6 +7,7 @@ import com.vanish994.cairnsolo.game.CanonProposal
 import com.vanish994.cairnsolo.game.CanonStatus
 import com.vanish994.cairnsolo.game.CanonSource
 import com.vanish994.cairnsolo.game.GrowthEvidenceProposal
+import com.vanish994.cairnsolo.game.GrowthChangeProposal
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -29,7 +30,8 @@ data class GuardianResponse(
     val suggestedActions: List<String>,
     val interactionId: String?,
     val canonProposals: List<CanonProposal> = emptyList(),
-    val growthEvidenceProposals: List<GrowthEvidenceProposal> = emptyList()
+    val growthEvidenceProposals: List<GrowthEvidenceProposal> = emptyList(),
+    val growthChangeProposals: List<GrowthChangeProposal> = emptyList()
 )
 
 interface GuardianClient {
@@ -194,6 +196,25 @@ class HttpGuardianClient(
                 ))
             }
         }
+        val changeProposals = buildList {
+            val array = json.optJSONArray("growthChangeProposals") ?: JSONArray()
+            for (i in 0 until array.length()) {
+                val item = array.getJSONObject(i)
+                add(GrowthChangeProposal(
+                    id = item.getString("id"),
+                    evidenceIds = item.optJSONArray("evidenceIds")?.let { ids -> (0 until ids.length()).map { ids.getString(it) } } ?: emptyList(),
+                    changeType = item.getString("changeType"),
+                    attribute = item.optString("attribute").takeIf { it.isNotBlank() },
+                    amount = item.optInt("amount").takeIf { item.has("amount") && !item.isNull("amount") },
+                    candidate = item.optInt("candidate").takeIf { item.has("candidate") && !item.isNull("candidate") },
+                    abilityId = item.optString("abilityId").takeIf { it.isNotBlank() },
+                    abilityName = item.optString("abilityName").takeIf { it.isNotBlank() },
+                    abilityDescription = item.optString("abilityDescription").takeIf { it.isNotBlank() },
+                    abilityCost = item.optString("abilityCost").takeIf { it.isNotBlank() },
+                    rationale = item.getString("rationale")
+                ))
+            }
+        }
         return GuardianResponse(
             narration = json.getString("narration"),
             sceneTitle = json.getString("sceneTitle"),
@@ -202,7 +223,8 @@ class HttpGuardianClient(
             suggestedActions = actions,
             interactionId = json.optString("interactionId").takeIf { it.isNotBlank() },
             canonProposals = proposals,
-            growthEvidenceProposals = growthProposals
+            growthEvidenceProposals = growthProposals,
+            growthChangeProposals = changeProposals
         )
     }
 

@@ -31,7 +31,7 @@ python3 - "$response_file" <<'PY'
 import json, sys
 from pathlib import Path
 body = json.loads(Path(sys.argv[1]).read_text())
-required = {"narration", "sceneTitle", "sceneDescription", "suggestedActions", "ruleRequest", "canonProposals", "growthEvidenceProposals", "interactionId"}
+required = {"narration", "sceneTitle", "sceneDescription", "suggestedActions", "ruleRequest", "canonProposals", "growthEvidenceProposals", "growthChangeProposals", "interactionId"}
 missing = required - body.keys()
 assert not missing, f"missing response fields: {sorted(missing)}"
 assert isinstance(body["narration"], str) and body["narration"].strip()
@@ -54,5 +54,10 @@ for proposal in body["growthEvidenceProposals"]:
     assert isinstance(proposal["summary"], str) and proposal["summary"].strip()
     assert isinstance(proposal["relatedEntityIds"], list)
     assert any(proposal[key] for key in ("focusedPattern", "seriousRisk", "uniqueInteraction"))
+for proposal in body["growthChangeProposals"]:
+    assert isinstance(proposal["id"], str) and proposal["id"]
+    assert isinstance(proposal["evidenceIds"], list) and proposal["evidenceIds"]
+    assert proposal["changeType"] in {"RAISE_MAX_ATTRIBUTE", "KEEP_HIGHER_ATTRIBUTE", "GAIN_ABILITY"}
+    assert isinstance(proposal["rationale"], str) and proposal["rationale"].strip()
 print("guardian: JSON contract ok")
 PY

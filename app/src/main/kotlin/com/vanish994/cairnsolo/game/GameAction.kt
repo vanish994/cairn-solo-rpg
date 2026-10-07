@@ -54,6 +54,7 @@ sealed interface GameAction {
     data class CheckHirelingMorale(val hirelingId: String, val failureOutcome: MoraleOutcome = MoraleOutcome.RETREAT) : GameAction
     data class RecordGrowthEvidence(val evidence: GrowthEvidence) : GameAction
     data class RecordGrowthEvidenceProposal(val proposal: GrowthEvidenceProposal) : GameAction
+    data class ApplyGrowthChangeProposal(val proposal: GrowthChangeProposal) : GameAction
     data class ApplyGrowth(val proposal: GrowthProposal) : GameAction
     data class ApplyCanonProposals(val proposals: List<CanonProposal>) : GameAction
     data class AdvanceFaction(val factionId: String, val amount: Int = 1, val reason: String) : GameAction
@@ -193,6 +194,7 @@ class GameActionResolver(
             GameResult(next, listOf(GameEvent.GrowthEvidenceRecorded(action.proposal.id)))
         }
         is GameAction.ApplyGrowth -> applyGrowth(state, action)
+        is GameAction.ApplyGrowthChangeProposal -> applyGrowthChangeProposal(state, action)
         is GameAction.ApplyCanonProposals -> {
             val next = CanonResolver().apply(state, action.proposals)
             GameResult(next, if (action.proposals.isEmpty()) emptyList() else listOf(GameEvent.CanonUpdated(action.proposals.size)))
@@ -227,6 +229,20 @@ class GameActionResolver(
 
     private fun applyGrowth(state: GameState, action: GameAction.ApplyGrowth): GameResult {
         val result = growth.apply(state, action.proposal)
+        val next = state.copy(
+            campaign = state.campaign.copy(
+                rules = result.character,
+                growth = result.growth,
+                history = (state.campaign.history + result.history).takeLast(500),
+                turn = state.campaign.turn + 1
+            ),
+            updatedAtEpochMs = System.currentTimeMillis()
+        )
+        return GameResult(next, listOf(GameEvent.GrowthApplied(action.proposal.id)))
+    }
+
+    private fun applyGrowthChangeProposal(state: GameState, action: GameAction.ApplyGrowthChangeProposal): GameResult {
+        val result = growth.applyProposal(state, action.proposal)
         val next = state.copy(
             campaign = state.campaign.copy(
                 rules = result.character,
