@@ -91,7 +91,7 @@ data class GameState(
             exits = exits,
             turn = campaign.turn + 1,
             guardianMessage = narration,
-            guardianHistory = (campaign.guardianHistory + narration).takeLast(20),
+            guardianHistory = (campaign.guardianHistory + narration).takeLast(200),
             log = (campaign.log + narration).takeLast(50)
         ),
         updatedAtEpochMs = System.currentTimeMillis()
@@ -100,11 +100,10 @@ data class GameState(
     fun recordGuardianIntent(intent: String): GameState {
         val clean = intent.trim()
         require(clean.isNotEmpty())
-        val reply = "O Guardião escuta sua decisão: \"$clean\". A intenção foi registrada; a próxima cena será determinada pela narrativa e pelas regras do mundo."
         return copy(
             campaign = campaign.copy(
-                guardianMessage = reply,
-                guardianHistory = (campaign.guardianHistory + "Você: $clean" + reply).takeLast(20),
+                guardianMessage = "Você: $clean",
+                guardianHistory = (campaign.guardianHistory + "Você: $clean").takeLast(200),
                 log = (campaign.log + "Você declarou: $clean").takeLast(50),
                 turn = campaign.turn + 1
             ),
@@ -128,7 +127,7 @@ data class GameState(
                 guardianHistory = if (campaign.guardianHistory.lastOrNull() == clean) {
                     campaign.guardianHistory
                 } else {
-                    (campaign.guardianHistory + clean).takeLast(20)
+                    (campaign.guardianHistory + clean).takeLast(200)
                 },
                 log = if (campaign.log.lastOrNull() == clean) {
                     campaign.log

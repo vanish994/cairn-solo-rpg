@@ -223,13 +223,19 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onGuardianIntent = { intent ->
                                     if (pendingRule == null && lastResolution == null) {
+                                        val intentState = actionResolver.resolve(
+                                            current,
+                                            GameAction.GuardianIntent(intent)
+                                        ).state
+                                        repository.save(intentState)
+                                        state = intentState
                                         guardianFlow = GuardianFlow.GUARDIAN_THINKING
                                         guardianLoading = true
                                         guardianError = null
                                         scope.launch {
-                                            guardianClient.narrate(current, intent)
+                                            guardianClient.narrate(intentState, intent)
                                                 .onSuccess { response ->
-                                                    val narrated = current.applyGuardianResponse(
+                                                    val narrated = intentState.applyGuardianResponse(
                                                         narration = response.narration,
                                                         sceneTitle = response.sceneTitle,
                                                         sceneDescription = response.sceneDescription,
@@ -335,9 +341,10 @@ private fun SectionCard(modifier: Modifier = Modifier, content: @Composable Colu
 @Composable
 private fun GuardianCard(message: String, history: List<String>) {
     val scrollState = rememberScrollState()
-    val messages = (history + message).filter { it.isNotBlank() }.distinct()
+    val messages = (if (history.lastOrNull() == message) history else history + message)
+        .filter { it.isNotBlank() }
 
-    LaunchedEffect(messages.size) {
+    LaunchedEffect(messages) {
         scrollState.animateScrollTo(scrollState.maxValue)
     }
 
@@ -595,9 +602,13 @@ private fun ExplorationScreen(
             modifier = Modifier.fillMaxWidth()
         ) {
             ActionButton(
-                "Continuar",
+                "Continuar narrativa",
                 Modifier.weight(1f),
-                onClick = { if (pendingRule == null && lastResolution == null) onAction(GameAction.ExploreContinue) }
+                onClick = {
+                    if (pendingRule == null && lastResolution == null && !guardianLoading) {
+                        onGuardianIntent("Continue a narrativa a partir da situação atual, sem mudar de local automaticamente.")
+                    }
+                }
             )
             ActionButton(
                 "Investigar",
