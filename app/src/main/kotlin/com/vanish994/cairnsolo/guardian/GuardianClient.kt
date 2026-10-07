@@ -4,6 +4,7 @@ import android.util.Log
 import com.vanish994.cairnsolo.BuildConfig
 import com.vanish994.cairnsolo.game.GameState
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -37,39 +38,49 @@ class HttpGuardianClient(
         state: GameState,
         playerIntent: String
     ): Result<GuardianResponse> = withContext(Dispatchers.IO) {
-        runCatching {
-            require(baseUrl.isNotBlank()) { "Guardião online não configurado." }
-            require(playerIntent.isNotBlank()) { "A intenção do jogador está vazia." }
+        require(baseUrl.isNotBlank()) { "Guardião online não configurado." }
+        require(playerIntent.isNotBlank()) { "A intenção do jogador está vazia." }
 
-            val url = baseUrl.trimEnd('/')
-            val connection = (URL(url).openConnection() as HttpURLConnection).apply {
-                requestMethod = "POST"
-                connectTimeout = 10_000
-                readTimeout = 45_000
-                doOutput = true
-                setRequestProperty("Content-Type", "application/json")
-                setRequestProperty("Accept", "application/json")
-            }
+        var lastFailure: Throwable? = null
+        repeat(2) { attempt ->
+            runCatching { narrateOnce(state, playerIntent) }
+                .onSuccess { return@withContext Result.success(it) }
+                .onFailure {
+                    lastFailure = it
+                    if (attempt == 0) delay(1_500)
+                }
+        }
+        Result.failure(lastFailure ?: IllegalStateException("Falha desconhecida do Guardião"))
+    }
 
+    private fun narrateOnce(state: GameState, playerIntent: String): GuardianResponse {
+        val url = baseUrl.trimEnd('/')
+        val connection = (URL(url).openConnection() as HttpURLConnection).apply {
+            requestMethod = "POST"
+            connectTimeout = 10_000
+            readTimeout = 45_000
+            doOutput = true
+            setRequestProperty("Content-Type", "application/json")
+            setRequestProperty("Accept", "application/json")
+        }
+        return try {
             val payload = JSONObject().apply {
                 put("playerIntent", playerIntent.trim())
                 put("campaign", campaignJson(state))
             }
-
             connection.outputStream.use {
                 it.write(payload.toString().toByteArray(Charsets.UTF_8))
             }
-
             val code = connection.responseCode
             val stream = if (code in 200..299) connection.inputStream else connection.errorStream
             val body = stream?.bufferedReader()?.use { it.readText() }.orEmpty()
-            connection.disconnect()
-
             if (code !in 200..299) {
                 Log.e("CairnGuardian", "Guardian request failed: HTTP " + code + ", body=" + body)
                 error("O Guardião está temporariamente em silêncio. Tente novamente.")
             }
             parseResponse(body)
+        } finally {
+            connection.disconnect()
         }
     }
 
