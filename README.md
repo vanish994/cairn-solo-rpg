@@ -114,6 +114,13 @@ Antes de alterar código:
 7. Atualize documentação quando uma decisão arquitetural mudar.
 8. Inspecione o código existente antes de criar novas estruturas.
 
+### Documentação de continuidade
+
+- `docs/DEVELOPMENT-GUIDE.md`: guia operacional para continuar o desenvolvimento, validar mudanças e manter a fronteira entre IA e regras.
+- `docs/ARCHITECTURE-MAP.md`: mapa detalhado de camadas, módulos, contratos, estado, persistência e fluxos de combate/Growth/cânone.
+- `docs/STATUS.md`: fotografia do estado atual e pendências conhecidas.
+- `docs/CAIRN-2E-RULE-MATRIX.md`: cobertura normativa e lacunas do Cairn 2e.
+
 ## Referências arquiteturais
 
 O projeto usa ideias de referência, não cópia de implementação:
