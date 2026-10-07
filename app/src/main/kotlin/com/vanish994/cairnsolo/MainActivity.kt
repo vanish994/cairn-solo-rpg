@@ -107,7 +107,9 @@ class MainActivity : ComponentActivity() {
                                 onCreate = {
                                     val r = rolled ?: rollCharacter(KotlinRandomSource())
                                     val finalRolled = r.copy(background = selectedBackground ?: r.background)
-                                    val created = createCharacter(name.trim(), finalRolled)
+                                    val created = actionResolver.resolve(
+                                        GameAction.CreateCharacter(name.trim(), finalRolled)
+                                    ).state
                                     repository.save(created)
                                     state = created
                                     screen = AppScreen.EXPLORATION

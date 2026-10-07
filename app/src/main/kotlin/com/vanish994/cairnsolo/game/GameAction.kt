@@ -107,6 +107,17 @@ class GameActionResolver(
     private val hirelingRules: com.vanish994.cairnsolo.rules.HirelingRules = com.vanish994.cairnsolo.rules.HirelingRules(morale),
     private val growth: GrowthResolver = GrowthResolver()
 ) {
+    /** Entrada de criação para a UI; mesmo a primeira transição passa pelo domínio. */
+    fun resolve(action: GameAction): GameResult = resolve(
+        GameState(
+            campaign = CampaignState(
+                character = CharacterIdentity("creation-bootstrap"),
+                rules = CharacterState(str = 1, dex = 1, wil = 1, hp = 1, maxHp = 1, armor = 0)
+            )
+        ),
+        action
+    )
+
     fun resolve(state: GameState, action: GameAction): GameResult = when (action) {
         is GameAction.CreateCharacter -> {
             val created = com.vanish994.cairnsolo.rules.createCharacter(action.name, action.rolled)
@@ -116,7 +127,12 @@ class GameActionResolver(
             val withWorld = created.copy(campaign = created.campaign.copy(
                 worldState = world,
                 wilderness = com.vanish994.cairnsolo.rules.WildernessState(world.currentLocationId),
-                dungeon = world.dungeons.firstOrNull()?.let { com.vanish994.cairnsolo.rules.DungeonState(it.id) }
+                dungeon = world.dungeons.firstOrNull()?.let { com.vanish994.cairnsolo.rules.DungeonState(it.id) },
+                sceneId = world.currentLocationId,
+                sceneTitle = world.settlements.first().name,
+                sceneDescription = "${world.settlements.first().description} ${world.region.description}",
+                exits = listOf("conversar com os moradores", "seguir os rumores", "explorar a região"),
+                guardianMessage = openingNarration(world)
             ))
             GameResult(withWorld, listOf(GameEvent.CharacterCreated(withWorld.campaign.character.id)))
         }
@@ -200,6 +216,19 @@ class GameActionResolver(
             GameResult(next, if (action.proposals.isEmpty()) emptyList() else listOf(GameEvent.CanonUpdated(action.proposals.size)))
         }
         is GameAction.AdvanceFaction -> advanceFaction(state, action)
+    }
+
+    private fun openingNarration(world: WorldState): String {
+        val settlement = world.settlements.first()
+        val faction = world.factions.first()
+        val dungeon = world.dungeons.firstOrNull()
+        val rumor = world.rumors.firstOrNull()?.text ?: "Rumores contraditórios circulam entre os viajantes."
+        val dungeonClue = dungeon?.let { " Ao longe, a entrada de ${it.name} aguarda quem se atrever a procurá-la." }
+            ?: " A região oferece mais de um caminho, mas nenhum parece seguro."
+        return "Você chega a ${settlement.name}, na região ${world.region.name}. " +
+            "${settlement.description} ${world.region.description} " +
+            "${faction.name} movimenta seus agentes para cumprir o plano de ${faction.agenda.lowercase()}. " +
+            "$rumor$dungeonClue"
     }
 
     private fun advanceFaction(state: GameState, action: GameAction.AdvanceFaction): GameResult {

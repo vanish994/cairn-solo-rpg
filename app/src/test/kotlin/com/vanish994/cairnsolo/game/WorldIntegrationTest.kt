@@ -26,6 +26,21 @@ class WorldIntegrationTest {
     }
 
     @Test
+    fun creatingCharacterStartsWithGeneratedWorldOpening() {
+        val random = FixedRandomSource(d20Value = 10, d6Value = 3)
+        val resolver = GameActionResolver(ExplorationEngine(random), RulesEngine(random))
+        val result = resolver.resolve(GameAction.CreateCharacter("Mara", rolled()))
+        val campaign = result.state.campaign
+        val world = assertNotNull(campaign.worldState)
+
+        assertEquals(world.currentLocationId, campaign.sceneId)
+        assertEquals(world.settlements.first().name, campaign.sceneTitle)
+        assertTrue(campaign.guardianMessage.contains(world.region.name))
+        assertTrue(campaign.guardianMessage.contains(world.factions.first().name))
+        assertTrue(campaign.guardianMessage != DEFAULT_GUARDIAN_PROLOGUE)
+    }
+
+    @Test
     fun worldStateRoundTripPreservesGeneratedWorld() {
         val world = WorldGenerator(FixedRandomSource(d20Value = 12, d6Value = 4)).generate(
             WorldSeed("Cinzas", "uma fronteira assombrada")
