@@ -26,6 +26,18 @@ object GameStatePersistenceCodec {
             put("sceneDescription", c.sceneDescription); put("exits", c.exits.joinToString(SEPARATOR))
             put("log", c.log.joinToString(SEPARATOR)); put("turn", c.turn.toString())
             put("guardianMessage", c.guardianMessage); put("guardianHistory", c.guardianHistory.joinToString(SEPARATOR))
+            put("canonLocationCount", c.worldCanon.locations.size.toString())
+            c.worldCanon.locations.forEachIndexed { i, x -> put("canonLocation_${i}", listOf(x.id, x.name, x.description, x.status.name, x.firstSeenTurn).joinToString(SEPARATOR)) }
+            put("canonNpcCount", c.worldCanon.npcs.size.toString())
+            c.worldCanon.npcs.forEachIndexed { i, x -> put("canonNpc_${i}", listOf(x.id, x.name, x.role ?: "", x.description ?: "", x.status.name, x.firstSeenTurn).joinToString(SEPARATOR)) }
+            put("canonItemCount", c.worldCanon.importantItems.size.toString())
+            c.worldCanon.importantItems.forEachIndexed { i, x -> put("canonItem_${i}", listOf(x.id, x.name, x.description ?: "", x.status.name, x.firstSeenTurn).joinToString(SEPARATOR)) }
+            put("canonQuestCount", c.worldCanon.quests.size.toString())
+            c.worldCanon.quests.forEachIndexed { i, x -> put("canonQuest_${i}", listOf(x.id, x.title, x.description, x.status, x.firstSeenTurn).joinToString(SEPARATOR)) }
+            put("canonDiscoveryCount", c.worldCanon.discoveries.size.toString())
+            c.worldCanon.discoveries.forEachIndexed { i, x -> put("canonDiscovery_${i}", listOf(x.id, x.text, x.status.name, x.source.name, x.turn).joinToString(SEPARATOR)) }
+            put("historyCount", c.history.size.toString())
+            c.history.forEachIndexed { i, x -> put("history_${i}", listOf(x.id, x.turn, x.type.name, x.summary, x.source.name, x.relatedEntityIds.joinToString(",")).joinToString(SEPARATOR)) }
             put("updatedAt", state.updatedAtEpochMs.toString())
             put("str", r.str.toString()); put("dex", r.dex.toString()); put("wil", r.wil.toString())
             put("maxStr", r.maxStr.toString()); put("maxDex", r.maxDex.toString()); put("maxWil", r.maxWil.toString())
@@ -92,6 +104,13 @@ object GameStatePersistenceCodec {
         val exits = string("exits").split(SEPARATOR).filter { it.isNotBlank() }
         val log = string("log").split(SEPARATOR).filter { it.isNotBlank() }
         val sceneType = runCatching { SceneType.valueOf(string("sceneType", SceneType.EXPLORATION.name)) }.getOrDefault(SceneType.EXPLORATION)
+        fun fields(key: String): List<String> = string(key).split(SEPARATOR)
+        val locations = (0 until int("canonLocationCount", 0)).mapNotNull { i -> fields("canonLocation_${i}").takeIf { it.size >= 5 }?.let { x -> runCatching { CanonLocation(x[0], x[1], x[2], CanonStatus.valueOf(x[3]), x[4].toLong()) }.getOrNull() } }
+        val npcs = (0 until int("canonNpcCount", 0)).mapNotNull { i -> fields("canonNpc_${i}").takeIf { it.size >= 6 }?.let { x -> runCatching { CanonNpc(x[0], x[1], x[2].takeIf { it.isNotBlank() }, x[3].takeIf { it.isNotBlank() }, CanonStatus.valueOf(x[4]), x[5].toLong()) }.getOrNull() } }
+        val items = (0 until int("canonItemCount", 0)).mapNotNull { i -> fields("canonItem_${i}").takeIf { it.size >= 5 }?.let { x -> runCatching { CanonItem(x[0], x[1], x[2].takeIf { it.isNotBlank() }, CanonStatus.valueOf(x[3]), x[4].toLong()) }.getOrNull() } }
+        val quests = (0 until int("canonQuestCount", 0)).mapNotNull { i -> fields("canonQuest_${i}").takeIf { it.size >= 5 }?.let { x -> runCatching { CanonQuest(x[0], x[1], x[2], x[3], x[4].toLong()) }.getOrNull() } }
+        val discoveries = (0 until int("canonDiscoveryCount", 0)).mapNotNull { i -> fields("canonDiscovery_${i}").takeIf { it.size >= 5 }?.let { x -> runCatching { CanonDiscovery(x[0], x[1], CanonStatus.valueOf(x[2]), CanonSource.valueOf(x[3]), x[4].toLong()) }.getOrNull() } }
+        val history = (0 until int("historyCount", 0)).mapNotNull { i -> fields("history_${i}").takeIf { it.size >= 6 }?.let { x -> runCatching { CampaignHistoryEntry(x[0], x[1].toLong(), HistoryEventType.valueOf(x[2]), x[3], HistorySource.valueOf(x[4]), x[5].split(",").filter { it.isNotBlank() }) }.getOrNull() } }
         return GameState(
             campaign = CampaignState(
                 campaignId = string("campaignId"), character = CharacterIdentity(string("characterId"), string("characterName", "Aventureiro")),
@@ -99,7 +118,9 @@ object GameStatePersistenceCodec {
                 sceneTitle = string("sceneTitle", "Prologue"), sceneDescription = string("sceneDescription", "A aventura começa."),
                 exits = exits, log = log, turn = long("turn", 0L),
                 guardianMessage = string("guardianMessage", DEFAULT_GUARDIAN_PROLOGUE),
-                guardianHistory = string("guardianHistory").split(SEPARATOR).filter { it.isNotBlank() }
+                guardianHistory = string("guardianHistory").split(SEPARATOR).filter { it.isNotBlank() },
+                worldCanon = WorldCanon(locations, npcs, items, quests, discoveries),
+                history = history
             ), updatedAtEpochMs = long("updatedAt", 0L)
         )
     }

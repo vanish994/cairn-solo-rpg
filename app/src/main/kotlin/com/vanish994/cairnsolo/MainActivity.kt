@@ -28,6 +28,7 @@ import com.vanish994.cairnsolo.game.GameActionResolver
 import com.vanish994.cairnsolo.game.GameState
 import com.vanish994.cairnsolo.game.ExplorationEngine
 import com.vanish994.cairnsolo.game.LocalGameStateRepository
+import com.vanish994.cairnsolo.game.CanonResolver
 import com.vanish994.cairnsolo.guardian.GuardianRuleRequest
 import com.vanish994.cairnsolo.guardian.GuardianRuleResolution
 import com.vanish994.cairnsolo.rules.*
@@ -79,6 +80,7 @@ class MainActivity : ComponentActivity() {
                     )
                 }
                 val guardianRuleResolver = remember { GuardianRuleResolver(actionResolver) }
+                val canonResolver = remember { CanonResolver() }
                 var screen by remember { mutableStateOf(AppScreen.CHARACTER) }
 
                 Surface(Modifier.fillMaxSize(), color = CairnBackground) {
@@ -187,12 +189,15 @@ class MainActivity : ComponentActivity() {
                                                     "Resultado autoritativo: " + resolution.resultText
                                             )
                                                 .onSuccess { response ->
-                                                    val next = resolution.state.applyGuardianResponse(
+                                                    val narrated = resolution.state.applyGuardianResponse(
                                                         narration = response.narration,
                                                         sceneTitle = response.sceneTitle,
                                                         sceneDescription = response.sceneDescription,
                                                         interactionId = response.interactionId
                                                     )
+                                                    val next = runCatching {
+                                                        canonResolver.apply(narrated, response.canonProposals)
+                                                    }.getOrElse { narrated }
                                                     repository.save(next)
                                                     state = next
                                                     lastResolution = null
@@ -214,12 +219,15 @@ class MainActivity : ComponentActivity() {
                                         scope.launch {
                                             guardianClient.narrate(current, intent)
                                                 .onSuccess { response ->
-                                                    val next = current.applyGuardianResponse(
+                                                    val narrated = current.applyGuardianResponse(
                                                         narration = response.narration,
                                                         sceneTitle = response.sceneTitle,
                                                         sceneDescription = response.sceneDescription,
                                                         interactionId = response.interactionId
                                                     )
+                                                    val next = runCatching {
+                                                        canonResolver.apply(narrated, response.canonProposals)
+                                                    }.getOrElse { narrated }
                                                     repository.save(next)
                                                     state = next
                                                     pendingRule = response.ruleRequest

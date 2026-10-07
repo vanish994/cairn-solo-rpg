@@ -3,6 +3,9 @@ package com.vanish994.cairnsolo.guardian
 import android.util.Log
 import com.vanish994.cairnsolo.BuildConfig
 import com.vanish994.cairnsolo.game.GameState
+import com.vanish994.cairnsolo.game.CanonProposal
+import com.vanish994.cairnsolo.game.CanonStatus
+import com.vanish994.cairnsolo.game.CanonSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -23,7 +26,8 @@ data class GuardianResponse(
     val sceneDescription: String,
     val ruleRequest: GuardianRuleRequest?,
     val suggestedActions: List<String>,
-    val interactionId: String?
+    val interactionId: String?,
+    val canonProposals: List<CanonProposal> = emptyList()
 )
 
 interface GuardianClient {
@@ -99,6 +103,14 @@ class HttpGuardianClient(
             put("guardianMessage", c.guardianMessage)
             put("guardianInteractionId", c.guardianInteractionId ?: JSONObject.NULL)
             put("guardianHistory", JSONArray(c.guardianHistory.takeLast(12)))
+            put("worldCanon", JSONObject().apply {
+                put("locations", JSONArray(c.worldCanon.locations.map { JSONObject().apply { put("id", it.id); put("name", it.name); put("description", it.description); put("status", it.status.name) } }))
+                put("npcs", JSONArray(c.worldCanon.npcs.map { JSONObject().apply { put("id", it.id); put("name", it.name); put("role", it.role ?: JSONObject.NULL); put("description", it.description ?: JSONObject.NULL); put("status", it.status.name) } }))
+                put("importantItems", JSONArray(c.worldCanon.importantItems.map { JSONObject().apply { put("id", it.id); put("name", it.name); put("description", it.description ?: JSONObject.NULL); put("status", it.status.name) } }))
+                put("quests", JSONArray(c.worldCanon.quests.map { JSONObject().apply { put("id", it.id); put("title", it.title); put("description", it.description); put("status", it.status) } }))
+                put("discoveries", JSONArray(c.worldCanon.discoveries.map { JSONObject().apply { put("id", it.id); put("text", it.text); put("status", it.status.name); put("source", it.source.name) } }))
+            })
+            put("recentHistory", JSONArray(c.history.takeLast(12).map { JSONObject().apply { put("id", it.id); put("turn", it.turn); put("type", it.type.name); put("summary", it.summary); put("source", it.source.name) } }))
             put("stats", JSONObject().apply {
                 put("str", r.str)
                 put("dex", r.dex)
@@ -136,13 +148,37 @@ class HttpGuardianClient(
             val array = json.optJSONArray("suggestedActions") ?: JSONArray()
             for (i in 0 until array.length()) add(array.getString(i))
         }
+        val proposals = buildList {
+            val array = json.optJSONArray("canonProposals") ?: JSONArray()
+            for (i in 0 until array.length()) parseCanonProposal(array.getJSONObject(i))?.let(::add)
+        }
         return GuardianResponse(
             narration = json.getString("narration"),
             sceneTitle = json.getString("sceneTitle"),
             sceneDescription = json.getString("sceneDescription"),
             ruleRequest = ruleRequest,
             suggestedActions = actions,
-            interactionId = json.optString("interactionId").takeIf { it.isNotBlank() }
+            interactionId = json.optString("interactionId").takeIf { it.isNotBlank() },
+            canonProposals = proposals
         )
+    }
+
+    private fun parseCanonProposal(json: JSONObject): CanonProposal? {
+        val type = json.optString("type").uppercase()
+        val id = json.optString("id")
+        val status = runCatching { CanonStatus.valueOf(json.optString("status").uppercase()) }.getOrNull() ?: return null
+        val source = runCatching { CanonSource.valueOf(json.optString("source").uppercase()) }.getOrNull() ?: return null
+        val related = buildList {
+            val ids = json.optJSONArray("relatedEntityIds") ?: JSONArray()
+            for (i in 0 until ids.length()) add(ids.getString(i))
+        }
+        return when (type) {
+            "UPSERT_NPC" -> CanonProposal.UpsertNpc(id, json.optString("name"), json.optString("role").takeIf { it.isNotBlank() }, json.optString("description").takeIf { it.isNotBlank() }, status, source, related)
+            "DISCOVER_LOCATION" -> CanonProposal.DiscoverLocation(id, json.optString("name"), json.optString("description"), status, source, related)
+            "ADD_IMPORTANT_ITEM" -> CanonProposal.AddImportantItem(id, json.optString("name"), json.optString("description").takeIf { it.isNotBlank() }, status, source, related)
+            "CREATE_QUEST" -> CanonProposal.CreateQuest(id, json.optString("name", json.optString("title")), json.optString("description"), status, source, related)
+            "ADD_DISCOVERY", "ADD_RUMOR" -> CanonProposal.AddDiscovery(id, json.optString("text"), status, source, related)
+            else -> null
+        }
     }
 }

@@ -49,7 +49,9 @@ data class CampaignState(
     val log: List<String> = emptyList(),
     val guardianMessage: String = DEFAULT_GUARDIAN_PROLOGUE,
     val guardianHistory: List<String> = emptyList(),
-    val guardianInteractionId: String? = null
+    val guardianInteractionId: String? = null,
+    val worldCanon: WorldCanon = WorldCanon(),
+    val history: List<CampaignHistoryEntry> = emptyList()
 )
 
 data class GameState(
