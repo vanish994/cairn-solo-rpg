@@ -28,6 +28,8 @@ import com.vanish994.cairnsolo.game.GameActionResolver
 import com.vanish994.cairnsolo.game.GameState
 import com.vanish994.cairnsolo.game.ExplorationEngine
 import com.vanish994.cairnsolo.game.LocalGameStateRepository
+import com.vanish994.cairnsolo.guardian.GuardianRuleRequest
+import com.vanish994.cairnsolo.guardian.GuardianRuleResolution
 import com.vanish994.cairnsolo.rules.*
 import kotlin.random.Random
 
@@ -67,6 +69,8 @@ class MainActivity : ComponentActivity() {
                 val scope = rememberCoroutineScope()
                 var guardianLoading by remember { mutableStateOf(false) }
                 var guardianError by remember { mutableStateOf<String?>(null) }
+                var pendingRule by remember { mutableStateOf<GuardianRuleRequest?>(null) }
+                var lastResolution by remember { mutableStateOf<GuardianRuleResolution?>(null) }
                 val actionResolver = remember {
                     GameActionResolver(
                         exploration = ExplorationEngine(KotlinRandomSource()),
@@ -143,63 +147,83 @@ class MainActivity : ComponentActivity() {
                             AppScreen.EXPLORATION -> ExplorationScreen(
                                 state = current,
                                 onAction = { action ->
-                                    val result = actionResolver.resolve(current, action)
-                                    repository.save(result.state)
-                                    state = result.state
+                                    if (pendingRule == null && lastResolution == null) {
+                                        val result = actionResolver.resolve(current, action)
+                                        repository.save(result.state)
+                                        state = result.state
+                                    }
                                 },
                                 guardianLoading = guardianLoading,
                                 guardianError = guardianError,
-                                onGuardianIntent = { intent ->
-                                    guardianLoading = true
-                                    guardianError = null
-                                    scope.launch {
-                                        guardianClient.narrate(current, intent)
-                                            .onSuccess { response ->
-                                                var next = current.applyGuardianResponse(
-                                                    narration = response.narration,
-                                                    sceneTitle = response.sceneTitle,
-                                                    sceneDescription = response.sceneDescription,
-                                                    interactionId = response.interactionId
-                                                )
-                                                repository.save(next)
-                                                state = next
-
-                                                response.ruleRequest?.let { request ->
-                                                    runCatching {
-                                                        val resolution = guardianRuleResolver.resolve(next, request)
-                                                        next = resolution.state
-                                                        repository.save(next)
-                                                        state = next
-
-                                                        guardianClient.narrate(
-                                                            next,
-                                                            "O motor de regras resolveu a solicitação anterior. " +
-                                                                "Resultado autoritativo: " + resolution.resultText
-                                                        )
-                                                            .onSuccess { followUp ->
-                                                                next = next.applyGuardianResponse(
-                                                                    narration = followUp.narration,
-                                                                    sceneTitle = followUp.sceneTitle,
-                                                                    sceneDescription = followUp.sceneDescription,
-                                                                    interactionId = followUp.interactionId
-                                                                )
-                                                                repository.save(next)
-                                                                state = next
-                                                            }
-                                                            .onFailure { error ->
-                                                                guardianError = error.message
-                                                                    ?: "A regra foi resolvida, mas o Guardião não respondeu à consequência."
-                                                            }
-                                                    }.onFailure { error ->
-                                                        guardianError = error.message
-                                                            ?: "O Guardião solicitou uma regra que o motor não reconhece."
-                                                    }
-                                                }
+                                pendingRule = pendingRule,
+                                lastResolution = lastResolution,
+                                onResolveRule = {
+                                    pendingRule?.let { request ->
+                                        runCatching { guardianRuleResolver.resolve(state!!, request) }
+                                            .onSuccess { resolution ->
+                                                repository.save(resolution.state)
+                                                state = resolution.state
+                                                pendingRule = null
+                                                lastResolution = resolution
                                             }
                                             .onFailure { error ->
-                                                guardianError = error.message ?: "Não foi possível falar com o Guardião."
+                                                guardianError = error.message
+                                                    ?: "Não foi possível resolver esta regra."
                                             }
-                                        guardianLoading = false
+                                    }
+                                },
+                                onContinueNarrative = {
+                                    lastResolution?.let { resolution ->
+                                        guardianLoading = true
+                                        guardianError = null
+                                        scope.launch {
+                                            guardianClient.narrate(
+                                                resolution.state,
+                                                "O motor de regras resolveu a solicitação anterior. " +
+                                                    "Resultado autoritativo: " + resolution.resultText
+                                            )
+                                                .onSuccess { response ->
+                                                    val next = resolution.state.applyGuardianResponse(
+                                                        narration = response.narration,
+                                                        sceneTitle = response.sceneTitle,
+                                                        sceneDescription = response.sceneDescription,
+                                                        interactionId = response.interactionId
+                                                    )
+                                                    repository.save(next)
+                                                    state = next
+                                                    lastResolution = null
+                                                }
+                                                .onFailure { error ->
+                                                    guardianError = error.message
+                                                        ?: "A regra foi resolvida, mas o Guardião não respondeu à consequência."
+                                                }
+                                            guardianLoading = false
+                                        }
+                                    }
+                                },
+                                onGuardianIntent = { intent ->
+                                    if (pendingRule == null && lastResolution == null) {
+                                        guardianLoading = true
+                                        guardianError = null
+                                        scope.launch {
+                                            guardianClient.narrate(current, intent)
+                                                .onSuccess { response ->
+                                                    val next = current.applyGuardianResponse(
+                                                        narration = response.narration,
+                                                        sceneTitle = response.sceneTitle,
+                                                        sceneDescription = response.sceneDescription,
+                                                        interactionId = response.interactionId
+                                                    )
+                                                    repository.save(next)
+                                                    state = next
+                                                    pendingRule = response.ruleRequest
+                                                    lastResolution = null
+                                                }
+                                                .onFailure { error ->
+                                                    guardianError = error.message ?: "Não foi possível falar com o Guardião."
+                                                }
+                                            guardianLoading = false
+                                        }
                                     }
                                 },
                                 onBack = { screen = AppScreen.CHARACTER }
@@ -381,6 +405,10 @@ private fun ExplorationScreen(
     onAction: (GameAction) -> Unit,
     guardianLoading: Boolean,
     guardianError: String?,
+    pendingRule: GuardianRuleRequest?,
+    lastResolution: GuardianRuleResolution?,
+    onResolveRule: () -> Unit,
+    onContinueNarrative: () -> Unit,
     onGuardianIntent: (String) -> Unit,
     onBack: () -> Unit
 ) {
@@ -450,6 +478,14 @@ private fun ExplorationScreen(
             )
         }
 
+        pendingRule?.let { request ->
+            RollRequestCard(request, enabled = !guardianLoading, onRoll = onResolveRule)
+        }
+
+        lastResolution?.let { resolution ->
+            RollResultCard(resolution, enabled = !guardianLoading, onContinue = onContinueNarrative)
+        }
+
         Text(
             "SUA DECISÃO",
             color = CairnAccent,
@@ -470,6 +506,7 @@ private fun ExplorationScreen(
                 )
             },
             maxLines = 2,
+            enabled = !guardianLoading && pendingRule == null && lastResolution == null,
             shape = RoundedCornerShape(8.dp)
         )
 
@@ -487,7 +524,7 @@ private fun ExplorationScreen(
                 onGuardianIntent(intent.trim())
                 intent = ""
             },
-            enabled = intent.isNotBlank() && !guardianLoading,
+            enabled = intent.isNotBlank() && !guardianLoading && pendingRule == null && lastResolution == null,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(38.dp),
@@ -513,12 +550,12 @@ private fun ExplorationScreen(
             ActionButton(
                 "Continuar",
                 Modifier.weight(1f),
-                onClick = { onAction(GameAction.ExploreContinue) }
+                onClick = { if (pendingRule == null && lastResolution == null) onAction(GameAction.ExploreContinue) }
             )
             ActionButton(
                 "Investigar",
                 Modifier.weight(1f),
-                onClick = { onAction(GameAction.ExploreInvestigate) }
+                onClick = { if (pendingRule == null && lastResolution == null) onAction(GameAction.ExploreInvestigate) }
             )
             ActionButton(
                 "Ficha",
@@ -533,9 +570,81 @@ private fun ExplorationScreen(
             Modifier.fillMaxWidth(),
             outlined = true
         ) {
-            onAction(GameAction.ExploreRest)
+            if (pendingRule == null && lastResolution == null) onAction(GameAction.ExploreRest)
         }
     }
+}
+
+@Composable
+private fun RollRequestCard(
+    request: GuardianRuleRequest,
+    enabled: Boolean,
+    onRoll: () -> Unit
+) {
+    SectionCard {
+        Text("ROLAGEM NECESSÁRIA", color = CairnAccent, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(5.dp))
+        Text(ruleRequestTitle(request), color = CairnText, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Text(ruleRequestDescription(request), color = CairnMuted, style = MaterialTheme.typography.bodySmall)
+        Spacer(Modifier.height(8.dp))
+        Button(
+            onClick = onRoll,
+            enabled = enabled,
+            modifier = Modifier.fillMaxWidth().height(42.dp),
+            shape = RoundedCornerShape(7.dp)
+        ) {
+            Text(if (request.type.equals("SAVE", ignoreCase = true)) "Rolar 1d20" else "Resolver regra", fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
+private fun RollResultCard(
+    resolution: GuardianRuleResolution,
+    enabled: Boolean,
+    onContinue: () -> Unit
+) {
+    val save = resolution.gameResult.events.filterIsInstance<com.vanish994.cairnsolo.game.GameEvent.SaveResolved>().firstOrNull()
+    val success = save?.success
+    SectionCard {
+        Text("RESULTADO", color = CairnAccent, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(5.dp))
+        if (save != null) {
+            Text("${save.roll}", color = CairnText, style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold)
+            Text(
+                if (success == true) "SUCESSO" else "FALHA",
+                color = if (success == true) CairnAccent else CairnDanger,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Text("Teste de ${save.attribute.name}", color = CairnMuted, style = MaterialTheme.typography.bodySmall)
+        } else {
+            Text(resolution.resultText, color = CairnText, style = MaterialTheme.typography.bodyMedium)
+        }
+        Spacer(Modifier.height(8.dp))
+        Button(
+            onClick = onContinue,
+            enabled = enabled,
+            modifier = Modifier.fillMaxWidth().height(42.dp),
+            shape = RoundedCornerShape(7.dp)
+        ) { Text("Continuar história", fontWeight = FontWeight.Bold) }
+    }
+}
+
+private fun ruleRequestTitle(request: GuardianRuleRequest): String = when (request.type.uppercase()) {
+    "SAVE" -> "Teste de ${request.attribute.orEmpty().uppercase()}"
+    "DAMAGE" -> "Perigo: dano iminente"
+    "FATIGUE" -> "Exaustão"
+    "REST" -> "Descanso"
+    else -> request.type.replace('_', ' ').lowercase().replaceFirstChar { it.uppercase() }
+}
+
+private fun ruleRequestDescription(request: GuardianRuleRequest): String = when (request.type.uppercase()) {
+    "SAVE" -> "Role 1d20 e obtenha sucesso se o resultado for igual ou menor que seu atributo."
+    "DAMAGE" -> "O Rules Engine aplicará ${request.amount ?: 0} de dano, respeitando a Armadura."
+    "FATIGUE" -> "O Rules Engine aplicará ${request.amount ?: 1} ponto(s) de Fadiga."
+    "REST" -> "O Rules Engine resolverá o descanso conforme as regras de Cairn."
+    else -> "O Rules Engine resolverá esta consequência antes da narrativa continuar."
 }
 
 @Composable
