@@ -346,13 +346,12 @@ private fun CharacterCreation(
     var backgroundMenu by remember { mutableStateOf(false) }
     var selectedSprite by remember { mutableStateOf(0) }
     Box(Modifier.fillMaxSize()) {
-        Image(
-            painter = painterResource(R.drawable.cairn_scene_old_road),
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize()
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Color(0xFF0A0908))
         )
-        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.58f)))
+        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.18f)))
         Column(
             Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
