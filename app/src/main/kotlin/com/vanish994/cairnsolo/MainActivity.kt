@@ -3,6 +3,7 @@ package com.vanish994.cairnsolo
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -16,10 +17,14 @@ import androidx.compose.runtime.*
 import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.vanish994.cairnsolo.ai.AIProviderFactory
 import com.vanish994.cairnsolo.ai.WardenRequest
 import com.vanish994.cairnsolo.game.GameAction
@@ -38,7 +43,21 @@ class MainActivity : ComponentActivity() {
         val repository = LocalGameStateRepository(applicationContext)
 
         setContent {
-            MaterialTheme(colorScheme = darkColorScheme()) {
+            MaterialTheme(
+                colorScheme = darkColorScheme(
+                    primary = CairnGold,
+                    onPrimary = CairnInk,
+                    primaryContainer = CairnGoldDim,
+                    onPrimaryContainer = CairnPaper,
+                    secondary = CairnEmber,
+                    background = CairnInk,
+                    surface = CairnPanel,
+                    surfaceVariant = CairnPanelRaised,
+                    onBackground = CairnPaper,
+                    onSurface = CairnPaper,
+                    onSurfaceVariant = CairnMuted
+                )
+            ) {
                 var state by remember { mutableStateOf(repository.load()) }
                 var name by remember { mutableStateOf("") }
                 var rolled by remember { mutableStateOf<RolledCharacter?>(null) }
@@ -280,54 +299,99 @@ private fun ExplorationScreen(
 ) {
     val c = state.campaign
     LazyColumn(
-        Modifier.fillMaxSize().padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+        modifier = Modifier
+            .fillMaxSize()
+            .background(CairnInk)
+            .padding(horizontal = 20.dp, vertical = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item {
-            Text("Exploração", style = MaterialTheme.typography.headlineMedium)
-            Text("Turno " + c.turn + " • " + sceneTypeLabel(c.sceneType))
-            Spacer(Modifier.height(16.dp))
-            Text(c.sceneTitle, style = MaterialTheme.typography.titleLarge)
-            Spacer(Modifier.height(8.dp))
-            Text(wardenStatus, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-            Text(wardenNarrative ?: c.sceneDescription)
-            Spacer(Modifier.height(16.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text("EXPLORAÇÃO", style = CairnEyebrow())
+                    Text("O caminho ainda não terminou", style = CairnTitle())
+                }
+                CairnTurnBadge(c.turn)
+            }
+        }
+        item {
+            CairnStoryCard(
+                eyebrow = "CENA",
+                title = c.sceneTitle.ifBlank { "A estrada esquecida" },
+                body = c.sceneDescription.ifBlank { "A névoa cobre o caminho e nenhum som se move além das árvores." },
+                accent = CairnGold
+            )
+        }
+        item {
+            CairnStoryCard(
+                eyebrow = "GUARDIÃO",
+                title = if (wardenLoading) "O Guardião observa" else wardenStatus,
+                body = wardenNarrative ?: "A presença à frente permanece em silêncio, esperando sua próxima escolha.",
+                accent = CairnEmber
+            )
+        }
+        item {
             OutlinedTextField(
                 value = playerInput,
                 onValueChange = onPlayerInputChange,
                 modifier = Modifier.fillMaxWidth(),
-                label = { Text("O que você faz?") },
-                placeholder = { Text("Descreva a ação do seu personagem…") },
-                minLines = 2,
-                maxLines = 4,
-                enabled = !wardenLoading
+                label = { Text("O que você faz?", color = CairnGold) },
+                placeholder = { Text("Descreva a ação do seu aventureiro…", color = CairnMuted) },
+                minLines = 4,
+                maxLines = 6,
+                enabled = !wardenLoading,
+                shape = RoundedCornerShape(16.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = CairnGold,
+                    unfocusedBorderColor = CairnLine,
+                    focusedContainerColor = CairnPanel,
+                    unfocusedContainerColor = CairnPanel,
+                    cursorColor = CairnGold,
+                    focusedTextColor = CairnPaper,
+                    unfocusedTextColor = CairnPaper
+                )
             )
-            Spacer(Modifier.height(8.dp))
+        }
+        item {
             Button(
                 onClick = onSubmitPlayerInput,
-                modifier = Modifier.fillMaxWidth(),
-                enabled = playerInput.isNotBlank() && !wardenLoading
+                modifier = Modifier.fillMaxWidth().height(52.dp),
+                enabled = playerInput.isNotBlank() && !wardenLoading,
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = CairnGold,
+                    contentColor = CairnInk,
+                    disabledContainerColor = CairnPanelRaised,
+                    disabledContentColor = CairnMuted
+                )
             ) {
-                Text(if (wardenLoading) "O Guardião está pensando…" else "Enviar ao Guardião")
+                Text(if (wardenLoading) "O GUARDIÃO ESTÁ PENSANDO…" else "FALAR COM O GUARDIÃO", fontWeight = FontWeight.Bold)
             }
-            Spacer(Modifier.height(16.dp))
+        }
+        item {
             if (c.exits.isNotEmpty()) {
-                Text("Possibilidades: " + c.exits.joinToString(" • "))
-                Spacer(Modifier.height(12.dp))
+                Text("Possibilidades  •  " + c.exits.joinToString("  •  "), style = MaterialTheme.typography.bodySmall, color = CairnMuted)
             }
-            Button(onClick = { onAction(GameAction.ExploreContinue) }) { Text("Continuar") }
-            Spacer(Modifier.height(8.dp))
-            Button(onClick = { onAction(GameAction.ExploreInvestigate) }) { Text("Investigar") }
-            Spacer(Modifier.height(8.dp))
-            OutlinedButton(onClick = { onAction(GameAction.ExploreRest) }) { Text("Descansar") }
-            Spacer(Modifier.height(16.dp))
-            OutlinedButton(onClick = onBack) { Text("Voltar à ficha") }
-            Spacer(Modifier.height(16.dp))
-            Text("Diário", style = MaterialTheme.typography.titleMedium)
+        }
+        item {
+            CairnBottomBar(
+                onContinue = { onAction(GameAction.ExploreContinue) },
+                onInvestigate = { onAction(GameAction.ExploreInvestigate) },
+                onSheet = onBack,
+                onRest = { onAction(GameAction.ExploreRest) }
+            )
+        }
+        item {
+            Text("REGISTRO DA JORNADA", style = CairnEyebrow(), modifier = Modifier.padding(top = 6.dp))
         }
         items(c.log.takeLast(10)) { entry ->
-            Text(entry, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp))
+            Text(entry, modifier = Modifier.fillMaxWidth(), color = CairnMuted, style = MaterialTheme.typography.bodySmall)
         }
+        item { Spacer(Modifier.height(12.dp)) }
     }
 }
 
@@ -345,104 +409,195 @@ private fun CharacterCreation(
 ) {
     var backgroundMenu by remember { mutableStateOf(false) }
     var selectedSprite by remember { mutableStateOf(0) }
-    Box(Modifier.fillMaxSize()) {
-        Box(
-            Modifier
-                .fillMaxSize()
-                .background(Color(0xFF0A0908))
-        )
-        Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.18f)))
-        Column(
-            Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Text("CAIRN", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-            Text("Criação de personagem", style = MaterialTheme.typography.headlineSmall)
-            OutlinedTextField(
-                value = name,
-                onValueChange = onNameChange,
-                label = { Text("Nome do aventureiro") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
+    var showHelp by remember { mutableStateOf(false) }
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(CairnInk)
+            .padding(horizontal = 20.dp, vertical = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Text("CAIRN • SOLO RPG", style = CairnEyebrow())
+        Text("Criação do aventureiro", style = CairnTitle())
+        Text("Antes da estrada, existe uma escolha.", color = CairnMuted, style = MaterialTheme.typography.bodyMedium)
+
+        OutlinedTextField(
+            value = name,
+            onValueChange = onNameChange,
+            label = { Text("Nome do aventureiro", color = CairnGold) },
+            placeholder = { Text("Como será lembrado?", color = CairnMuted) },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(14.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = CairnGold,
+                unfocusedBorderColor = CairnLine,
+                focusedContainerColor = CairnPanel,
+                unfocusedContainerColor = CairnPanel,
+                cursorColor = CairnGold,
+                focusedTextColor = CairnPaper,
+                unfocusedTextColor = CairnPaper
             )
-            Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Card(
-                    Modifier.weight(0.9f).fillMaxHeight(),
-                    colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.40f)),
-                    shape = RoundedCornerShape(18.dp)
-                ) {
-                    Column(Modifier.fillMaxSize().padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("Retrato", style = MaterialTheme.typography.labelLarge)
-                        Image(
-                            painter = painterResource(CAIRN_PROTAGONIST_SPRITES[selectedSprite]),
-                            contentDescription = "Retrato do protagonista ${selectedSprite + 1}",
-                            contentScale = ContentScale.Fit,
-                            modifier = Modifier.weight(1f).fillMaxWidth()
-                        )
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                            CAIRN_PROTAGONIST_SPRITES.forEachIndexed { index, sprite ->
+        )
+
+        CairnPanelCard {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Column(Modifier.weight(0.85f), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("RETRATO", style = CairnEyebrow())
+                    Image(
+                        painter = painterResource(CAIRN_PROTAGONIST_SPRITES[selectedSprite]),
+                        contentDescription = "Retrato do aventureiro ${selectedSprite + 1}",
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.height(190.dp).fillMaxWidth()
+                    )
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        items(CAIRN_PROTAGONIST_SPRITES.size) { index ->
+                            Surface(
+                                modifier = Modifier.size(38.dp).clickable { selectedSprite = index },
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (selectedSprite == index) CairnGoldDim else CairnPanelRaised,
+                                border = if (selectedSprite == index) BorderStroke(1.dp, CairnGold) else null
+                            ) {
                                 Image(
-                                    painter = painterResource(sprite),
+                                    painter = painterResource(CAIRN_PROTAGONIST_SPRITES[index]),
                                     contentDescription = "Selecionar retrato ${index + 1}",
                                     contentScale = ContentScale.Crop,
-                                    modifier = Modifier.size(42.dp).clickable { selectedSprite = index }
+                                    modifier = Modifier.padding(3.dp)
                                 )
                             }
                         }
                     }
                 }
-                Card(
-                    Modifier.weight(1.1f).fillMaxHeight(),
-                    colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.52f)),
-                    shape = RoundedCornerShape(18.dp)
-                ) {
-                    Column(Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text("Ficha rápida", style = MaterialTheme.typography.titleMedium)
-                        if (rolled == null) {
-                            Text("Role para gerar atributos, HP e background.", style = MaterialTheme.typography.bodyMedium)
-                        } else {
-                            Text("FOR ${rolled.str}   DES ${rolled.dex}   VON ${rolled.wil}")
-                            Text("HP ${rolled.hp}   Ouro ${rolled.gold} po")
-                            rolled.age?.let { Text("Idade: $it anos") }
-                            Text("Background: ${selectedBackground?.let(::backgroundLabel) ?: "—"}")
-                            Text("Físico: ${rolled.traits?.let { traitLabel(it.physique) } ?: "—"}", style = MaterialTheme.typography.bodySmall)
-                            Text("Vestuário: ${rolled.traits?.let { traitLabel(it.clothing) } ?: "—"}", style = MaterialTheme.typography.bodySmall)
-                            Spacer(Modifier.weight(1f))
-                            Text("Trocar atributos", style = MaterialTheme.typography.labelLarge)
-                            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                TextButton(onClick = { onSwap(AttributeSlot.STR, AttributeSlot.DEX) }) { Text("FOR/DES") }
-                                TextButton(onClick = { onSwap(AttributeSlot.STR, AttributeSlot.WIL) }) { Text("FOR/VON") }
+                Column(Modifier.weight(1.15f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("FICHA DO DESTINO", style = CairnEyebrow())
+                    if (rolled == null) {
+                        Text("Role os dados para revelar atributos, vitalidade e passado.", color = CairnMuted)
+                    } else {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            CairnStat("FOR", rolled.str)
+                            CairnStat("DES", rolled.dex)
+                            CairnStat("VON", rolled.wil)
+                        }
+                        Text("HP ${rolled.hp}   •   ${rolled.gold} po", color = CairnPaper)
+                        Text("${rolled.age ?: "—"} anos  •  ${selectedBackground?.let(::backgroundLabel) ?: "sem passado"}", color = CairnMuted, style = MaterialTheme.typography.bodySmall)
+                        Text("${rolled.traits?.let { traitLabel(it.physique) } ?: "—"}  /  ${rolled.traits?.let { traitLabel(it.clothing) } ?: "—"}", color = CairnMuted, style = MaterialTheme.typography.bodySmall)
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            TextButton(onClick = { onSwap(AttributeSlot.STR, AttributeSlot.DEX) }) { Text("FOR ↔ DES", color = CairnGold) }
+                            TextButton(onClick = { onSwap(AttributeSlot.STR, AttributeSlot.WIL) }) { Text("FOR ↔ VON", color = CairnGold) }
+                        }
+                        Box {
+                            OutlinedButton(onClick = { backgroundMenu = true }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp)) {
+                                Text(selectedBackground?.let(::backgroundLabel) ?: "Escolher background")
                             }
-                            TextButton(onClick = { onSwap(AttributeSlot.DEX, AttributeSlot.WIL) }) { Text("DES/VON") }
-                            Box {
-                                OutlinedButton(onClick = { backgroundMenu = true }, modifier = Modifier.fillMaxWidth()) {
-                                    Text(selectedBackground?.let(::backgroundLabel) ?: "Escolher background")
-                                }
-                                DropdownMenu(expanded = backgroundMenu, onDismissRequest = { backgroundMenu = false }) {
-                                    Background.entries.forEach { background ->
-                                        DropdownMenuItem(
-                                            text = { Text(backgroundLabel(background)) },
-                                            onClick = { onBackgroundChange(background); backgroundMenu = false }
-                                        )
-                                    }
+                            DropdownMenu(expanded = backgroundMenu, onDismissRequest = { backgroundMenu = false }) {
+                                Background.entries.forEach { background ->
+                                    DropdownMenuItem(text = { Text(backgroundLabel(background)) }, onClick = { onBackgroundChange(background); backgroundMenu = false })
                                 }
                             }
                         }
                     }
                 }
             }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = onRoll, modifier = Modifier.weight(1f)) {
-                    Text(if (rolled == null) "Rolar" else "Rolar novamente")
-                }
-                Button(onClick = onCreate, enabled = name.isNotBlank() && rolled != null, modifier = Modifier.weight(1.5f)) {
-                    Text("Começar aventura")
-                }
-                OutlinedButton(onClick = onRules, modifier = Modifier.weight(0.8f)) { Text("Regras") }
+        }
+
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            OutlinedButton(onClick = onRoll, modifier = Modifier.weight(0.8f).height(52.dp), shape = RoundedCornerShape(14.dp)) {
+                Text(if (rolled == null) "ROLAR" else "ROLAR NOVAMENTE", fontWeight = FontWeight.Bold)
+            }
+            Button(
+                onClick = onCreate,
+                enabled = name.isNotBlank() && rolled != null,
+                modifier = Modifier.weight(1.35f).height(52.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = CairnGold, contentColor = CairnInk, disabledContainerColor = CairnPanelRaised, disabledContentColor = CairnMuted)
+            ) { Text("COMEÇAR AVENTURA", fontWeight = FontWeight.Bold) }
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = { showHelp = !showHelp }) { Text(if (showHelp) "Ocultar fórmula" else "Como funciona?", color = CairnMuted) }
+            TextButton(onClick = onRules) { Text("Regras", color = CairnMuted) }
+        }
+        if (showHelp) {
+            CairnPanelCard {
+                Text("FÓRMULA DOS ATRIBUTOS", style = CairnEyebrow())
+                Text("FOR, DES e VON são rolados com 3d6. HP é 1d6. Background, idade e traços surgem de novas rolagens.", color = CairnMuted, style = MaterialTheme.typography.bodySmall)
             }
         }
     }
 }
+
+@Composable
+private fun CairnStoryCard(eyebrow: String, title: String, body: String, accent: Color) {
+    CairnPanelCard {
+        Row(verticalAlignment = Alignment.Top) {
+            Box(Modifier.width(3.dp).height(66.dp).background(accent, RoundedCornerShape(3.dp)))
+            Spacer(Modifier.width(12.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(eyebrow, style = CairnEyebrow(), color = accent)
+                Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                Text(body, color = CairnMuted, style = MaterialTheme.typography.bodyMedium)
+            }
+        }
+    }
+}
+
+@Composable
+private fun CairnPanelCard(content: @Composable ColumnScope.() -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = CairnPanel),
+        border = BorderStroke(1.dp, CairnLine)
+    ) { Column(Modifier.padding(16.dp), content = content) }
+}
+
+@Composable
+private fun CairnTurnBadge(turn: Long) {
+    Surface(shape = RoundedCornerShape(10.dp), color = CairnPanelRaised, border = BorderStroke(1.dp, CairnLine)) {
+        Text("TURNO $turn", modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp), style = CairnEyebrow(), color = CairnGold)
+    }
+}
+
+@Composable
+private fun CairnStat(label: String, value: Int) {
+    Surface(Modifier.weight(1f), shape = RoundedCornerShape(9.dp), color = CairnPanelRaised) {
+        Column(Modifier.padding(vertical = 7.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(label, style = CairnEyebrow(), color = CairnGold)
+            Text(value.toString(), fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
+private fun CairnBottomBar(onContinue: () -> Unit, onInvestigate: () -> Unit, onSheet: () -> Unit, onRest: () -> Unit) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        CairnBarAction("Continuar", onContinue, Modifier.weight(1f), primary = true)
+        CairnBarAction("Investigar", onInvestigate, Modifier.weight(1f))
+        CairnBarAction("Ficha", onSheet, Modifier.weight(1f))
+        CairnBarAction("Descansar", onRest, Modifier.weight(1f))
+    }
+}
+
+@Composable
+private fun CairnBarAction(label: String, onClick: () -> Unit, modifier: Modifier, primary: Boolean = false) {
+    if (primary) {
+        Button(onClick, modifier.height(48.dp), shape = RoundedCornerShape(10.dp), contentPadding = PaddingValues(horizontal = 4.dp), colors = ButtonDefaults.buttonColors(containerColor = CairnGold, contentColor = CairnInk)) { Text(label, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold) }
+    } else {
+        OutlinedButton(onClick, modifier.height(48.dp), shape = RoundedCornerShape(10.dp), contentPadding = PaddingValues(horizontal = 4.dp)) { Text(label, style = MaterialTheme.typography.labelSmall) }
+    }
+}
+
+private fun CairnEyebrow() = TextStyle(fontFamily = FontFamily.SansSerif, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.4f.sp)
+private fun CairnTitle() = TextStyle(fontFamily = FontFamily.Serif, fontSize = 26.sp, fontWeight = FontWeight.SemiBold, color = CairnPaper)
+
+private val CairnInk = Color(0xFF0C0B0A)
+private val CairnPanel = Color(0xFF171411)
+private val CairnPanelRaised = Color(0xFF211D18)
+private val CairnLine = Color(0xFF42382C)
+private val CairnPaper = Color(0xFFE7DDCB)
+private val CairnMuted = Color(0xFFA79A88)
+private val CairnGold = Color(0xFFD2A85E)
+private val CairnGoldDim = Color(0xFF574325)
+private val CairnEmber = Color(0xFFB96E4B)
 
 @Composable
 private fun CharacterSheet(

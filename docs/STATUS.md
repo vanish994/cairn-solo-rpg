@@ -125,6 +125,15 @@ O descanso de exploração agora usa `RulesEngine.safeRest()`. Isso evita criar 
 - Toda alteração relevante deve ter testes automatizados quando houver comportamento determinístico verificável.
 - Uma etapa só é considerada validada após execução real do CI.
 
+## Atualização de interface — 2026-10-06
+
+- Redesign dark fantasy aplicado em `MainActivity.kt`.
+- Tela de criação com nome, retrato selecionável, ficha de rolagem, fórmula discreta e estados claros para os botões.
+- Tela de exploração com cards separados de Cena e Guardião, campo narrativo multilinha, ação principal e barra inferior padronizada.
+- Paleta própria com tinta escura, papel envelhecido, dourado suave e cobre; títulos serifados e rótulos compactos.
+- A lógica existente de rolagem, criação, exploração, descanso e narrativa foi preservada.
+- Validação local não executada: o checkout não possui `gradlew` e o sandbox não tem o comando `gradle`; o CI do GitHub Actions será a validação de build.
+
 ## Última validação
 
 Workflow GitHub Actions **Android Build #68**:
