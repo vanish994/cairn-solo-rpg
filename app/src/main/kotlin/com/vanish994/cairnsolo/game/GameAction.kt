@@ -100,7 +100,7 @@ class GameActionResolver(
     private val wilderness: com.vanish994.cairnsolo.rules.WildernessRules = com.vanish994.cairnsolo.rules.WildernessRules(rules.random, rules),
     private val reactions: com.vanish994.cairnsolo.rules.ReactionRules = com.vanish994.cairnsolo.rules.ReactionRules(rules.random),
     private val morale: com.vanish994.cairnsolo.rules.MoraleRules = com.vanish994.cairnsolo.rules.MoraleRules(rules.random),
-    private val hirelingRules: com.vanish994.cairnsolo.rules.HirelingRules = com.vanish994.cairnsolo.rules.HirelingRules(morale)
+    private val hirelingRules: com.vanish994.cairnsolo.rules.HirelingRules = com.vanish994.cairnsolo.rules.HirelingRules(morale),
     private val growth: GrowthResolver = GrowthResolver()
 ) {
     fun resolve(state: GameState, action: GameAction): GameResult = when (action) {
