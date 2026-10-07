@@ -92,77 +92,7 @@ class HttpGuardianClient(
         }
     }
 
-    private fun campaignJson(state: GameState): JSONObject {
-        val c = state.campaign
-        val r = c.rules
-        return JSONObject().apply {
-            put("campaignId", c.campaignId)
-            put("characterName", c.character.name)
-            put("turn", c.turn)
-            put("sceneId", c.sceneId)
-            put("sceneType", c.sceneType.name)
-            put("sceneTitle", c.sceneTitle)
-            put("sceneDescription", c.sceneDescription)
-            put("exits", JSONArray(c.exits))
-            put("guardianMessage", c.guardianMessage)
-            put("guardianInteractionId", c.guardianInteractionId ?: JSONObject.NULL)
-            put("guardianHistory", JSONArray(c.guardianHistory.takeLast(12)))
-            put("worldCanon", JSONObject().apply {
-                put("locations", JSONArray(c.worldCanon.locations.map { JSONObject().apply { put("id", it.id); put("name", it.name); put("description", it.description); put("status", it.status.name) } }))
-                put("npcs", JSONArray(c.worldCanon.npcs.map { JSONObject().apply { put("id", it.id); put("name", it.name); put("role", it.role ?: JSONObject.NULL); put("description", it.description ?: JSONObject.NULL); put("status", it.status.name) } }))
-                put("importantItems", JSONArray(c.worldCanon.importantItems.map { JSONObject().apply { put("id", it.id); put("name", it.name); put("description", it.description ?: JSONObject.NULL); put("status", it.status.name) } }))
-                put("quests", JSONArray(c.worldCanon.quests.map { JSONObject().apply { put("id", it.id); put("title", it.title); put("description", it.description); put("status", it.status) } }))
-                put("discoveries", JSONArray(c.worldCanon.discoveries.map { JSONObject().apply { put("id", it.id); put("text", it.text); put("status", it.status.name); put("source", it.source.name) } }))
-            })
-            put("recentHistory", JSONArray(c.history.takeLast(12).map { JSONObject().apply { put("id", it.id); put("turn", it.turn); put("type", it.type.name); put("summary", it.summary); put("source", it.source.name) } }))
-            put("growth", JSONObject().apply {
-                put("evidence", JSONArray(c.growth.evidence.takeLast(12).map { evidence -> JSONObject().apply {
-                    put("id", evidence.id); put("summary", evidence.summary); put("turn", evidence.turn)
-                    put("relatedEntityIds", JSONArray(evidence.relatedEntityIds)); put("focusedPattern", evidence.focusedPattern)
-                    put("seriousRisk", evidence.seriousRisk); put("uniqueInteraction", evidence.uniqueInteraction)
-                } }))
-                put("appliedProposalIds", JSONArray(c.growth.appliedProposalIds.takeLast(12)))
-                put("abilities", JSONArray(c.growth.abilities.takeLast(12).map { ability -> JSONObject().apply {
-                    put("id", ability.id); put("name", ability.name); put("description", ability.description)
-                    put("cost", ability.cost ?: JSONObject.NULL); put("acquiredTurn", ability.acquiredTurn)
-                } }))
-            })
-            c.worldState?.let { world ->
-                put("world", JSONObject().apply {
-                    put("currentLocationId", world.currentLocationId)
-                    put("factions", JSONArray(world.factions.map { faction -> JSONObject().apply {
-                        put("id", faction.id); put("name", faction.name); put("agenda", faction.agenda)
-                        put("goalProgress", faction.goalProgress); put("goals", JSONArray(faction.goals))
-                        put("obstacle", faction.obstacle); put("traits", JSONArray(faction.traits))
-                    } }))
-                    put("npcs", JSONArray(world.npcs.map { npc -> JSONObject().apply {
-                        put("id", npc.id); put("name", npc.name); put("role", npc.role)
-                        put("locationId", npc.locationId); put("factionId", npc.factionId ?: JSONObject.NULL)
-                    } }))
-                })
-            }
-            put("stats", JSONObject().apply {
-                put("str", r.str)
-                put("dex", r.dex)
-                put("wil", r.wil)
-                put("hp", r.hp)
-                put("maxHp", r.maxHp)
-                put("armor", r.armor)
-                put("deprived", r.deprived)
-                put("critical", r.critical)
-                put("dead", r.dead)
-            })
-            put("inventory", JSONArray(r.inventory.map { item ->
-                JSONObject().apply {
-                    put("id", item.id)
-                    put("slotCost", item.slotCost)
-                    put("damage", item.damage ?: JSONObject.NULL)
-                    put("armor", item.armor)
-                    put("uses", item.uses ?: JSONObject.NULL)
-                }
-            }))
-        }
-    }
+    private fun campaignJson(state: GameState): JSONObject = GuardianContextBuilder.from(state).toJson()
 
     private fun parseResponse(body: String): GuardianResponse {
         val json = JSONObject(body)
