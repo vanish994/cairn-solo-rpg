@@ -14,6 +14,7 @@ data class MJContext(
     val exits: List<String>,
     val turn: Long,
     val rules: CharacterState,
+    val world: WorldState?,
     val recentLog: List<String>
 ) {
     companion object {
@@ -32,6 +33,7 @@ data class MJContext(
                 exits = c.exits,
                 turn = c.turn,
                 rules = c.rules,
+                world = c.worldState,
                 recentLog = c.log.takeLast(recentEntries)
             )
         }
