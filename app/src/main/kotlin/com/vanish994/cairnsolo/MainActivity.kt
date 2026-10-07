@@ -7,6 +7,8 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -233,11 +235,45 @@ private fun SectionCard(modifier: Modifier = Modifier, content: @Composable Colu
 }
 
 @Composable
-private fun GuardianCard(message: String) {
-    SectionCard {
+private fun GuardianCard(message: String, history: List<String>) {
+    val scrollState = rememberScrollState()
+    val messages = (history + message).filter { it.isNotBlank() }.distinct()
+
+    LaunchedEffect(messages.size) {
+        scrollState.animateScrollTo(scrollState.maxValue)
+    }
+
+    SectionCard(Modifier.fillMaxSize()) {
         Text("GUARDIÃO", color = CairnAccent, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(8.dp))
-        Text(message, style = MaterialTheme.typography.bodyLarge, color = CairnText)
+        Spacer(Modifier.height(6.dp))
+        Column(
+            modifier = Modifier.weight(1f).fillMaxWidth().verticalScroll(scrollState),
+            verticalArrangement = Arrangement.spacedBy(7.dp)
+        ) {
+            messages.forEach { entry ->
+                val isPlayer = entry.startsWith("Você:")
+                Surface(
+                    color = if (isPlayer) CairnSurfaceRaised else Color(0xFF2A241E),
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(Modifier.padding(horizontal = 10.dp, vertical = 7.dp)) {
+                        Text(
+                            if (isPlayer) "VOCÊ" else "GUARDIÃO",
+                            color = if (isPlayer) CairnMuted else CairnAccent,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            if (isPlayer) entry.removePrefix("Você:").trim() else entry,
+                            color = CairnText,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -285,75 +321,67 @@ private fun ExplorationScreen(
     val c = state.campaign
     var intent by remember { mutableStateOf("") }
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize().padding(horizontal = 18.dp, vertical = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+    // A exploração é fixa para manter narrativa, entrada e ações sempre visíveis.
+    Column(
+        modifier = Modifier.fillMaxSize().padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(7.dp)
     ) {
-        item { CairnHeader("CAIRN", "Exploração", "Turno " + c.turn + "  ·  " + sceneTypeLabel(c.sceneType)) }
-        item {
-            SectionCard {
-                Text("PRÓLOGO", color = CairnAccent, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(5.dp))
-                Text(c.sceneTitle, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.height(6.dp))
-                Text(c.sceneDescription, color = CairnMuted)
+        CairnHeader("CAIRN", "Exploração", "Turno " + c.turn + "  ·  " + sceneTypeLabel(c.sceneType))
+        Row(
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(7.dp)
+        ) {
+            Box(Modifier.weight(1f).fillMaxHeight()) {
+                SectionCard(Modifier.fillMaxSize()) {
+                    Text("CENA", color = CairnAccent, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(4.dp))
+                    Text(c.sceneTitle, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, maxLines = 2)
+                    Spacer(Modifier.height(4.dp))
+                    Text(c.sceneDescription, color = CairnMuted, maxLines = 5)
+                }
             }
-        }
-        item { GuardianCard(c.guardianMessage) }
-        item {
-            SectionCard {
-                Text("O QUE VOCÊ FAZ?", color = CairnAccent, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(8.dp))
-                OutlinedTextField(
-                    value = intent,
-                    onValueChange = { intent = it },
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 96.dp),
-                    placeholder = { Text("Descreva a intenção do aventureiro…") },
-                    minLines = 3,
-                    maxLines = 5,
-                    shape = RoundedCornerShape(14.dp)
+            Box(Modifier.weight(1f).fillMaxHeight()) {
+                GuardianCard(
+                    message = c.guardianMessage.ifBlank { "O Guardião aguarda sua decisão." },
+                    history = c.guardianHistory
                 )
-                Spacer(Modifier.height(10.dp))
-                Button(
-                    onClick = { onGuardianIntent(intent); intent = "" },
-                    enabled = intent.isNotBlank() && !guardianLoading,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp)
-                ) {
-                    if (guardianLoading) {
-                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                        Spacer(Modifier.width(8.dp))
-                    }
-                    Text(if (guardianLoading) "O Guardião responde…" else "Falar com o Guardião")
+            }
+        }
+        SectionCard {
+            Text("O QUE VOCÊ FAZ?", color = CairnAccent, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(5.dp))
+            OutlinedTextField(
+                value = intent,
+                onValueChange = { intent = it },
+                modifier = Modifier.fillMaxWidth().height(78.dp),
+                placeholder = { Text("Descreva a intenção do aventureiro…") },
+                maxLines = 2,
+                shape = RoundedCornerShape(14.dp)
+            )
+            Spacer(Modifier.height(6.dp))
+            Button(
+                onClick = { onGuardianIntent(intent); intent = "" },
+                enabled = intent.isNotBlank() && !guardianLoading,
+                modifier = Modifier.fillMaxWidth().height(44.dp),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                if (guardianLoading) {
+                    CircularProgressIndicator(modifier = Modifier.size(17.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(7.dp))
                 }
-                guardianError?.let {
-                    Spacer(Modifier.height(6.dp))
-                    Text(it, color = CairnDanger, style = MaterialTheme.typography.bodySmall)
-                }
+                Text(if (guardianLoading) "O Guardião responde…" else "Falar com o Guardião")
+            }
+            guardianError?.let {
+                Text(it, color = CairnDanger, style = MaterialTheme.typography.bodySmall, maxLines = 1)
             }
         }
-        item { Text("AÇÕES DA CENA", color = CairnMuted, style = MaterialTheme.typography.labelLarge) }
-        item {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                ActionButton("Continuar", Modifier.weight(1f)) { onAction(GameAction.ExploreContinue) }
-                ActionButton("Investigar", Modifier.weight(1f)) { onAction(GameAction.ExploreInvestigate) }
-            }
+        Text("AÇÕES DA CENA", color = CairnMuted, style = MaterialTheme.typography.labelLarge)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            ActionButton("Continuar", Modifier.weight(1f)) { onAction(GameAction.ExploreContinue) }
+            ActionButton("Investigar", Modifier.weight(1f)) { onAction(GameAction.ExploreInvestigate) }
+            ActionButton("Ficha", Modifier.weight(1f), outlined = true, onClick = onBack)
         }
-        item {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                ActionButton("Descansar", Modifier.weight(1f), outlined = true) { onAction(GameAction.ExploreRest) }
-                ActionButton("Ficha", Modifier.weight(1f), outlined = true, onClick = onBack)
-            }
-        }
-        item {
-            SectionCard {
-                Text("DIÁRIO", color = CairnAccent, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(6.dp))
-                if (c.log.isEmpty()) Text("A história ainda não deixou marcas.", color = CairnMuted)
-                else c.log.takeLast(6).forEach { entry -> Text("• " + entry, color = CairnMuted, modifier = Modifier.padding(vertical = 3.dp)) }
-            }
-        }
-        item { Spacer(Modifier.height(18.dp)) }
+        ActionButton("Descansar", Modifier.fillMaxWidth(), outlined = true) { onAction(GameAction.ExploreRest) }
     }
 }
 
