@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.vanish994.cairnsolo.game.GameAction
 import com.vanish994.cairnsolo.guardian.HttpGuardianClient
@@ -232,7 +233,8 @@ private fun CairnHeader(eyebrow: String, title: String, subtitle: String? = null
                 style = MaterialTheme.typography.titleLarge,
                 color = CairnText,
                 fontWeight = FontWeight.SemiBold,
-                maxLines = 1
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
         subtitle?.let {
@@ -241,7 +243,8 @@ private fun CairnHeader(eyebrow: String, title: String, subtitle: String? = null
                 modifier = Modifier.padding(start = 8.dp),
                 color = CairnMuted,
                 style = MaterialTheme.typography.labelSmall,
-                maxLines = 1
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
@@ -400,7 +403,7 @@ private fun ExplorationScreen(
         SectionCard(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(72.dp)
+                .height(88.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
@@ -415,13 +418,15 @@ private fun ExplorationScreen(
                         color = CairnText,
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold,
-                        maxLines = 1
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Text(
                         c.sceneDescription,
                         color = CairnMuted,
                         style = MaterialTheme.typography.bodySmall,
-                        maxLines = 1
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
                 Spacer(Modifier.width(8.dp))
