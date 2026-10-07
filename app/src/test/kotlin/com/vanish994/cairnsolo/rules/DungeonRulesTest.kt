@@ -29,11 +29,11 @@ class DungeonRulesTest {
 
     @Test
     fun dungeonEventTableMapsSixToQuietAndFiveToExhaustion() {
-        val quiet = DungeonRules(FixedRandomSource(6)).resolveTurn(
+        val quiet = DungeonRules(FixedRandomSource(1, d6Value = 6)).resolveTurn(
             state(), character, DungeonAction(DungeonActionKind.MOVE, fastMovement = true)
         )
         assertIs<DungeonEvent.Quiet>(quiet.events.last())
-        val exhaustion = DungeonRules(FixedRandomSource(5)).resolveTurn(
+        val exhaustion = DungeonRules(FixedRandomSource(1, d6Value = 5)).resolveTurn(
             state(), character, DungeonAction(DungeonActionKind.MOVE, loud = true)
         )
         assertIs<DungeonEvent.Exhaustion>(exhaustion.events.last())
