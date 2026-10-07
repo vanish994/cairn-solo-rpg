@@ -30,6 +30,22 @@ object FeedbackMapper {
             is GameEvent.SaveResolved -> saveMessage(event.attribute, event.roll, event.success) to if (event.success) FeedbackType.SUCCESS else FeedbackType.FAILURE
             GameEvent.CriticalStabilized -> "A condição crítica foi estabilizada." to FeedbackType.SUCCESS
             is GameEvent.ScarRecovered -> "Cicatriz recuperada: " + event.scar.toDisplayName() + "." to FeedbackType.SUCCESS
+            is GameEvent.CombatStarted -> "Combate iniciado contra ${event.opponentId}; rodada ${event.round}." to FeedbackType.INFO
+            is GameEvent.CombatAttackResolved -> "Rodada ${event.round}: ataque e contra-ataque resolvidos." to FeedbackType.DAMAGE
+            is GameEvent.CombatEnded -> if (event.victory) "Combate vencido contra ${event.opponentId}." to FeedbackType.SUCCESS else "Combate encerrado." to FeedbackType.WARNING
+            is GameEvent.SpellResolved -> "Magia lançada: ${event.spellId}." to FeedbackType.INFO
+            is GameEvent.PurchaseResolved -> "Compra concluída: ${event.itemId}. Ouro restante: ${event.goldRemaining}." to FeedbackType.INVENTORY
+            is GameEvent.DowntimeResolved -> "Downtime concluído: ${event.action.name.lowercase()}." to FeedbackType.SUCCESS
+            is GameEvent.WildernessResolved -> "Ação de viagem resolvida: ${event.action.name.lowercase()}." to FeedbackType.INFO
+            is GameEvent.DungeonResolved -> "Ação de dungeon resolvida: ${event.action.name.lowercase()}." to FeedbackType.INFO
+            is GameEvent.RuleNotice -> event.summary to FeedbackType.INFO
+            is GameEvent.ReactionResolved -> "Reação resolvida: ${event.disposition.name.lowercase()} (2d6=${event.roll})." to FeedbackType.INFO
+            is GameEvent.MoraleResolved -> "Moral resolvida: ${event.outcome.name.lowercase()} (2d6=${event.roll}/${event.morale})." to if (event.outcome.name == "STAND") FeedbackType.SUCCESS else FeedbackType.WARNING
+            is GameEvent.HirelingResolved -> "Hireling ${event.hirelingId}: ${event.outcome.lowercase()}." to if (event.outcome == "HIRED") FeedbackType.SUCCESS else FeedbackType.INFO
+            is GameEvent.GrowthEvidenceRecorded -> "Experiência significativa registrada: ${event.evidenceId}." to FeedbackType.INFO
+            is GameEvent.GrowthApplied -> "Growth aplicado: ${event.proposalId}." to FeedbackType.SUCCESS
+            is GameEvent.CanonUpdated -> "Cânone atualizado com ${event.count} proposta(s)." to FeedbackType.INFO
+            is GameEvent.FactionProgressChanged -> "Facção ${event.factionId}: progresso ${event.previous} → ${event.current}." to FeedbackType.INFO
         }
         return FeedbackEntry(id = idFor(event, turn), message = mapped.first, type = mapped.second, turn = turn)
     }
