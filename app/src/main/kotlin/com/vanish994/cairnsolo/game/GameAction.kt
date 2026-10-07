@@ -111,7 +111,7 @@ class GameActionResolver(
     fun resolve(action: GameAction): GameResult = resolve(
         GameState(
             campaign = CampaignState(
-                character = CharacterIdentity("creation-bootstrap"),
+                character = CharacterIdentity(name = "creation-bootstrap"),
                 rules = CharacterState(str = 1, dex = 1, wil = 1, hp = 1, maxHp = 1, armor = 0)
             )
         ),
