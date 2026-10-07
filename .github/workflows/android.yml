@@ -2,7 +2,7 @@ name: Android Build
 
 on:
   push:
-    branches: ["feat/cairn-visual-guardian-v1"]
+    branches: ["feat/cairn-visual-guardian-v1", "feat/interactive-roll-flow"]
   workflow_dispatch:
 
 concurrency:
@@ -33,6 +33,35 @@ jobs:
 
       - name: Test Guardian server
         run: gradle :guardian-server:test
+
+      - name: Integration test Guardian HTTP endpoint
+        shell: bash
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          PORT: 18080
+        run: |
+          set -euo pipefail
+          if [[ -z "${GEMINI_API_KEY:-}" ]]; then
+            echo "GEMINI_API_KEY secret is not configured for this repository." >&2
+            exit 1
+          fi
+          gradle :guardian-server:installDist
+          PORT="$PORT" GEMINI_API_KEY="$GEMINI_API_KEY" \
+            guardian-server/build/install/guardian-server/bin/guardian-server \
+            > "$RUNNER_TEMP/cairn-guardian.log" 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in {1..30}; do
+            if curl --fail --silent "http://127.0.0.1:$PORT/health" > /dev/null; then
+              break
+            fi
+            if [[ "$attempt" == "30" ]]; then
+              cat "$RUNNER_TEMP/cairn-guardian.log" >&2
+              exit 1
+            fi
+            sleep 1
+          done
+          guardian-server/scripts/integration-test.sh "http://127.0.0.1:$PORT"
 
       - name: Build optimized release APK
         run: gradle :app:assembleRelease

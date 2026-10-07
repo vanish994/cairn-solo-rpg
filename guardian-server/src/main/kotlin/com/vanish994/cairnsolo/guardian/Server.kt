@@ -32,6 +32,7 @@ condições, morte, recursos e resultados aleatórios.
 Nunca invente ou altere valores mecânicos.
 Nunca diga que um teste foi bem-sucedido, que dano foi causado ou que um item foi obtido.
 Quando uma ação exigir resolução mecânica, preencha ruleRequest com um pedido estruturado e deixe o aplicativo resolver. Use apenas SAVE, DAMAGE, FATIGUE, REST, STABILIZE_CRITICAL ou RECOVER_SCAR.
+Você pode propor atualizações narrativas em canonProposals, mas elas não são fatos até serem validadas pelo aplicativo. Use apenas UPSERT_NPC, DISCOVER_LOCATION, ADD_IMPORTANT_ITEM, CREATE_QUEST, ADD_DISCOVERY ou ADD_RUMOR. Nunca altere HP, atributos, inventário ou outros dados mecânicos.
 
 Escreva em português brasileiro, com atmosfera de fantasia sombria e prosa objetiva.
 Não conduza o jogador por escolhas obrigatórias: apresente a situação e deixe espaço para ações livres.
@@ -86,6 +87,7 @@ como objeto com type e os campos necessários. Use apenas SAVE (attribute STR/DE
 FATIGUE (amount), REST, STABILIZE_CRITICAL ou RECOVER_SCAR. Não informe resultados; o aplicativo resolve.
 Se não houver resolução mecânica, use null.
 Se houver um ruleResult no estado, trate-o como resultado autoritativo do motor e narre suas consequências.
+Inclua canonProposals como uma lista, mesmo quando vazia. Cada proposta deve ter type, id, status e source.
 """.trimIndent()
 
     val schema = JsonObject().apply {
@@ -96,11 +98,12 @@ Se houver um ruleResult no estado, trate-o como resultado autoritativo do motor 
               "sceneTitle": {"type":"string"},
               "sceneDescription": {"type":"string"},
               "ruleRequest": {"anyOf":[{"type":"null"},{"type":"object","properties":{"type":{"type":"string","enum":["SAVE","DAMAGE","FATIGUE","REST","STABILIZE_CRITICAL","RECOVER_SCAR"]},"attribute":{"type":"string","enum":["STR","DEX","WIL"]},"amount":{"type":"integer","minimum":1}},"required":["type"],"additionalProperties":false}]},
-              "suggestedActions": {"type":"array","items":{"type":"string"}}
+              "suggestedActions": {"type":"array","items":{"type":"string"}},
+              "canonProposals": {"type":"array","maxItems":5,"items":{"type":"object","properties":{"type":{"type":"string","enum":["UPSERT_NPC","DISCOVER_LOCATION","ADD_IMPORTANT_ITEM","CREATE_QUEST","UPDATE_QUEST","ADD_DISCOVERY","ADD_RUMOR"]},"id":{"type":"string","pattern":"^[a-z0-9-]{3,80}$"},"status":{"type":"string","enum":["CONFIRMED","RUMOR","DISCOVERED"]},"source":{"type":"string","enum":["PLAYER","GUARDIAN","NPC","RULES_ENGINE","SYSTEM"]},"name":{"type":"string"},"title":{"type":"string"},"text":{"type":"string"},"description":{"type":"string"},"role":{"type":"string"},"relatedEntityIds":{"type":"array","items":{"type":"string"}}},"required":["type","id","status","source"],"additionalProperties":false}}
             }
         """).asJsonObject)
         add("required", JsonParser.parseString(
-            """["narration","sceneTitle","sceneDescription","ruleRequest","suggestedActions"]"""
+            """["narration","sceneTitle","sceneDescription","ruleRequest","suggestedActions","canonProposals"]"""
         ).asJsonArray)
         addProperty("additionalProperties", false)
     }
