@@ -71,6 +71,7 @@ class MainActivity : ComponentActivity() {
                 var guardianError by remember { mutableStateOf<String?>(null) }
                 var pendingRule by remember { mutableStateOf<GuardianRuleRequest?>(null) }
                 var lastResolution by remember { mutableStateOf<GuardianRuleResolution?>(null) }
+                var guardianFlow by remember { mutableStateOf(GuardianFlow.EXPLORATION) }
                 val actionResolver = remember {
                     GameActionResolver(
                         exploration = ExplorationEngine(KotlinRandomSource()),
@@ -155,6 +156,7 @@ class MainActivity : ComponentActivity() {
                                 },
                                 guardianLoading = guardianLoading,
                                 guardianError = guardianError,
+                                guardianFlow = guardianFlow,
                                 pendingRule = pendingRule,
                                 lastResolution = lastResolution,
                                 onResolveRule = {
@@ -165,6 +167,7 @@ class MainActivity : ComponentActivity() {
                                                 state = resolution.state
                                                 pendingRule = null
                                                 lastResolution = resolution
+                                                guardianFlow = GuardianFlow.ROLL_RESULT
                                             }
                                             .onFailure { error ->
                                                 guardianError = error.message
@@ -174,6 +177,7 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onContinueNarrative = {
                                     lastResolution?.let { resolution ->
+                                        guardianFlow = GuardianFlow.CONSEQUENCE_NARRATION
                                         guardianLoading = true
                                         guardianError = null
                                         scope.launch {
@@ -192,6 +196,7 @@ class MainActivity : ComponentActivity() {
                                                     repository.save(next)
                                                     state = next
                                                     lastResolution = null
+                                                    guardianFlow = GuardianFlow.EXPLORATION
                                                 }
                                                 .onFailure { error ->
                                                     guardianError = error.message
@@ -203,6 +208,7 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onGuardianIntent = { intent ->
                                     if (pendingRule == null && lastResolution == null) {
+                                        guardianFlow = GuardianFlow.GUARDIAN_THINKING
                                         guardianLoading = true
                                         guardianError = null
                                         scope.launch {
@@ -218,9 +224,15 @@ class MainActivity : ComponentActivity() {
                                                     state = next
                                                     pendingRule = response.ruleRequest
                                                     lastResolution = null
+                                                    guardianFlow = if (response.ruleRequest == null) {
+                                                        GuardianFlow.EXPLORATION
+                                                    } else {
+                                                        GuardianFlow.ROLL_REQUIRED
+                                                    }
                                                 }
                                                 .onFailure { error ->
                                                     guardianError = error.message ?: "Não foi possível falar com o Guardião."
+                                                    guardianFlow = GuardianFlow.EXPLORATION
                                                 }
                                             guardianLoading = false
                                         }
@@ -238,6 +250,14 @@ class MainActivity : ComponentActivity() {
 }
 
 enum class AppScreen { CHARACTER, EXPLORATION, RULES }
+
+private enum class GuardianFlow {
+    EXPLORATION,
+    GUARDIAN_THINKING,
+    ROLL_REQUIRED,
+    ROLL_RESULT,
+    CONSEQUENCE_NARRATION
+}
 
 @Composable
 private fun CairnHeader(eyebrow: String, title: String, subtitle: String? = null) {
@@ -405,6 +425,7 @@ private fun ExplorationScreen(
     onAction: (GameAction) -> Unit,
     guardianLoading: Boolean,
     guardianError: String?,
+    guardianFlow: GuardianFlow,
     pendingRule: GuardianRuleRequest?,
     lastResolution: GuardianRuleResolution?,
     onResolveRule: () -> Unit,
@@ -425,7 +446,7 @@ private fun ExplorationScreen(
         CairnHeader(
             "CAIRN",
             "Exploração",
-            "T" + c.turn + " · " + sceneTypeLabel(c.sceneType)
+            "T" + c.turn + " · " + sceneTypeLabel(c.sceneType) + " · " + guardianFlowLabel(guardianFlow)
         )
 
         SectionCard(
@@ -645,6 +666,14 @@ private fun ruleRequestDescription(request: GuardianRuleRequest): String = when 
     "FATIGUE" -> "O Rules Engine aplicará ${request.amount ?: 1} ponto(s) de Fadiga."
     "REST" -> "O Rules Engine resolverá o descanso conforme as regras de Cairn."
     else -> "O Rules Engine resolverá esta consequência antes da narrativa continuar."
+}
+
+private fun guardianFlowLabel(flow: GuardianFlow): String = when (flow) {
+    GuardianFlow.EXPLORATION -> "exploração"
+    GuardianFlow.GUARDIAN_THINKING -> "Guardião pensando"
+    GuardianFlow.ROLL_REQUIRED -> "rolagem necessária"
+    GuardianFlow.ROLL_RESULT -> "resultado"
+    GuardianFlow.CONSEQUENCE_NARRATION -> "consequência"
 }
 
 @Composable
