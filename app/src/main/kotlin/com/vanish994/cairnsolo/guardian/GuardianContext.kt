@@ -8,14 +8,18 @@ import com.vanish994.cairnsolo.rules.CharacterState
 import org.json.JSONArray
 import org.json.JSONObject
 
+private fun guardianArray(values: Iterable<Any?>): JSONArray = JSONArray().apply {
+    values.forEach { value -> put(value ?: JSONObject.NULL) }
+}
+
 private fun guardianMapJson(value: Map<String, Any?>): JSONObject = JSONObject().apply {
     value.forEach { (key, item) ->
         put(key, when (item) {
             is Map<*, *> -> guardianMapJson(item.entries.associate { it.key.toString() to it.value })
-            is List<*> -> JSONArray(item.map { nested ->
+            is List<*> -> guardianArray(item.map { nested ->
                 when (nested) {
                     is Map<*, *> -> guardianMapJson(nested.entries.associate { it.key.toString() to it.value })
-                    else -> nested ?: JSONObject.NULL
+                    else -> nested
                 }
             })
             else -> item ?: JSONObject.NULL
@@ -43,8 +47,8 @@ data class GuardianContext(
         world?.let { put("world", it.toJson()) }
         put("canon", canon.toJson())
         put("growth", growth.toJson())
-        put("recentHistory", JSONArray(recentHistory.map { it.toJson() }))
-        put("availableActions", JSONArray(availableActions))
+        put("recentHistory", guardianArray(recentHistory.map { it.toJson() }))
+        put("availableActions", guardianArray(availableActions))
     }
 }
 
@@ -67,9 +71,9 @@ data class GuardianCharacterContext(
             put("str", str); put("dex", dex); put("wil", wil)
             put("hp", hp); put("maxHp", maxHp); put("armor", armor)
         })
-        put("conditions", JSONArray(conditions))
+        put("conditions", guardianArray(conditions))
         put("gold", gold)
-        put("inventory", JSONArray(inventory.map { it.toJson() }))
+        put("inventory", guardianArray(inventory.map { it.toJson() }))
         combat?.let { put("combat", it.toJson()) }
     }
 }
@@ -104,7 +108,7 @@ data class GuardianSceneContext(
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("id", id); put("type", type); put("title", title)
-        put("description", description); put("exits", JSONArray(exits))
+        put("description", description); put("exits", guardianArray(exits))
         put("lastGuardianMessage", lastGuardianMessage)
     }
 }
@@ -116,8 +120,8 @@ data class GuardianWorldContext(
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("currentLocationId", currentLocationId)
-        put("factions", JSONArray(factions.map { it.toJson() }))
-        put("npcs", JSONArray(npcs.map { it.toJson() }))
+        put("factions", guardianArray(factions.map { it.toJson() }))
+        put("npcs", guardianArray(npcs.map { it.toJson() }))
     }
 }
 
@@ -132,8 +136,8 @@ data class GuardianFactionContext(
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("id", id); put("name", name); put("agenda", agenda)
-        put("goalProgress", goalProgress); put("goals", JSONArray(goals))
-        put("obstacle", obstacle); put("traits", JSONArray(traits))
+        put("goalProgress", goalProgress); put("goals", guardianArray(goals))
+        put("obstacle", obstacle); put("traits", guardianArray(traits))
     }
 }
 
@@ -152,11 +156,11 @@ data class GuardianCanonContext(
     val discoveries: List<Map<String, Any?>>
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
-        put("locations", JSONArray(locations.map(::guardianMapJson)))
-        put("npcs", JSONArray(npcs.map(::guardianMapJson)))
-        put("importantItems", JSONArray(importantItems.map(::guardianMapJson)))
-        put("quests", JSONArray(quests.map(::guardianMapJson)))
-        put("discoveries", JSONArray(discoveries.map(::guardianMapJson)))
+        put("locations", guardianArray(locations.map(::guardianMapJson)))
+        put("npcs", guardianArray(npcs.map(::guardianMapJson)))
+        put("importantItems", guardianArray(importantItems.map(::guardianMapJson)))
+        put("quests", guardianArray(quests.map(::guardianMapJson)))
+        put("discoveries", guardianArray(discoveries.map(::guardianMapJson)))
     }
 }
 
@@ -166,16 +170,16 @@ data class GuardianGrowthContext(
     val abilities: List<Map<String, Any?>>
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
-        put("evidence", JSONArray(evidence.map(::guardianMapJson)))
-        put("appliedProposalIds", JSONArray(appliedProposalIds))
-        put("abilities", JSONArray(abilities.map(::guardianMapJson)))
+        put("evidence", guardianArray(evidence.map(::guardianMapJson)))
+        put("appliedProposalIds", guardianArray(appliedProposalIds))
+        put("abilities", guardianArray(abilities.map(::guardianMapJson)))
     }
 }
 
 data class GuardianHistoryContext(val id: String, val turn: Long, val type: String, val summary: String, val source: String, val relatedEntityIds: List<String>) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("id", id); put("turn", turn); put("type", type); put("summary", summary); put("source", source)
-        put("relatedEntityIds", JSONArray(relatedEntityIds))
+        put("relatedEntityIds", guardianArray(relatedEntityIds))
     }
 }
 
