@@ -211,40 +211,6 @@ class MainActivity : ComponentActivity() {
                                         }
                                     }
                                 },
-                                onContinueScene = {
-                                    if (!guardianLoading && pendingRule == null && lastResolution == null) {
-                                        guardianFlow = GuardianFlow.GUARDIAN_THINKING
-                                        guardianLoading = true
-                                        guardianError = null
-                                        scope.launch {
-                                            guardianClient.narrate(
-                                                current,
-                                                "CONTINUAR_NARRATIVA: desenvolva a situação atual sem registrar uma decisão do jogador, " +
-                                                    "sem repetir a última frase e sem mudar de local automaticamente."
-                                            )
-                                                .onSuccess { response ->
-                                                    val narrated = current.applyGuardianResponse(
-                                                        narration = response.narration,
-                                                        sceneTitle = response.sceneTitle,
-                                                        sceneDescription = response.sceneDescription,
-                                                        interactionId = response.interactionId
-                                                    )
-                                                    val next = actionResolver.resolve(
-                                                        narrated,
-                                                        GameAction.ApplyCanonProposals(response.canonProposals)
-                                                    ).state
-                                                    repository.save(next)
-                                                    state = next
-                                                    guardianFlow = GuardianFlow.EXPLORATION
-                                                }
-                                                .onFailure { error ->
-                                                    guardianError = error.message ?: "O Guardião não pôde continuar a cena."
-                                                    guardianFlow = GuardianFlow.EXPLORATION
-                                                }
-                                            guardianLoading = false
-                                        }
-                                    }
-                                },
                                 onContinueNarrative = {
                                     lastResolution?.let { resolution ->
                                         guardianFlow = GuardianFlow.CONSEQUENCE_NARRATION
@@ -528,7 +494,6 @@ private fun ExplorationScreen(
     pendingRule: GuardianRuleRequest?,
     lastResolution: GuardianRuleResolution?,
     onResolveRule: () -> Unit,
-    onContinueScene: () -> Unit,
     onContinueNarrative: () -> Unit,
     onGuardianIntent: (String) -> Unit,
     onBack: () -> Unit
@@ -614,22 +579,48 @@ private fun ExplorationScreen(
             fontWeight = FontWeight.Bold
         )
 
-        OutlinedTextField(
-            value = intent,
-            onValueChange = { intent = it },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp),
-            placeholder = {
-                Text(
-                    "Descreva a intenção do aventureiro…",
-                    style = MaterialTheme.typography.bodySmall
-                )
-            },
-            maxLines = 2,
-            enabled = !guardianLoading && pendingRule == null && lastResolution == null,
-            shape = RoundedCornerShape(8.dp)
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            OutlinedTextField(
+                value = intent,
+                onValueChange = { intent = it },
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = 56.dp, max = 96.dp),
+                placeholder = {
+                    Text(
+                        "Descreva a intenção do aventureiro…",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                },
+                maxLines = 3,
+                enabled = !guardianLoading && pendingRule == null && lastResolution == null,
+                shape = RoundedCornerShape(8.dp)
+            )
+            IconButton(
+                onClick = {
+                    onGuardianIntent(intent.trim())
+                    intent = ""
+                },
+                enabled = intent.isNotBlank() && !guardianLoading && pendingRule == null && lastResolution == null,
+                modifier = Modifier
+                    .size(48.dp)
+                    .background(CairnAccent, RoundedCornerShape(12.dp))
+            ) {
+                if (guardianLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        color = CairnBackground,
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Text("➤", color = CairnBackground, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
 
         guardianError?.let {
             Text(
@@ -640,53 +631,12 @@ private fun ExplorationScreen(
             )
         }
 
-        Button(
-            onClick = {
-                onGuardianIntent(intent.trim())
-                intent = ""
-            },
-            enabled = intent.isNotBlank() && !guardianLoading && pendingRule == null && lastResolution == null,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(38.dp),
-            shape = RoundedCornerShape(7.dp)
-        ) {
-            if (guardianLoading) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(15.dp),
-                    strokeWidth = 2.dp
-                )
-                Spacer(Modifier.width(6.dp))
-            }
-            Text(
-                if (guardianLoading) "O Guardião responde…" else "Falar com o Guardião",
-                style = MaterialTheme.typography.labelMedium
-            )
-        }
-
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            ActionButton(
-                "Continuar narrativa",
-                Modifier.weight(1f),
-                onClick = {
-                    onContinueScene()
-                }
-            )
-            ActionButton(
-                "Investigar",
-                Modifier.weight(1f),
-                onClick = { if (pendingRule == null && lastResolution == null) onAction(GameAction.ExploreInvestigate) }
-            )
-            ActionButton(
-                "Ficha",
-                Modifier.weight(1f),
-                outlined = true,
-                onClick = onBack
-            )
-        }
+        ActionButton(
+            "Ficha",
+            Modifier.fillMaxWidth(),
+            outlined = true,
+            onClick = onBack
+        )
 
         ActionButton(
             "Descansar",
