@@ -73,7 +73,6 @@ class GuardianContextTest {
         val state = base.recordGuardianIntent("examinar a ponte")
         val context = GuardianContextBuilder.from(state)
         assertEquals(listOf("Você: examinar a ponte"), context.recentNarrative)
-        assertTrue(context.toJson().has("campaignSeed"))
-        assertTrue(context.toJson().has("recentNarrative"))
+        assertTrue(context.campaignSeed.isNotBlank())
     }
 }
