@@ -138,7 +138,7 @@ Se houver um ruleResult no estado, trate-o como resultado autoritativo do motor 
 
     val response = http.send(request, HttpResponse.BodyHandlers.ofString())
     if (response.statusCode() !in 200..299) {
-        error("Gemini HTTP ${response.statusCode}: ${response.body().take(500)}")
+        error("Gemini HTTP ${response.statusCode()}: ${response.body().take(500)}")
     }
 
     val root = JsonParser.parseString(response.body()).asJsonObject
