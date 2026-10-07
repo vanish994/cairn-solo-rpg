@@ -8,6 +8,7 @@ import com.vanish994.cairnsolo.rules.Scar
 import com.vanish994.cairnsolo.rules.DowntimeCost
 import com.vanish994.cairnsolo.rules.Milestone
 import com.vanish994.cairnsolo.rules.DungeonLight
+import com.vanish994.cairnsolo.rules.DungeonState
 import com.vanish994.cairnsolo.rules.PathType
 import com.vanish994.cairnsolo.rules.TravelDistance
 import com.vanish994.cairnsolo.rules.Terrain

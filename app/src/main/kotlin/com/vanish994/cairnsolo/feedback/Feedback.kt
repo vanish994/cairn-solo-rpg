@@ -33,6 +33,12 @@ object FeedbackMapper {
             is GameEvent.CombatStarted -> "Combate iniciado contra ${event.opponentId}; rodada ${event.round}." to FeedbackType.INFO
             is GameEvent.CombatAttackResolved -> "Rodada ${event.round}: ataque e contra-ataque resolvidos." to FeedbackType.DAMAGE
             is GameEvent.CombatEnded -> if (event.victory) "Combate vencido contra ${event.opponentId}." to FeedbackType.SUCCESS else "Combate encerrado." to FeedbackType.WARNING
+            is GameEvent.SpellResolved -> "Magia lançada: ${event.spellId}." to FeedbackType.INFO
+            is GameEvent.PurchaseResolved -> "Compra concluída: ${event.itemId}. Ouro restante: ${event.goldRemaining}." to FeedbackType.INVENTORY
+            is GameEvent.DowntimeResolved -> "Downtime concluído: ${event.action.name.lowercase()}." to FeedbackType.SUCCESS
+            is GameEvent.WildernessResolved -> "Ação de viagem resolvida: ${event.action.name.lowercase()}." to FeedbackType.INFO
+            is GameEvent.DungeonResolved -> "Ação de dungeon resolvida: ${event.action.name.lowercase()}." to FeedbackType.INFO
+            is GameEvent.RuleNotice -> event.summary to FeedbackType.INFO
         }
         return FeedbackEntry(id = idFor(event, turn), message = mapped.first, type = mapped.second, turn = turn)
     }

@@ -144,7 +144,7 @@ class GameActionResolver(
         is GameAction.StartTravel -> GameResult(state.copy(campaign = state.campaign.copy(wilderness = wilderness.startTravel(state.campaign.wilderness ?: error("Wilderness state not initialized"), action.destination), turn = state.campaign.turn + 1)), listOf(GameEvent.RuleNotice("Viagem iniciada para ${action.destination}")))
         is GameAction.WildernessAct -> wildernessAct(state, action)
         is GameAction.RollWeather -> rollWeather(state, action)
-        is GameAction.DungeonAct -> dungeonAct(state, action)
+        is GameAction.DungeonAct -> dungeonAct(state, action.action)
         GameAction.LightTorch -> dungeonLight(state) { dungeon.lightTorch(it) }
         GameAction.LightLantern -> dungeonLight(state) { dungeon.lightLantern(it) }
         GameAction.ExtinguishLight -> dungeonLight(state) { dungeon.extinguish(it) }
@@ -184,7 +184,7 @@ class GameActionResolver(
         return GameResult(state.copy(campaign = state.campaign.copy(wilderness = next, turn = state.campaign.turn + 1)), listOf(GameEvent.RuleNotice(event.toString())))
     }
 
-    private fun dungeonAct(state: GameState, action: GameAction.DungeonAct): GameResult {
+    private fun dungeonAct(state: GameState, action: DungeonAction): GameResult {
         val current = state.campaign.dungeon ?: error("Dungeon state not initialized")
         return dungeonTurn(state, dungeon.resolveTurn(current, state.campaign.rules, action))
     }
