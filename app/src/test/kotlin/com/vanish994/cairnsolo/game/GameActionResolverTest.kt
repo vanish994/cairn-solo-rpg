@@ -17,6 +17,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
+import kotlin.test.assertFailsWith
 
 class GameActionResolverTest {
     private fun state(
@@ -101,6 +102,14 @@ class GameActionResolverTest {
         val removed = resolver().resolve(added.state, GameAction.RemoveItem("torch"))
         assertEquals(0, removed.state.campaign.rules.inventory.size)
         assertIs<GameEvent.ItemRemoved>(removed.events.single())
+    }
+
+    @Test
+    fun duplicateInventoryIdsAreRejectedAtActionBoundary() {
+        val actionResolver = resolver()
+        val item = com.vanish994.cairnsolo.rules.InventoryItem("torch")
+        val added = actionResolver.resolve(state(), GameAction.AddItem(item)).state
+        assertFailsWith<IllegalArgumentException> { actionResolver.resolve(added, GameAction.AddItem(item)) }
     }
 
     @Test
@@ -269,6 +278,21 @@ class CombatGameActionResolverTest {
         assertEquals(null, attacked.state.campaign.combat)
         assertIs<GameEvent.CombatEnded>(attacked.events.last())
         assertTrue((attacked.events.last() as GameEvent.CombatEnded).victory)
+        assertTrue(attacked.state.campaign.history.any { it.type == HistoryEventType.COMBAT_UPDATED })
+    }
+
+    @Test
+    fun factionProgressIsChangedOnlyByResolverAndPersistsInWorldState() {
+        val random = FixedRandomSource(d20Value = 10, d6Value = 3)
+        val world = WorldGenerator(random).generate(WorldSeed("campaign", "mistério"))
+        val base = state().copy(campaign = state().campaign.copy(worldState = world))
+        val result = resolver(random).resolve(base, GameAction.AdvanceFaction(world.factions.first().id, 2, "A personagem ajudou a facção contra seu obstáculo."))
+        val faction = result.state.campaign.worldState!!.factions.first()
+        assertEquals(2, faction.goalProgress)
+        assertIs<GameEvent.FactionProgressChanged>(result.events.single())
+        assertEquals(HistoryEventType.FACTION_UPDATED, result.state.campaign.history.single().type)
+        val restored = GameStatePersistenceCodec.decode(GameStatePersistenceCodec.encode(result.state))!!
+        assertEquals(result.state.campaign.worldState, restored.campaign.worldState)
     }
 
     @Test

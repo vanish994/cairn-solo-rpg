@@ -45,6 +45,7 @@ object FeedbackMapper {
             is GameEvent.GrowthEvidenceRecorded -> "Experiência significativa registrada: ${event.evidenceId}." to FeedbackType.INFO
             is GameEvent.GrowthApplied -> "Growth aplicado: ${event.proposalId}." to FeedbackType.SUCCESS
             is GameEvent.CanonUpdated -> "Cânone atualizado com ${event.count} proposta(s)." to FeedbackType.INFO
+            is GameEvent.FactionProgressChanged -> "Facção ${event.factionId}: progresso ${event.previous} → ${event.current}." to FeedbackType.INFO
         }
         return FeedbackEntry(id = idFor(event, turn), message = mapped.first, type = mapped.second, turn = turn)
     }

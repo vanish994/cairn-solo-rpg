@@ -55,6 +55,7 @@ sealed interface GameAction {
     data class RecordGrowthEvidence(val evidence: GrowthEvidence) : GameAction
     data class ApplyGrowth(val proposal: GrowthProposal) : GameAction
     data class ApplyCanonProposals(val proposals: List<CanonProposal>) : GameAction
+    data class AdvanceFaction(val factionId: String, val amount: Int = 1, val reason: String) : GameAction
 }
 
 data class GameResult(val state: GameState, val events: List<GameEvent>)
@@ -87,6 +88,7 @@ sealed interface GameEvent {
     data class GrowthEvidenceRecorded(val evidenceId: String) : GameEvent
     data class GrowthApplied(val proposalId: String) : GameEvent
     data class CanonUpdated(val count: Int) : GameEvent
+    data class FactionProgressChanged(val factionId: String, val previous: Int, val current: Int, val goal: String) : GameEvent
 }
 
 class GameActionResolver(
@@ -125,12 +127,13 @@ class GameActionResolver(
             GameResult(state.withRules(result.newState), result.events.toGameEvents(result.newState))
         }
         is GameAction.AddItem -> {
+            require(state.campaign.rules.inventory.none { it.id == action.item.id }) { "Item id already exists in inventory" }
             val result = rules.addItem(state.campaign.rules, action.item)
-            GameResult(state.withRules(result.newState), listOf(GameEvent.ItemAdded(action.item.id)))
+            GameResult(state.withHistory("item-add-${state.campaign.turn}-${action.item.id}", HistoryEventType.ITEM_CHANGED, "Item adicionado: ${action.item.id}", listOf(action.item.id)).withRules(result.newState), listOf(GameEvent.ItemAdded(action.item.id)))
         }
         is GameAction.RemoveItem -> {
             val result = rules.removeItem(state.campaign.rules, action.itemId)
-            GameResult(state.withRules(result.newState), listOf(GameEvent.ItemRemoved(action.itemId)))
+            GameResult(state.withHistory("item-remove-${state.campaign.turn}-${action.itemId}", HistoryEventType.ITEM_CHANGED, "Item removido: ${action.itemId}", listOf(action.itemId)).withRules(result.newState), listOf(GameEvent.ItemRemoved(action.itemId)))
         }
         is GameAction.AddFatigue -> {
             val result = rules.addFatigue(state.campaign.rules, action.amount)
@@ -189,6 +192,32 @@ class GameActionResolver(
             val next = CanonResolver().apply(state, action.proposals)
             GameResult(next, if (action.proposals.isEmpty()) emptyList() else listOf(GameEvent.CanonUpdated(action.proposals.size)))
         }
+        is GameAction.AdvanceFaction -> advanceFaction(state, action)
+    }
+
+    private fun advanceFaction(state: GameState, action: GameAction.AdvanceFaction): GameResult {
+        require(action.amount > 0) { "Faction progress must be positive" }
+        require(action.reason.isNotBlank() && action.reason.length <= 500) { "Faction progress requires a reason" }
+        val world = state.campaign.worldState ?: error("World state not initialized")
+        val faction = world.factions.firstOrNull { it.id == action.factionId } ?: error("Unknown faction: ${action.factionId}")
+        val previous = faction.goalProgress
+        val current = (previous + action.amount).coerceAtMost(faction.goals.size)
+        val nextFaction = faction.copy(goalProgress = current)
+        val nextWorld = world.copy(factions = world.factions.map { if (it.id == faction.id) nextFaction else it })
+        val history = CampaignHistoryEntry(
+            id = "faction-${state.campaign.turn}-${faction.id}",
+            turn = state.campaign.turn,
+            type = HistoryEventType.FACTION_UPDATED,
+            summary = "${faction.name}: progresso ${previous}→${current}. ${action.reason}",
+            source = HistorySource.RULES_ENGINE,
+            relatedEntityIds = listOf(faction.id)
+        )
+        val next = state.copy(campaign = state.campaign.copy(
+            worldState = nextWorld,
+            history = (state.campaign.history + history).takeLast(500),
+            turn = state.campaign.turn + 1
+        ))
+        return GameResult(next, listOf(GameEvent.FactionProgressChanged(faction.id, previous, current, faction.goals[current.coerceAtMost(faction.goals.lastIndex)])))
     }
 
     private fun applyGrowth(state: GameState, action: GameAction.ApplyGrowth): GameResult {
@@ -235,9 +264,14 @@ class GameActionResolver(
     }
 
     private fun purchase(state: GameState, action: GameAction.Purchase): GameResult {
+        val entry = com.vanish994.cairnsolo.rules.MarketplaceCatalog.find(action.itemId) ?: error("Unknown Marketplace entry: ${action.itemId}")
+        if (entry.item != null) require(state.campaign.rules.inventory.none { it.id == action.itemId }) { "Item id already exists in inventory" }
         val result = marketplace.purchase(state.campaign.rules, state.campaign.profile.gold, action.itemId)
         val profile = state.campaign.profile.copy(gold = result.goldRemaining)
-        return GameResult(state.withRules(result.state).copy(campaign = state.withRules(result.state).campaign.copy(profile = profile)), listOf(GameEvent.PurchaseResolved(action.itemId, result.goldRemaining)))
+        val recorded = state.withHistory("purchase-${state.campaign.turn}-${action.itemId}", HistoryEventType.ITEM_CHANGED, "Compra realizada: ${action.itemId}.", listOf(action.itemId))
+        val resolved = recorded.withRules(result.state)
+        val next = resolved.copy(campaign = resolved.campaign.copy(profile = profile))
+        return GameResult(next, listOf(GameEvent.PurchaseResolved(action.itemId, result.goldRemaining)))
     }
 
     private fun performDowntime(state: GameState, action: GameAction.PerformDowntime): GameResult {
@@ -290,7 +324,7 @@ class GameActionResolver(
         if (save.success) {
             val combatState = CombatState(action.opponentId, action.opponent, action.opponentWeapon, 1, true)
             val next = state.copy(campaign = state.campaign.copy(combat = combatState, turn = state.campaign.turn + 1))
-            return GameResult(next, listOf(GameEvent.CombatStarted(action.opponentId, 1, true), GameEvent.SaveResolved(Attribute.DEX, save.roll, true)))
+            return GameResult(next.withHistory("combat-start-${state.campaign.turn}", HistoryEventType.COMBAT_UPDATED, "Combate iniciado contra ${action.opponentId}.", listOf(action.opponentId)), listOf(GameEvent.CombatStarted(action.opponentId, 1, true), GameEvent.SaveResolved(Attribute.DEX, save.roll, true)))
         }
         val enemyAttack = combat.attack(action.opponent, state.campaign.rules, action.opponentWeapon)
         val damage = enemyAttack.events.toDamageEvent(enemyAttack.target)
@@ -302,7 +336,7 @@ class GameActionResolver(
         ))
         val events = mutableListOf<GameEvent>(GameEvent.CombatStarted(action.opponentId, 1, false), GameEvent.SaveResolved(Attribute.DEX, save.roll, false), GameEvent.CombatAttackResolved(action.opponentId, 1, damage, null, !dead))
         if (dead) events += GameEvent.CombatEnded(action.opponentId, false)
-        return GameResult(next, events)
+        return GameResult(next.withHistory("combat-start-${state.campaign.turn}", HistoryEventType.COMBAT_UPDATED, "Combate iniciado contra ${action.opponentId}; o inimigo agiu primeiro.", listOf(action.opponentId)), events)
     }
 
     private fun combatAttack(state: GameState, action: GameAction.CombatAttack): GameResult {
@@ -312,7 +346,7 @@ class GameActionResolver(
         val playerDamage = playerAttack.events.toDamageEvent(playerAttack.target)
         if (playerAttack.target.dead || playerAttack.target.hp == 0) {
             val next = state.copy(campaign = state.campaign.copy(combat = null, turn = state.campaign.turn + 1))
-            return GameResult(next, listOf(GameEvent.CombatAttackResolved(current.opponentId, current.round, playerDamage, null, false), GameEvent.CombatEnded(current.opponentId, true)))
+            return GameResult(next.withHistory("combat-victory-${state.campaign.turn}", HistoryEventType.COMBAT_UPDATED, "Combate vencido contra ${current.opponentId}.", listOf(current.opponentId)), listOf(GameEvent.CombatAttackResolved(current.opponentId, current.round, playerDamage, null, false), GameEvent.CombatEnded(current.opponentId, true)))
         }
         val enemyAttack = combat.attack(playerAttack.attacker, state.campaign.rules, current.opponentWeapon)
         val enemyDamage = enemyAttack.events.toDamageEvent(enemyAttack.target)
@@ -327,12 +361,12 @@ class GameActionResolver(
         )
         val events = mutableListOf<GameEvent>(GameEvent.CombatAttackResolved(current.opponentId, current.round, playerDamage, enemyDamage, !playerDead))
         if (playerDead) events += GameEvent.CombatEnded(current.opponentId, false)
-        return GameResult(next, events)
+        return GameResult(next.withHistory("combat-round-${state.campaign.turn}", HistoryEventType.COMBAT_UPDATED, "Rodada ${current.round} resolvida contra ${current.opponentId}.", listOf(current.opponentId)), events)
     }
 
     private fun endCombat(state: GameState): GameResult {
         val current = state.campaign.combat ?: return GameResult(state, emptyList())
-        return GameResult(state.copy(campaign = state.campaign.copy(combat = null, turn = state.campaign.turn + 1)), listOf(GameEvent.CombatEnded(current.opponentId, false)))
+        return GameResult(state.copy(campaign = state.campaign.copy(combat = null, turn = state.campaign.turn + 1)).withHistory("combat-end-${state.campaign.turn}", HistoryEventType.COMBAT_UPDATED, "Combate encerrado contra ${current.opponentId}.", listOf(current.opponentId)), listOf(GameEvent.CombatEnded(current.opponentId, false)))
     }
 
     private fun ExplorationResult.toGameResult(): GameResult = GameResult(state, events.map { event ->
@@ -356,4 +390,9 @@ class GameActionResolver(
         val damage = filterIsInstance<RuleEvent.DamageApplied>().single()
         return GameEvent.DamageResolved(damage.rawDamage, damage.armorAbsorbed, damage.hpDamage, state.critical, state.dead, state.scar?.name)
     }
+
+    private fun GameState.withHistory(id: String, type: HistoryEventType, summary: String, related: List<String> = emptyList()): GameState = copy(
+        campaign = campaign.copy(history = (campaign.history + CampaignHistoryEntry(id, campaign.turn, type, summary, HistorySource.RULES_ENGINE, related)).takeLast(500)),
+        updatedAtEpochMs = System.currentTimeMillis()
+    )
 }
