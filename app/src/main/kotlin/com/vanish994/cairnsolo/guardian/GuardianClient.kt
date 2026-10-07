@@ -6,6 +6,7 @@ import com.vanish994.cairnsolo.game.GameState
 import com.vanish994.cairnsolo.game.CanonProposal
 import com.vanish994.cairnsolo.game.CanonStatus
 import com.vanish994.cairnsolo.game.CanonSource
+import com.vanish994.cairnsolo.game.GrowthEvidenceProposal
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -27,7 +28,8 @@ data class GuardianResponse(
     val ruleRequest: GuardianRuleRequest?,
     val suggestedActions: List<String>,
     val interactionId: String?,
-    val canonProposals: List<CanonProposal> = emptyList()
+    val canonProposals: List<CanonProposal> = emptyList(),
+    val growthEvidenceProposals: List<GrowthEvidenceProposal> = emptyList()
 )
 
 interface GuardianClient {
@@ -178,6 +180,20 @@ class HttpGuardianClient(
             val array = json.optJSONArray("canonProposals") ?: JSONArray()
             for (i in 0 until array.length()) parseCanonProposal(array.getJSONObject(i))?.let(::add)
         }
+        val growthProposals = buildList {
+            val array = json.optJSONArray("growthEvidenceProposals") ?: JSONArray()
+            for (i in 0 until array.length()) {
+                val item = array.getJSONObject(i)
+                add(GrowthEvidenceProposal(
+                    id = item.getString("id"),
+                    summary = item.getString("summary"),
+                    relatedEntityIds = item.optJSONArray("relatedEntityIds")?.let { ids -> (0 until ids.length()).map { ids.getString(it) } } ?: emptyList(),
+                    focusedPattern = item.optBoolean("focusedPattern", false),
+                    seriousRisk = item.optBoolean("seriousRisk", false),
+                    uniqueInteraction = item.optBoolean("uniqueInteraction", false)
+                ))
+            }
+        }
         return GuardianResponse(
             narration = json.getString("narration"),
             sceneTitle = json.getString("sceneTitle"),
@@ -185,7 +201,8 @@ class HttpGuardianClient(
             ruleRequest = ruleRequest,
             suggestedActions = actions,
             interactionId = json.optString("interactionId").takeIf { it.isNotBlank() },
-            canonProposals = proposals
+            canonProposals = proposals,
+            growthEvidenceProposals = growthProposals
         )
     }
 

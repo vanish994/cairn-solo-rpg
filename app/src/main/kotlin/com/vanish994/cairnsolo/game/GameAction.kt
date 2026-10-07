@@ -53,6 +53,7 @@ sealed interface GameAction {
     data object PayHirelings : GameAction
     data class CheckHirelingMorale(val hirelingId: String, val failureOutcome: MoraleOutcome = MoraleOutcome.RETREAT) : GameAction
     data class RecordGrowthEvidence(val evidence: GrowthEvidence) : GameAction
+    data class RecordGrowthEvidenceProposal(val proposal: GrowthEvidenceProposal) : GameAction
     data class ApplyGrowth(val proposal: GrowthProposal) : GameAction
     data class ApplyCanonProposals(val proposals: List<CanonProposal>) : GameAction
     data class AdvanceFaction(val factionId: String, val amount: Int = 1, val reason: String) : GameAction
@@ -186,6 +187,10 @@ class GameActionResolver(
         is GameAction.RecordGrowthEvidence -> {
             val next = growth.recordEvidence(state, action.evidence)
             GameResult(next, listOf(GameEvent.GrowthEvidenceRecorded(action.evidence.id)))
+        }
+        is GameAction.RecordGrowthEvidenceProposal -> {
+            val next = growth.recordProposal(state, action.proposal)
+            GameResult(next, listOf(GameEvent.GrowthEvidenceRecorded(action.proposal.id)))
         }
         is GameAction.ApplyGrowth -> applyGrowth(state, action)
         is GameAction.ApplyCanonProposals -> {

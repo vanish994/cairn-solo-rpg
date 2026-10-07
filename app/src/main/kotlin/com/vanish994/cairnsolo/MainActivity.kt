@@ -196,7 +196,11 @@ class MainActivity : ComponentActivity() {
                                                         interactionId = response.interactionId
                                                     )
                                                     val next = runCatching {
-                                                        actionResolver.resolve(narrated, GameAction.ApplyCanonProposals(response.canonProposals)).state
+                                                        val withGrowth = response.growthEvidenceProposals.fold(narrated) { accumulated, proposal ->
+                                                            runCatching { actionResolver.resolve(accumulated, GameAction.RecordGrowthEvidenceProposal(proposal)).state }
+                                                                .getOrElse { accumulated }
+                                                        }
+                                                        actionResolver.resolve(withGrowth, GameAction.ApplyCanonProposals(response.canonProposals)).state
                                                     }.getOrElse { narrated }
                                                     repository.save(next)
                                                     state = next
@@ -226,7 +230,11 @@ class MainActivity : ComponentActivity() {
                                                         interactionId = response.interactionId
                                                     )
                                                     val next = runCatching {
-                                                        actionResolver.resolve(narrated, GameAction.ApplyCanonProposals(response.canonProposals)).state
+                                                        val withGrowth = response.growthEvidenceProposals.fold(narrated) { accumulated, proposal ->
+                                                            runCatching { actionResolver.resolve(accumulated, GameAction.RecordGrowthEvidenceProposal(proposal)).state }
+                                                                .getOrElse { accumulated }
+                                                        }
+                                                        actionResolver.resolve(withGrowth, GameAction.ApplyCanonProposals(response.canonProposals)).state
                                                     }.getOrElse { narrated }
                                                     repository.save(next)
                                                     state = next

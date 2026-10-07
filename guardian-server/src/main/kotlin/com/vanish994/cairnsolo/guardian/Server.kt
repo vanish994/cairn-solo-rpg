@@ -35,6 +35,7 @@ Quando uma ação exigir resolução mecânica, preencha ruleRequest com um pedi
 Você pode propor atualizações narrativas em canonProposals, mas elas não são fatos até serem validadas pelo aplicativo. Use apenas UPSERT_NPC, DISCOVER_LOCATION, ADD_IMPORTANT_ITEM, CREATE_QUEST, ADD_DISCOVERY ou ADD_RUMOR. Nunca altere HP, atributos, inventário, facções, Growth ou outros dados mecânicos.
 O estado growth.evidence contém experiências já registradas pelo domínio. Não crie evidências, habilidades ou aumentos de atributo por conta própria. Se uma experiência parecer um gatilho de Growth, narre a consequência e aguarde o fluxo de Growth do aplicativo.
 Use apenas fatos presentes em worldCanon, world, growth e recentHistory. Não invente NPCs, facções, agendas, relações ou experiências passadas; qualquer novo fato deve ser apenas uma proposta de cânone validável.
+Quando uma experiência significativa estiver sustentada pela cena atual, você pode preencher growthEvidenceProposals. Isso é apenas uma proposta: o aplicativo valida ID, resumo, entidades relacionadas e os gatilhos focusedPattern, seriousRisk e uniqueInteraction antes de registrá-la. Nunca proponha uma habilidade ou aumento de atributo nesse campo.
 
 Escreva em português brasileiro, com atmosfera de fantasia sombria e prosa objetiva.
 Não conduza o jogador por escolhas obrigatórias: apresente a situação e deixe espaço para ações livres.
@@ -90,6 +91,7 @@ FATIGUE (amount), REST, STABILIZE_CRITICAL ou RECOVER_SCAR. Não informe resulta
 Se não houver resolução mecânica, use null.
 Se houver um ruleResult no estado, trate-o como resultado autoritativo do motor e narre suas consequências.
 Inclua canonProposals como uma lista, mesmo quando vazia. Cada proposta deve ter type, id, status e source.
+Inclua growthEvidenceProposals como uma lista, mesmo quando vazia. Cada item deve ter id, summary, relatedEntityIds e pelo menos um gatilho verdadeiro.
 """.trimIndent()
 
     val schema = JsonObject().apply {
@@ -101,11 +103,12 @@ Inclua canonProposals como uma lista, mesmo quando vazia. Cada proposta deve ter
               "sceneDescription": {"type":"string"},
               "ruleRequest": {"anyOf":[{"type":"null"},{"type":"object","properties":{"type":{"type":"string","enum":["SAVE","DAMAGE","FATIGUE","REST","STABILIZE_CRITICAL","RECOVER_SCAR"]},"attribute":{"type":"string","enum":["STR","DEX","WIL"]},"amount":{"type":"integer","minimum":1}},"required":["type"],"additionalProperties":false}]},
               "suggestedActions": {"type":"array","items":{"type":"string"}},
-              "canonProposals": {"type":"array","maxItems":5,"items":{"type":"object","properties":{"type":{"type":"string","enum":["UPSERT_NPC","DISCOVER_LOCATION","ADD_IMPORTANT_ITEM","CREATE_QUEST","UPDATE_QUEST","ADD_DISCOVERY","ADD_RUMOR"]},"id":{"type":"string","pattern":"^[a-z0-9-]{3,80}$"},"status":{"type":"string","enum":["CONFIRMED","RUMOR","DISCOVERED"]},"source":{"type":"string","enum":["PLAYER","GUARDIAN","NPC","RULES_ENGINE","SYSTEM"]},"name":{"type":"string"},"title":{"type":"string"},"text":{"type":"string"},"description":{"type":"string"},"role":{"type":"string"},"relatedEntityIds":{"type":"array","items":{"type":"string"}}},"required":["type","id","status","source"],"additionalProperties":false}}
+              "canonProposals": {"type":"array","maxItems":5,"items":{"type":"object","properties":{"type":{"type":"string","enum":["UPSERT_NPC","DISCOVER_LOCATION","ADD_IMPORTANT_ITEM","CREATE_QUEST","UPDATE_QUEST","ADD_DISCOVERY","ADD_RUMOR"]},"id":{"type":"string","pattern":"^[a-z0-9-]{3,80}$"},"status":{"type":"string","enum":["CONFIRMED","RUMOR","DISCOVERED"]},"source":{"type":"string","enum":["PLAYER","GUARDIAN","NPC","RULES_ENGINE","SYSTEM"]},"name":{"type":"string"},"title":{"type":"string"},"text":{"type":"string"},"description":{"type":"string"},"role":{"type":"string"},"relatedEntityIds":{"type":"array","items":{"type":"string"}}},"required":["type","id","status","source"],"additionalProperties":false}},
+              "growthEvidenceProposals": {"type":"array","maxItems":3,"items":{"type":"object","properties":{"id":{"type":"string","pattern":"^[a-z0-9-]{3,80}$"},"summary":{"type":"string","minLength":1,"maxLength":1000},"relatedEntityIds":{"type":"array","items":{"type":"string"}},"focusedPattern":{"type":"boolean"},"seriousRisk":{"type":"boolean"},"uniqueInteraction":{"type":"boolean"}},"required":["id","summary","relatedEntityIds","focusedPattern","seriousRisk","uniqueInteraction"],"additionalProperties":false}}
             }
         """).asJsonObject)
         add("required", JsonParser.parseString(
-            """["narration","sceneTitle","sceneDescription","ruleRequest","suggestedActions","canonProposals"]"""
+            """["narration","sceneTitle","sceneDescription","ruleRequest","suggestedActions","canonProposals","growthEvidenceProposals"]"""
         ).asJsonArray)
         addProperty("additionalProperties", false)
     }

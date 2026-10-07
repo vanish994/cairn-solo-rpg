@@ -23,6 +23,16 @@ data class GrowthEvidence(
     val triggerCount: Int get() = listOf(focusedPattern, seriousRisk, uniqueInteraction).count { it }
 }
 
+/** Contrato externo: não contém turno, pois o domínio atribui o turno autoritativo. */
+data class GrowthEvidenceProposal(
+    val id: String,
+    val summary: String,
+    val relatedEntityIds: List<String> = emptyList(),
+    val focusedPattern: Boolean = false,
+    val seriousRisk: Boolean = false,
+    val uniqueInteraction: Boolean = false
+)
+
 sealed interface GrowthChange {
     data class RaiseMaxAttribute(val attribute: Attribute, val amount: Int = 1) : GrowthChange {
         init { require(amount > 0) }
@@ -72,6 +82,19 @@ data class GrowthResolution(
 )
 
 class GrowthResolver {
+    fun recordProposal(state: GameState, proposal: GrowthEvidenceProposal): GameState = recordEvidence(
+        state,
+        GrowthEvidence(
+            id = proposal.id,
+            summary = proposal.summary,
+            turn = state.campaign.turn,
+            relatedEntityIds = proposal.relatedEntityIds,
+            focusedPattern = proposal.focusedPattern,
+            seriousRisk = proposal.seriousRisk,
+            uniqueInteraction = proposal.uniqueInteraction
+        )
+    )
+
     fun recordEvidence(state: GameState, evidence: GrowthEvidence): GameState {
         require(state.campaign.growth.evidence.none { it.id == evidence.id }) { "Growth evidence id already exists" }
         val nextGrowth = state.campaign.growth.copy(evidence = (state.campaign.growth.evidence + evidence).takeLast(500))

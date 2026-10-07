@@ -31,12 +31,13 @@ python3 - "$response_file" <<'PY'
 import json, sys
 from pathlib import Path
 body = json.loads(Path(sys.argv[1]).read_text())
-required = {"narration", "sceneTitle", "sceneDescription", "suggestedActions", "ruleRequest", "canonProposals", "interactionId"}
+required = {"narration", "sceneTitle", "sceneDescription", "suggestedActions", "ruleRequest", "canonProposals", "growthEvidenceProposals", "interactionId"}
 missing = required - body.keys()
 assert not missing, f"missing response fields: {sorted(missing)}"
 assert isinstance(body["narration"], str) and body["narration"].strip()
 assert isinstance(body["suggestedActions"], list)
 assert isinstance(body["canonProposals"], list)
+assert isinstance(body["growthEvidenceProposals"], list)
 assert isinstance(body["interactionId"], str) and body["interactionId"].strip()
 rule = body["ruleRequest"]
 if rule is not None:
@@ -48,5 +49,10 @@ for proposal in body["canonProposals"]:
     assert isinstance(proposal["id"], str) and proposal["id"]
     assert proposal["status"] in {"CONFIRMED", "RUMOR", "DISCOVERED"}
     assert proposal["source"] in {"PLAYER", "GUARDIAN", "NPC", "RULES_ENGINE", "SYSTEM"}
+for proposal in body["growthEvidenceProposals"]:
+    assert isinstance(proposal["id"], str) and proposal["id"]
+    assert isinstance(proposal["summary"], str) and proposal["summary"].strip()
+    assert isinstance(proposal["relatedEntityIds"], list)
+    assert any(proposal[key] for key in ("focusedPattern", "seriousRisk", "uniqueInteraction"))
 print("guardian: JSON contract ok")
 PY

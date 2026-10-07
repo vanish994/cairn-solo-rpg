@@ -40,6 +40,18 @@ class GrowthTest {
     }
 
     @Test
+    fun guardianEvidenceProposalIsValidatedAndGetsAuthoritativeTurn() {
+        val base = newCharacter("Mara", 10, 10, 10)
+        val actions = GameActionResolver(ExplorationEngine(FixedRandomSource(10)), RulesEngine(FixedRandomSource(10)))
+        val proposal = GrowthEvidenceProposal("guardian-relic", "Mara tocou a relíquia desconhecida apesar do risco.", listOf("relic-1"), seriousRisk = true, uniqueInteraction = true)
+        val result = actions.resolve(base, GameAction.RecordGrowthEvidenceProposal(proposal)).state
+        val accepted = result.campaign.growth.evidence.single()
+        assertEquals(1L, accepted.turn)
+        assertEquals(listOf("relic-1"), accepted.relatedEntityIds)
+        assertEquals(HistoryEventType.GROWTH, result.campaign.history.single().type)
+    }
+
+    @Test
     fun growthCanAddAnAbilityWithoutLettingGuardianChangeRulesDirectly() {
         val base = newCharacter("Mara", 10, 10, 10)
         val actions = GameActionResolver(ExplorationEngine(FixedRandomSource(10)), RulesEngine(FixedRandomSource(10)))
