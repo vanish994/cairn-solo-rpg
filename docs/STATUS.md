@@ -6,9 +6,9 @@
 
 ## Gate atual
 
-**Gate 2 — Campanha e exploração**
+**Integração de campanha, Guardian e UI de chat**
 
-Status: 🟡 exploração inicial funcional; contrato de ações centralizado; CI validado
+Status: 🟡 núcleo de regras e módulos de campanha integrados; UI em transição para chat; combate/Growth precisam fechar o ciclo E2E
 
 ## Gate 0 — Concluído
 
@@ -104,13 +104,28 @@ A tela de exploração não modifica regras diretamente. Ela envia `GameAction`;
 
 O descanso de exploração agora usa `RulesEngine.safeRest()`. Isso evita criar uma segunda implementação de descanso dentro do motor de exploração.
 
-### Próximo incremento
+## Estado atual da integração
 
-- adicionar ações mecânicas de personagem ao mesmo contrato (`ApplyDamage`, `AddItem`, `RemoveItem`, etc.);
-- eliminar chamadas diretas do `RulesEngine` pela UI;
-- criar testes de round-trip da persistência;
-- consolidar o estado de campanha e remover duplicidade entre `CampaignState` e `CampaignRuntime`;
-- preparar um DTO de contexto autorizado para o futuro MJ, sem Gemini ainda.
+- [x] `GameActionResolver` como porta central para regras de personagem, inventário, combate, Growth, facções e módulos Warden.
+- [x] Mundo inicial gerado por `campaignSeed` e abertura narrativa derivada da campanha.
+- [x] `GuardianContext` filtrado para impedir exposição do estado bruto ao modelo.
+- [x] Histórico persistente de narrativa e falas do jogador na tela de exploração.
+- [x] Entrada principal em formato de chat, com envio compacto ao lado do campo.
+- [x] Botões narrativos redundantes `Continuar` e `Investigar` removidos da tela principal.
+- [x] Descanso conectado ao `RulesEngine.safeRest()` e explicado como descanso seguro na UI.
+- [x] Combate, magia, dungeon, wilderness, downtime, marketplace, reações, moral, hirelings, Growth e cânone possuem módulos de domínio e ações de integração.
+- [x] Persistência inclui os módulos novos e possui testes de round-trip em partes relevantes.
+- [x] Backend Guardian usa fluxo estruturado de propostas e modelo Flash-Lite.
+
+## Próximo incremento
+
+- conectar `BEGIN_COMBAT`/`BeginCombat` ao fluxo do Guardian e à UI de combate;
+- bloquear ações de exploração enquanto `campaign.combat` estiver ativo;
+- criar revisão aceitar/recusar para Growth validado;
+- diferenciar descanso seguro, descanso breve e acampamento inseguro por contexto de cena;
+- concluir o teste E2E: criação → abertura única → exploração → encontro → combate → Growth → save/load;
+- sincronizar a matriz normativa com o código real e atualizar os Gates antigos;
+- decidir e registrar a consolidação entre `CampaignState` e `CampaignRuntime`.
 
 ## Regras para agentes
 
@@ -125,15 +140,6 @@ O descanso de exploração agora usa `RulesEngine.safeRest()`. Isso evita criar 
 - Toda alteração relevante deve ter testes automatizados quando houver comportamento determinístico verificável.
 - Uma etapa só é considerada validada após execução real do CI.
 
-## Atualização de interface — 2026-10-06
-
-- Redesign dark fantasy aplicado em `MainActivity.kt`.
-- Tela de criação com nome, retrato selecionável, ficha de rolagem, fórmula discreta e estados claros para os botões.
-- Tela de exploração com cards separados de Cena e Guardião, campo narrativo multilinha, ação principal e barra inferior padronizada.
-- Paleta própria com tinta escura, papel envelhecido, dourado suave e cobre; títulos serifados e rótulos compactos.
-- A lógica existente de rolagem, criação, exploração, descanso e narrativa foi preservada.
-- Validação local não executada: o checkout não possui `gradlew` e o sandbox não tem o comando `gradle`; o CI do GitHub Actions será a validação de build.
-
 ## Última validação
 
 Workflow GitHub Actions **Android Build #68**:
@@ -141,3 +147,8 @@ Workflow GitHub Actions **Android Build #68**:
 - 26 testes concluídos.
 - 0 falhas.
 - Build do projeto: sucesso.
+
+## Documentos para continuidade
+
+- `docs/DEVELOPMENT-GUIDE.md` — procedimento completo para novos agentes e mudanças.
+- `docs/ARCHITECTURE-MAP.md` — mapa técnico detalhado dos fluxos e dependências.
