@@ -214,10 +214,10 @@ class GameActionResolverTest {
 
     @Test
     fun wardenActionsResolveAndPersistHirelingState() {
-        val template = state().copy(campaign = state().campaign.copy(profile = CharacterProfile(gold = 30)))
+        val template = state().copy(campaign = state().campaign.copy(profile = CharacterProfile(gold = 40)))
         val resolver = GameActionResolver(ExplorationEngine(FixedRandomSource(10, d6Value = 6)), RulesEngine(FixedRandomSource(10, d6Value = 6)))
         val hired = resolver.resolve(template, GameAction.HireHireling("hireling-scholar", "scholar-1", "Iria"))
-        assertEquals(10, hired.state.campaign.profile.gold)
+        assertEquals(20, hired.state.campaign.profile.gold)
         assertEquals("scholar-1", hired.state.campaign.hirelings.single().id)
         val paid = resolver.resolve(hired.state, GameAction.PayHirelings)
         assertEquals(0, paid.state.campaign.profile.gold)
