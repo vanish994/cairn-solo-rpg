@@ -638,10 +638,21 @@ private fun ExplorationScreen(
             onClick = onBack
         )
 
+        Text(
+            if (r.deprived) {
+                "Sem recuperação: o aventureiro está privado de necessidades básicas."
+            } else {
+                "Descanso seguro recupera todo o HP e remove toda a Fadiga. Não é um avanço narrativo."
+            },
+            color = CairnMuted,
+            style = MaterialTheme.typography.labelSmall,
+            maxLines = 2
+        )
         ActionButton(
-            "Descansar",
+            "Descanso seguro",
             Modifier.fillMaxWidth(),
-            outlined = true
+            outlined = true,
+            enabled = !r.deprived && (r.hp < r.maxHp || r.fatigue > 0)
         ) {
             if (pendingRule == null && lastResolution == null) onAction(GameAction.ExploreRest)
         }
@@ -733,11 +744,13 @@ private fun ActionButton(
     label: String,
     modifier: Modifier = Modifier,
     outlined: Boolean = false,
+    enabled: Boolean = true,
     onClick: () -> Unit
 ) {
     if (outlined) {
         OutlinedButton(
             onClick = onClick,
+            enabled = enabled,
             modifier = modifier.height(40.dp),
             shape = RoundedCornerShape(7.dp)
         ) {
@@ -746,6 +759,7 @@ private fun ActionButton(
     } else {
         Button(
             onClick = onClick,
+            enabled = enabled,
             modifier = modifier.height(40.dp),
             shape = RoundedCornerShape(7.dp)
         ) {
