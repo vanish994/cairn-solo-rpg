@@ -9,7 +9,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 private fun guardianArray(values: Iterable<Any?>): JSONArray = JSONArray().apply {
-    values.forEach { value -> put(value ?: JSONObject.NULL) }
+    values.forEach { value -> value?.let(::put) }
 }
 
 private fun guardianMapJson(value: Map<String, Any?>): JSONObject = JSONObject().apply {
@@ -22,7 +22,7 @@ private fun guardianMapJson(value: Map<String, Any?>): JSONObject = JSONObject()
                     else -> nested
                 }
             })
-            else -> item ?: JSONObject.NULL
+            else -> item
         })
     }
 }
@@ -87,8 +87,9 @@ data class GuardianInventoryContext(
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("id", id); put("slotCost", slotCost)
-        put("damage", damage ?: JSONObject.NULL); put("armor", armor)
-        put("uses", uses ?: JSONObject.NULL)
+        damage?.let { put("damage", it) }
+        put("armor", armor)
+        uses?.let { put("uses", it) }
     }
 }
 
@@ -144,7 +145,7 @@ data class GuardianFactionContext(
 data class GuardianNpcContext(val id: String, val name: String, val role: String, val locationId: String, val factionId: String?) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("id", id); put("name", name); put("role", role); put("locationId", locationId)
-        put("factionId", factionId ?: JSONObject.NULL)
+        factionId?.let { put("factionId", it) }
     }
 }
 
