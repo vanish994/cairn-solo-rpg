@@ -52,6 +52,9 @@ sealed interface GameAction {
     data class HireHireling(val entryId: String, val hirelingId: String, val name: String, val loyalty: Int = 7, val morale: Int = 7) : GameAction
     data object PayHirelings : GameAction
     data class CheckHirelingMorale(val hirelingId: String, val failureOutcome: MoraleOutcome = MoraleOutcome.RETREAT) : GameAction
+    data class RecordGrowthEvidence(val evidence: GrowthEvidence) : GameAction
+    data class ApplyGrowth(val proposal: GrowthProposal) : GameAction
+    data class ApplyCanonProposals(val proposals: List<CanonProposal>) : GameAction
 }
 
 data class GameResult(val state: GameState, val events: List<GameEvent>)
@@ -81,6 +84,9 @@ sealed interface GameEvent {
     data class ReactionResolved(val roll: Int, val disposition: com.vanish994.cairnsolo.rules.ReactionDisposition) : GameEvent
     data class MoraleResolved(val roll: Int, val morale: Int, val outcome: MoraleOutcome) : GameEvent
     data class HirelingResolved(val hirelingId: String, val outcome: String, val goldRemaining: Int? = null) : GameEvent
+    data class GrowthEvidenceRecorded(val evidenceId: String) : GameEvent
+    data class GrowthApplied(val proposalId: String) : GameEvent
+    data class CanonUpdated(val count: Int) : GameEvent
 }
 
 class GameActionResolver(
@@ -95,6 +101,7 @@ class GameActionResolver(
     private val reactions: com.vanish994.cairnsolo.rules.ReactionRules = com.vanish994.cairnsolo.rules.ReactionRules(rules.random),
     private val morale: com.vanish994.cairnsolo.rules.MoraleRules = com.vanish994.cairnsolo.rules.MoraleRules(rules.random),
     private val hirelingRules: com.vanish994.cairnsolo.rules.HirelingRules = com.vanish994.cairnsolo.rules.HirelingRules(morale)
+    private val growth: GrowthResolver = GrowthResolver()
 ) {
     fun resolve(state: GameState, action: GameAction): GameResult = when (action) {
         is GameAction.CreateCharacter -> {
@@ -173,6 +180,29 @@ class GameActionResolver(
         is GameAction.HireHireling -> hireHireling(state, action)
         GameAction.PayHirelings -> payHirelings(state)
         is GameAction.CheckHirelingMorale -> checkHirelingMorale(state, action)
+        is GameAction.RecordGrowthEvidence -> {
+            val next = growth.recordEvidence(state, action.evidence)
+            GameResult(next, listOf(GameEvent.GrowthEvidenceRecorded(action.evidence.id)))
+        }
+        is GameAction.ApplyGrowth -> applyGrowth(state, action)
+        is GameAction.ApplyCanonProposals -> {
+            val next = CanonResolver().apply(state, action.proposals)
+            GameResult(next, if (action.proposals.isEmpty()) emptyList() else listOf(GameEvent.CanonUpdated(action.proposals.size)))
+        }
+    }
+
+    private fun applyGrowth(state: GameState, action: GameAction.ApplyGrowth): GameResult {
+        val result = growth.apply(state, action.proposal)
+        val next = state.copy(
+            campaign = state.campaign.copy(
+                rules = result.character,
+                growth = result.growth,
+                history = (state.campaign.history + result.history).takeLast(500),
+                turn = state.campaign.turn + 1
+            ),
+            updatedAtEpochMs = System.currentTimeMillis()
+        )
+        return GameResult(next, listOf(GameEvent.GrowthApplied(action.proposal.id)))
     }
 
     private fun hireHireling(state: GameState, action: GameAction.HireHireling): GameResult {

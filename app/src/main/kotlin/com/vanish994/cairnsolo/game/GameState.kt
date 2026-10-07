@@ -67,6 +67,7 @@ data class CampaignState(
     val wilderness: WildernessState? = null,
     val downtime: DowntimeState = DowntimeState(),
     val hirelings: List<HirelingState> = emptyList(),
+    val growth: GrowthState = GrowthState(),
     val worldState: WorldState? = null,
     val worldCanon: WorldCanon = WorldCanon(),
     val history: List<CampaignHistoryEntry> = emptyList()

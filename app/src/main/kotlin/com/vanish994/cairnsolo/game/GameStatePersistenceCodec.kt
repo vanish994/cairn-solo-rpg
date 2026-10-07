@@ -49,6 +49,11 @@ object GameStatePersistenceCodec {
             c.downtime.milestones.forEachIndexed { i, m -> put("milestone_$i", listOf(m.id, m.goal, m.total, m.progress, costType(m.cost), costValue(m.cost)).joinToString(SEPARATOR)) }
             put("hirelingCount", c.hirelings.size.toString())
             c.hirelings.forEachIndexed { i, h -> put("hireling_$i", listOf(h.id, h.name, h.role, h.wageGp, h.loyalty, h.morale, h.active, h.injured).joinToString(SEPARATOR)) }
+            put("growthEvidenceCount", c.growth.evidence.size.toString())
+            c.growth.evidence.forEachIndexed { i, e -> put("growthEvidence_$i", listOf(e.id, e.summary, e.turn, e.relatedEntityIds.joinToString(","), e.focusedPattern, e.seriousRisk, e.uniqueInteraction).joinToString(SEPARATOR)) }
+            put("growthProposalCount", c.growth.appliedProposalIds.size.toString()); c.growth.appliedProposalIds.forEachIndexed { i, id -> put("growthProposal_$i", id) }
+            put("growthAbilityCount", c.growth.abilities.size.toString())
+            c.growth.abilities.forEachIndexed { i, a -> put("growthAbility_$i", listOf(a.id, a.name, a.description, a.cost ?: "", a.acquiredTurn).joinToString(SEPARATOR)) }
             put("canonLocationCount", c.worldCanon.locations.size.toString())
             c.worldCanon.locations.forEachIndexed { i, x -> put("canonLocation_${i}", listOf(x.id, x.name, x.description, x.status.name, x.firstSeenTurn).joinToString(SEPARATOR)) }
             put("canonNpcCount", c.worldCanon.npcs.size.toString())
@@ -147,6 +152,9 @@ object GameStatePersistenceCodec {
         val milestones = (0 until int("milestoneCount", 0)).mapNotNull { i -> string("milestone_$i").split(SEPARATOR).takeIf { it.size >= 6 }?.let { x -> runCatching { Milestone(x[0], x[1], x[2].toInt(), x[3].toInt(), decodeCost(x[4], x[5])) }.getOrNull() } }
         val downtime = com.vanish994.cairnsolo.rules.DowntimeState(bool("downtimeSafe", true), bool("downtimeRecovery", false), int("downtimeGold", int("profileGold", 0)), int("downtimeReputation", 0), string("downtimeResources").split(SEPARATOR).filter { it.isNotBlank() }.toSet(), milestones, int("downtimeCompleted", 0))
         val hirelings = (0 until int("hirelingCount", 0)).mapNotNull { i -> string("hireling_$i").split(SEPARATOR).takeIf { it.size >= 8 }?.let { x -> runCatching { HirelingState(x[0], x[1], x[2], x[3].toInt(), x[4].toInt(), x[5].toInt(), x[6].toBoolean(), x[7].toBoolean()) }.getOrNull() } }
+        val growthEvidence = (0 until int("growthEvidenceCount", 0)).mapNotNull { i -> string("growthEvidence_$i").split(SEPARATOR).takeIf { it.size >= 7 }?.let { x -> runCatching { GrowthEvidence(x[0], x[1], x[2].toLong(), x[3].split(",").filter { it.isNotBlank() }, x[4].toBoolean(), x[5].toBoolean(), x[6].toBoolean()) }.getOrNull() } }
+        val appliedGrowth = (0 until int("growthProposalCount", 0)).map { i -> string("growthProposal_$i") }.filter { it.isNotBlank() }
+        val growthAbilities = (0 until int("growthAbilityCount", 0)).mapNotNull { i -> string("growthAbility_$i").split(SEPARATOR).takeIf { it.size >= 5 }?.let { x -> runCatching { GrowthAbility(x[0], x[1], x[2], x[3].takeIf { it.isNotBlank() }, x[4].toLong()) }.getOrNull() } }
         val worldState = WorldStatePersistenceCodec.decode(values)
         return GameState(
             campaign = CampaignState(
@@ -161,6 +169,7 @@ object GameStatePersistenceCodec {
                 wilderness = wilderness,
                 downtime = downtime,
                 hirelings = hirelings,
+                growth = GrowthState(growthEvidence, appliedGrowth, growthAbilities),
                 worldState = worldState,
                 worldCanon = WorldCanon(locations, npcs, items, quests, discoveries),
                 history = history

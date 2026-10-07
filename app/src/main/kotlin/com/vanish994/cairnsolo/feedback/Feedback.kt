@@ -42,6 +42,9 @@ object FeedbackMapper {
             is GameEvent.ReactionResolved -> "Reação resolvida: ${event.disposition.name.lowercase()} (2d6=${event.roll})." to FeedbackType.INFO
             is GameEvent.MoraleResolved -> "Moral resolvida: ${event.outcome.name.lowercase()} (2d6=${event.roll}/${event.morale})." to if (event.outcome.name == "STAND") FeedbackType.SUCCESS else FeedbackType.WARNING
             is GameEvent.HirelingResolved -> "Hireling ${event.hirelingId}: ${event.outcome.lowercase()}." to if (event.outcome == "HIRED") FeedbackType.SUCCESS else FeedbackType.INFO
+            is GameEvent.GrowthEvidenceRecorded -> "Experiência significativa registrada: ${event.evidenceId}." to FeedbackType.INFO
+            is GameEvent.GrowthApplied -> "Growth aplicado: ${event.proposalId}." to FeedbackType.SUCCESS
+            is GameEvent.CanonUpdated -> "Cânone atualizado com ${event.count} proposta(s)." to FeedbackType.INFO
         }
         return FeedbackEntry(id = idFor(event, turn), message = mapped.first, type = mapped.second, turn = turn)
     }

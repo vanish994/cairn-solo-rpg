@@ -196,7 +196,7 @@ class MainActivity : ComponentActivity() {
                                                         interactionId = response.interactionId
                                                     )
                                                     val next = runCatching {
-                                                        canonResolver.apply(narrated, response.canonProposals)
+                                                        actionResolver.resolve(narrated, GameAction.ApplyCanonProposals(response.canonProposals)).state
                                                     }.getOrElse { narrated }
                                                     repository.save(next)
                                                     state = next
@@ -226,7 +226,7 @@ class MainActivity : ComponentActivity() {
                                                         interactionId = response.interactionId
                                                     )
                                                     val next = runCatching {
-                                                        canonResolver.apply(narrated, response.canonProposals)
+                                                        actionResolver.resolve(narrated, GameAction.ApplyCanonProposals(response.canonProposals)).state
                                                     }.getOrElse { narrated }
                                                     repository.save(next)
                                                     state = next
