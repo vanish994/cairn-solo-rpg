@@ -4,6 +4,11 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+val guardianApiUrl = providers.gradleProperty("guardianApiUrl")
+    .orElse("https://cairn-guardian.onrender.com/guardian")
+    .get()
+val guardianApiUrlBuildConfigLiteral = "\"${guardianApiUrl.replace("\\", "\\\\").replace("\"", "\\\"")}\""
+
 android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -32,13 +37,13 @@ android {
 
     buildTypes {
         debug {
-            buildConfigField("String", "GUARDIAN_API_URL", "\${project.findProperty("guardianApiUrl") ?: "https://cairn-guardian.onrender.com/guardian"}")
+            buildConfigField("String", "GUARDIAN_API_URL", guardianApiUrlBuildConfigLiteral)
         }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
             signingConfig = signingConfigs.getByName("debug")
-            buildConfigField("String", "GUARDIAN_API_URL", "\${project.findProperty("guardianApiUrl") ?: "https://cairn-guardian.onrender.com/guardian"}")
+            buildConfigField("String", "GUARDIAN_API_URL", guardianApiUrlBuildConfigLiteral)
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
         }
     }
@@ -46,6 +51,7 @@ android {
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1,INDEX.LIST}"
+            excludes += "/META-INF/DEPENDENCIES"
         }
     }
 }
