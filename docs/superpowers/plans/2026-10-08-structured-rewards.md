@@ -19,7 +19,7 @@
 - Itens só podem usar IDs existentes em `MarketplaceCatalog` com `item != null`; o Guardian não define slots, Armor, dano ou outros atributos mecânicos.
 - Toda mutação passa por `GameActionResolver`; crédito de moeda é validado por `MarketplaceRules.creditGold`, itens/capacidade por `RulesEngine.addItem`; ID de recompensa/componentes impede duplicação em retry.
 - Se faltarem slots, manter o item em `pendingRewardItems` e pedir espaço para resgate; nunca remover um item automaticamente.
-- Ao preencher exatamente os 10 slots, não reduzir HP; atingir a capacidade não equivale a dano em Cairn 2e.
+- Por decisão do usuário em 2026-10-08, seguir a regra oficial Cairn 2e: preencher o 10º slot reduz HP a 0; a recompensa cabe e é concedida. Se o item não couber, manter pendente.
 - Primeiro revisar e mesclar o PR de documentação destes planos; depois criar o branch de feature a partir da `main` atualizada para que spec e plano acompanhem o trabalho.
 - Entregar via branch/PR; exigir Android Build verde antes de merge em `main`.
 
@@ -50,7 +50,7 @@
 - `GrantReward` aplica ouro e todos os itens em uma única transição de turno. Guardar `"$rewardId:grant"` como chave do pacote e `"$rewardId:gold"`/`"$rewardId:item:$ordinal"` como chaves de componentes; replay ou payload diferente com o mesmo ID não concede novamente. Itens são materializados por `MarketplaceCatalog.find(catalogItemId)?.item`, nunca por stats enviados pelo Guardian.
 - Cada instância usa `itemInstanceId = "reward:$rewardId:$ordinal:$catalogItemId"`, copia stats do catálogo e guarda a tag `reward-catalog:$catalogItemId`; claim reutiliza a mesma instância.
 
-- [ ] Escrever `MarketplaceTest.creditGoldAddsGpAndRejectsOverflow`; escrever `GameActionResolverTest.creditGoldUpdatesBalanceAndRecordsEvent`, `creditGoldIsIdempotent`, `invalidGrantRewardRejected`, `grantRewardAppliesGoldAndItemsInOneTurn`, `grantRewardIsIdempotent`, `grantRewardWithChangedPayloadIsNoOp`, `fullInventoryStoresRewardAsPending`, `claimPendingRewardItemAfterSpaceFreed`, `unsupportedItemIdDoesNotAddItem` e `nonItemCatalogEntryCannotBeGranted`; escrever `RulesEngineTest.fillingLastSlotDoesNotSetHpToZero` e `RewardPersistenceTest.pendingAndAppliedRewardIdsRoundTrip`.
+- [ ] Escrever `MarketplaceTest.creditGoldAddsGpAndRejectsOverflow`; escrever `GameActionResolverTest.creditGoldUpdatesBalanceAndRecordsEvent`, `creditGoldIsIdempotent`, `invalidGrantRewardRejected`, `grantRewardAppliesGoldAndItemsInOneTurn`, `grantRewardIsIdempotent`, `grantRewardWithChangedPayloadIsNoOp`, `fullInventoryStoresRewardAsPending`, `claimPendingRewardItemAfterSpaceFreed`, `unsupportedItemIdDoesNotAddItem` e `nonItemCatalogEntryCannotBeGranted`; confirmar com `RulesEngineTest.fillingLastSlotReducesHpToZeroAccordingToCairn2e` e `RewardPersistenceTest.pendingAndAppliedRewardIdsRoundTrip`.
 
 ```kotlin
 assertEquals(12, paid.state.campaign.profile.gold) // começar com 0 GP e aplicar a recompensa de teste
@@ -60,7 +60,7 @@ assertEquals(1, fullInventoryResult.state.campaign.pendingRewardItems.size)
 ```
 
 - [ ] Rodar `gh workflow run android.yml --ref <feature-branch>` com os testes novos; confirmar falha esperada antes da implementação. O Sandbox não possui Gradle/Android SDK local.
-- [ ] Corrigir `RulesEngine.addItem` para que ocupar exatamente 10 slots não reduza HP; manter a regra de capacidade e não remover itens existentes.
+- [ ] Preservar `RulesEngine.addItem` conforme Cairn 2e: ocupar exatamente 10 slots reduz HP a 0; cobrir isso com teste de regressão. Recompensas que excedam a capacidade ficam pendentes sem remover itens existentes.
 - [ ] Implementar `AddGold` no `GameActionResolver`; chamar `MarketplaceRules.creditGold`, registrar `rewardId:gold` e emitir `GoldCredited` com novo saldo.
 - [ ] Implementar `GrantReward`; chamar `MarketplaceRules.creditGold` e materializar itens via `RulesEngine.addItem` em uma única transição/turno. Se não houver espaço, persistir cada item pendente em vez de descartar item ou falhar silenciosamente.
 - [ ] Implementar `ClaimPendingRewardItem`; só resgatar quando há slots suficientes, chamar `RulesEngine.addItem` e remover a pendência. Liberar espaço é escolha do jogador por ações normais de inventário.
