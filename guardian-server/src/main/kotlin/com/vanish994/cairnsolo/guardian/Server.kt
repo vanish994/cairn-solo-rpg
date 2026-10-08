@@ -349,6 +349,7 @@ internal fun normalizeRewardProposal(response: JsonObject): JsonObject {
     val type = jsonString(ruleRequest.get("type"))
     if (!type.equals("REWARD", ignoreCase = true)) return response
 
+    ruleRequest.addProperty("type", "REWARD")
     if (!isCompleteRewardProposal(ruleRequest)) {
         ruleRequest.entrySet().map { it.key }.filter { it != "type" }.forEach { key -> ruleRequest.remove(key) }
     }

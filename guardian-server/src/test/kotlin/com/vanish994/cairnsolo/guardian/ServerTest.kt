@@ -197,6 +197,20 @@ class ServerTest {
     }
 
     @Test
+    fun rewardNormalizerCanonicalizesLowercaseType() {
+        val response = validRewardResponse().apply {
+            getAsJsonObject("ruleRequest").addProperty("type", "reward")
+        }
+
+        val normalized = normalizeRewardProposal(response)
+        val request = normalized.getAsJsonObject("ruleRequest")
+
+        assertEquals("A recompensa foi entregue.", normalized.get("narration").asString)
+        assertEquals("REWARD", request.get("type").asString)
+        assertEquals(2, request.getAsJsonArray("itemCatalogIds").size())
+    }
+
+    @Test
     fun malformedRewardProposalIsStrippedWithoutLosingNarrationOrRequestType() {
         val invalidResponses = listOf(
             validRewardResponse().apply { getAsJsonObject("ruleRequest").addProperty("amountGp", -1) },

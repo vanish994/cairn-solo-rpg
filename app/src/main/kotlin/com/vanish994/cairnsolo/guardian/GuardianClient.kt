@@ -302,7 +302,7 @@ class HttpGuardianClient(
         require(exactJson.keySet() == setOf("type", "id", "status", "amountGp", "itemCatalogIds")) {
             "REWARD payload contains missing or unsupported fields"
         }
-        require(exactJson.getExactString("type") == "REWARD") { "REWARD type is invalid" }
+        require(exactJson.getExactString("type").equals("REWARD", ignoreCase = true)) { "REWARD type is invalid" }
         return GuardianRewardProposal(
             id = exactJson.getExactString("id"),
             status = RewardStatus.valueOf(exactJson.getExactString("status")),

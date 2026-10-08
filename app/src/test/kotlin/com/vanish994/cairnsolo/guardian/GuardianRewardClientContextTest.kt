@@ -27,6 +27,17 @@ class GuardianRewardClientContextTest {
     }
 
     @Test
+    fun parsesPaidRewardProposalWhenTypeIsLowercase() {
+        val response = HttpGuardianClient(baseUrl = "").parseResponse(
+            """{"narration":"O pagamento foi entregue.","sceneTitle":"Taverna","sceneDescription":"A cena termina.","ruleRequest":{"type":"reward","id":"quest-pay","status":"PAID","amountGp":12,"itemCatalogIds":[]}}"""
+        )
+
+        assertEquals("REWARD", response.ruleRequest?.type)
+        assertEquals(RewardStatus.PAID, response.ruleRequest?.reward?.status)
+        assertEquals(12, response.ruleRequest?.reward?.amountGp)
+    }
+
+    @Test
     fun invalidRewardProposalPreservesNarrationForVisibleRejection() {
         val response = HttpGuardianClient(baseUrl = "").parseResponse(
             """{"narration":"A cena continua apesar do pedido inválido.","sceneTitle":"Taverna","sceneDescription":"A conversa segue.","ruleRequest":{"type":"REWARD","id":"quest-pay","status":"PAID","amountGp":12.5,"itemCatalogIds":[]}}"""
