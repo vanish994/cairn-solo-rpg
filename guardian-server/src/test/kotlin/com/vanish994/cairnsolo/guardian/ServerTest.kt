@@ -151,6 +151,86 @@ class ServerTest {
         assertTrue(encounterInstruction.contains("não autoriza") && encounterInstruction.contains("resultados mecânicos"))
     }
 
+    @Test
+    fun rewardSchemaRequiresGpStatusAndAtMostFiveCatalogIds() {
+        val schema = rewardRequestSchema()
+        val properties = schema.getAsJsonObject("properties")
+
+        assertEquals("object", schema.get("type").asString)
+        assertEquals(
+            setOf("type", "id", "status", "amountGp", "itemCatalogIds"),
+            schema.getAsJsonArray("required").map { it.asString }.toSet()
+        )
+        assertEquals(0, properties.getAsJsonObject("amountGp").get("minimum").asInt)
+        assertEquals(Int.MAX_VALUE, properties.getAsJsonObject("amountGp").get("maximum").asInt)
+        assertEquals(5, properties.getAsJsonObject("itemCatalogIds").get("maxItems").asInt)
+        assertEquals(
+            setOf("OFFERED", "PAID"),
+            properties.getAsJsonObject("status").getAsJsonArray("enum").map { it.asString }.toSet()
+        )
+        assertFalse(schema.get("additionalProperties").asBoolean)
+    }
+
+    @Test
+    fun rewardSchemaBranchIsAddedToRuleRequestAlternatives() {
+        val properties = JsonParser.parseString("""{"ruleRequest":{"anyOf":[]}}""").asJsonObject
+
+        addRewardRequestSchema(properties)
+
+        val alternatives = properties.getAsJsonObject("ruleRequest").getAsJsonArray("anyOf")
+        assertEquals(1, alternatives.size())
+        assertEquals("REWARD", alternatives[0].asJsonObject.getAsJsonObject("properties")
+            .getAsJsonObject("type").getAsJsonArray("enum")[0].asString)
+    }
+
+    @Test
+    fun rewardNormalizerPreservesValidProposalIncludingRepeatedCatalogIds() {
+        val response = validRewardResponse()
+
+        val normalized = normalizeRewardProposal(response)
+
+        assertEquals("A recompensa foi entregue.", normalized.get("narration").asString)
+        assertEquals(
+            2,
+            normalized.getAsJsonObject("ruleRequest").getAsJsonArray("itemCatalogIds").size()
+        )
+    }
+
+    @Test
+    fun malformedRewardProposalIsStrippedWithoutLosingNarrationOrRequestType() {
+        val invalidResponses = listOf(
+            validRewardResponse().apply { getAsJsonObject("ruleRequest").addProperty("amountGp", -1) },
+            validRewardResponse().apply { getAsJsonObject("ruleRequest").addProperty("amountGp", 2147483648L) },
+            validRewardResponse().apply { getAsJsonObject("ruleRequest").addProperty("amountGp", 1.5) },
+            validRewardResponse().apply { getAsJsonObject("ruleRequest").addProperty("status", "PROMISED") },
+            validRewardResponse().apply { getAsJsonObject("ruleRequest").getAsJsonArray("itemCatalogIds").add("unknown-1"); getAsJsonObject("ruleRequest").getAsJsonArray("itemCatalogIds").add("unknown-2"); getAsJsonObject("ruleRequest").getAsJsonArray("itemCatalogIds").add("unknown-3"); getAsJsonObject("ruleRequest").getAsJsonArray("itemCatalogIds").add("unknown-4"); getAsJsonObject("ruleRequest").getAsJsonArray("itemCatalogIds").add("unknown-5"); getAsJsonObject("ruleRequest").getAsJsonArray("itemCatalogIds").add("unknown-6") },
+            validRewardResponse().apply { getAsJsonObject("ruleRequest").addProperty("copper", 12) },
+            validRewardResponse().apply {
+                getAsJsonObject("ruleRequest").addProperty("amountGp", 0)
+                getAsJsonObject("ruleRequest").add("itemCatalogIds", JsonParser.parseString("[]"))
+            }
+        )
+
+        invalidResponses.forEach { response ->
+            val normalized = normalizeRewardProposal(response)
+            val request = normalized.getAsJsonObject("ruleRequest")
+            assertEquals("A recompensa foi entregue.", normalized.get("narration").asString)
+            assertEquals("REWARD", request.get("type").asString)
+            assertEquals(setOf("type"), request.keySet())
+        }
+    }
+
+    @Test
+    fun rewardPromptDistinguishesOfferedFromPaidAndUsesGpCatalogContext() {
+        val prompt = guardianSystemPrompt().lowercase()
+
+        assertTrue(prompt.contains("offered"))
+        assertTrue(prompt.contains("paid"))
+        assertTrue(prompt.contains("amountgp"))
+        assertTrue(prompt.contains("rewardableitems"))
+        assertTrue(prompt.contains("não converta cobre"))
+    }
+
     private fun assertEncounterRejectedWithoutLosingNarration(response: com.google.gson.JsonObject) {
         val normalized = normalizeCombatProposal(response)
 
@@ -161,5 +241,9 @@ class ServerTest {
 
     private fun validEncounterResponse() = JsonParser.parseString(
         """{"narration":"A cena continua.","ruleRequest":{"type":"BEGIN_COMBAT","encounter":{"opponents":[{"opponentId":"cultist-a","narrative":{"name":"Cultista","appearance":"Manto escuro.","behavior":"Observa a passagem.","intent":"Protege o altar.","context":"Na capela."},"stats":{"str":5,"dex":7,"wil":8,"hp":3,"maxHp":4,"armor":1},"weapon":{"id":"ritual-dagger","damage":"d4","blast":false,"ranged":false}}]}}}"""
+    ).asJsonObject
+
+    private fun validRewardResponse() = JsonParser.parseString(
+        """{"narration":"A recompensa foi entregue.","ruleRequest":{"type":"REWARD","id":"quest-pay","status":"PAID","amountGp":12,"itemCatalogIds":["dagger","dagger"]}}"""
     ).asJsonObject
 }

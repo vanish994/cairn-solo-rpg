@@ -31,7 +31,17 @@ data class GuardianRuleRequest(
     val type: String,
     val attribute: String? = null,
     val amount: Int? = null,
-    val encounter: GuardianEncounterProposal? = null
+    val encounter: GuardianEncounterProposal? = null,
+    val reward: GuardianRewardProposal? = null
+)
+
+enum class RewardStatus { OFFERED, PAID }
+
+data class GuardianRewardProposal(
+    val id: String,
+    val status: RewardStatus,
+    val amountGp: Int,
+    val itemCatalogIds: List<String>
 )
 
 data class GuardianOpponentProposal(
@@ -273,6 +283,12 @@ class HttpGuardianClient(
             }.getOrNull()
             return GuardianRuleRequest(type = "BEGIN_COMBAT", encounter = encounter)
         }
+        if (type.equals("REWARD", ignoreCase = true)) {
+            val reward = runCatching {
+                parseRewardProposal(exactJson ?: throw IllegalArgumentException("REWARD payload is missing"))
+            }.getOrNull()
+            return GuardianRuleRequest(type = "REWARD", reward = reward)
+        }
         return runCatching {
             GuardianRuleRequest(
                 type = type,
@@ -280,6 +296,19 @@ class HttpGuardianClient(
                 amount = if (json.has("amount") && !json.isNull("amount")) json.getInt("amount") else null
             )
         }.getOrNull()
+    }
+
+    private fun parseRewardProposal(exactJson: JsonObject): GuardianRewardProposal {
+        require(exactJson.keySet() == setOf("type", "id", "status", "amountGp", "itemCatalogIds")) {
+            "REWARD payload contains missing or unsupported fields"
+        }
+        require(exactJson.getExactString("type") == "REWARD") { "REWARD type is invalid" }
+        return GuardianRewardProposal(
+            id = exactJson.getExactString("id"),
+            status = RewardStatus.valueOf(exactJson.getExactString("status")),
+            amountGp = exactJson.getExactInt("amountGp"),
+            itemCatalogIds = exactJson.getExactStringList("itemCatalogIds")
+        )
     }
 
     private fun parseEncounter(json: JSONObject, exactJson: JsonObject): GuardianEncounterProposal {
@@ -338,6 +367,22 @@ class HttpGuardianClient(
             ?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isNumber }
             ?: throw IllegalArgumentException("$key must be an integer")
         return java.math.BigDecimal(value.asJsonPrimitive.asNumber.toString()).intValueExact()
+    }
+
+    private fun JsonObject.getExactString(key: String): String {
+        val value = get(key)
+            ?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isString }
+            ?: throw IllegalArgumentException("$key must be a string")
+        return value.asString
+    }
+
+    private fun JsonObject.getExactStringList(key: String): List<String> {
+        val values = get(key)?.takeIf { it.isJsonArray }?.asJsonArray
+            ?: throw IllegalArgumentException("$key must be an array")
+        return values.map { value ->
+            value.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isString }?.asString
+                ?: throw IllegalArgumentException("$key entries must be strings")
+        }
     }
 
     private fun parseCanonProposal(json: JSONObject): CanonProposal? {
