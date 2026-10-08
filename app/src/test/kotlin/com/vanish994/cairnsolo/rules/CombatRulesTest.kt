@@ -2,12 +2,31 @@ package com.vanish994.cairnsolo.rules
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class CombatRulesTest {
     private fun state(hp: Int = 10, armor: Int = 0) = CharacterState(
         str = 10, dex = 10, wil = 10, hp = hp, maxHp = hp, armor = armor
     )
+
+    @Test
+    fun supportedWeaponDamageUsesOnlyCairnDiceExpressions() {
+        assertTrue(isSupportedWeaponDamageExpression("d6"))
+        assertTrue(isSupportedWeaponDamageExpression("d6 + d8"))
+        assertFalse(isSupportedWeaponDamageExpression("4 STR"))
+        assertFalse(isSupportedWeaponDamageExpression("d20"))
+    }
+
+    @Test
+    fun normalAttackRejectsTextualDamageOutsideWeaponDiceSyntax() {
+        assertFailsWith<IllegalArgumentException> {
+            CombatRules(FixedRandomSource(1)).attack(
+                attacker = state(), target = state(), weapon = WeaponProfile("spring-loaded-trap", "4 STR")
+            )
+        }
+    }
 
     @Test
     fun normalAttackRollsWeaponDieAndSubtractsArmor() {

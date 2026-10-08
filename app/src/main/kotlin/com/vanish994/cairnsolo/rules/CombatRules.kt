@@ -10,6 +10,11 @@ data class WeaponProfile(
     val ranged: Boolean = false
 )
 
+private val CAIRN_WEAPON_DAMAGE_EXPRESSION = Regex("^d(4|6|8|10|12)(\\s*\\+\\s*d(4|6|8|10|12))*$")
+
+fun isSupportedWeaponDamageExpression(damage: String?): Boolean =
+    damage?.trim()?.let { CAIRN_WEAPON_DAMAGE_EXPRESSION.matches(it) } == true
+
 data class AttackResult(
     val attacker: CharacterState,
     val target: CharacterState,
@@ -47,6 +52,7 @@ class CombatRules(private val random: RandomSource) {
         if (mode == AttackMode.IMPAIRED) return random.roll(4)
         if (mode == AttackMode.ENHANCED) return random.roll(12)
         val expression = damage?.trim().orEmpty().ifBlank { "d4" }
+        require(isSupportedWeaponDamageExpression(expression)) { "Unsupported damage expression: $expression" }
         return expression.split('+').maxOf { die ->
             val sides = die.trim().removePrefix("d").toIntOrNull()
                 ?: error("Unsupported damage die: $die")

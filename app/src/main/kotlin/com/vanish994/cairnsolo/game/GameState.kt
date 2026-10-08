@@ -7,6 +7,7 @@ import com.vanish994.cairnsolo.rules.DowntimeState
 import com.vanish994.cairnsolo.rules.DungeonState
 import com.vanish994.cairnsolo.rules.WildernessState
 import com.vanish994.cairnsolo.rules.HirelingState
+import com.vanish994.cairnsolo.rules.isSupportedWeaponDamageExpression
 import java.util.UUID
 
 data class CharacterIdentity(val id: String = UUID.randomUUID().toString(), val name: String) {
@@ -15,13 +16,37 @@ data class CharacterIdentity(val id: String = UUID.randomUUID().toString(), val 
 
 data class CompanionState(val id: String, val hp: Int, val maxHp: Int, val armor: Int = 0, val str: Int = 0, val dex: Int = 0, val wil: Int = 0, val slots: Int = 0, val tags: Set<String> = emptySet())
 
+data class CombatOpponentNarrative(
+    val name: String,
+    val appearance: String = "",
+    val behavior: String = "",
+    val intent: String = "",
+    val context: String = ""
+) {
+    init {
+        require(name.isNotBlank())
+        require(name.length <= 160)
+        require(appearance.length <= 1000)
+        require(behavior.length <= 1000)
+        require(intent.length <= 1000)
+        require(context.length <= 1000)
+    }
+}
+
 data class CombatState(
     val opponentId: String,
     val opponent: com.vanish994.cairnsolo.rules.CharacterState,
     val opponentWeapon: com.vanish994.cairnsolo.rules.WeaponProfile = com.vanish994.cairnsolo.rules.WeaponProfile("unarmed", "d4"),
     val round: Int = 1,
-    val playerCanAct: Boolean = true
-)
+    val playerCanAct: Boolean = true,
+    val opponentNarrative: CombatOpponentNarrative = CombatOpponentNarrative(opponentId)
+) {
+    init {
+        require(opponentWeapon.damage.isNullOrBlank() || isSupportedWeaponDamageExpression(opponentWeapon.damage)) {
+            "Dado de dano da arma do oponente incompatível com as regras de combate."
+        }
+    }
+}
 
 data class CharacterProfile(
     val age: Int? = null,

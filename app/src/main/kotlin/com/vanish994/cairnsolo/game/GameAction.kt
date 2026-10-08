@@ -1,6 +1,5 @@
 package com.vanish994.cairnsolo.game
 
-import com.vanish994.cairnsolo.rules.AttackMode
 import com.vanish994.cairnsolo.rules.Attribute
 import com.vanish994.cairnsolo.rules.CharacterState
 import com.vanish994.cairnsolo.rules.CombatRules
@@ -14,6 +13,7 @@ import com.vanish994.cairnsolo.rules.RuleEvent
 import com.vanish994.cairnsolo.rules.RolledCharacter
 import com.vanish994.cairnsolo.rules.RulesEngine
 import com.vanish994.cairnsolo.rules.WeaponProfile
+import com.vanish994.cairnsolo.rules.isSupportedWeaponDamageExpression
 import com.vanish994.cairnsolo.rules.MoraleOutcome
 
 sealed interface GameAction {
@@ -31,8 +31,13 @@ sealed interface GameAction {
     data class Save(val attribute: Attribute) : GameAction
     data object StabilizeCritical : GameAction
     data object RecoverScar : GameAction
-    data class BeginCombat(val opponentId: String, val opponent: CharacterState, val opponentWeapon: WeaponProfile = WeaponProfile("unarmed", "d4")) : GameAction
-    data class CombatAttack(val weapon: WeaponProfile? = null, val mode: AttackMode = AttackMode.NORMAL) : GameAction
+    data class BeginCombat(
+        val opponentId: String,
+        val opponent: CharacterState,
+        val opponentWeapon: WeaponProfile = WeaponProfile("unarmed", "d4"),
+        val opponentNarrative: CombatOpponentNarrative = CombatOpponentNarrative(opponentId)
+    ) : GameAction
+    data class CombatAttack(val weapon: WeaponProfile? = null) : GameAction
     data object EndCombat : GameAction
     data class CastSpell(val itemId: String, val requiresWilSave: Boolean = false, val failure: com.vanish994.cairnsolo.rules.SpellFailureConsequence = com.vanish994.cairnsolo.rules.SpellFailureConsequence.NONE, val dropItemIdForFatigue: String? = null) : GameAction
     data class Purchase(val itemId: String) : GameAction
@@ -76,7 +81,13 @@ sealed interface GameEvent {
     data object CriticalStabilized : GameEvent
     data class ScarRecovered(val scar: String) : GameEvent
     data class CombatStarted(val opponentId: String, val round: Int, val playerCanAct: Boolean) : GameEvent
-    data class CombatAttackResolved(val opponentId: String, val round: Int, val playerDamage: DamageResolved, val enemyDamage: DamageResolved?, val playerCanAct: Boolean) : GameEvent
+    data class CombatAttackResolved(
+        val opponentId: String,
+        val round: Int,
+        val damageDealtByPlayer: DamageResolved?,
+        val damageDealtByOpponent: DamageResolved?,
+        val playerCanAct: Boolean
+    ) : GameEvent
     data class CombatEnded(val opponentId: String, val victory: Boolean) : GameEvent
     data class SpellResolved(val spellId: String, val itemId: String) : GameEvent
     data class PurchaseResolved(val itemId: String, val goldRemaining: Int) : GameEvent
@@ -120,7 +131,11 @@ class GameActionResolver(
         action
     )
 
-    fun resolve(state: GameState, action: GameAction): GameResult = when (action) {
+    fun resolve(state: GameState, action: GameAction): GameResult {
+        require(state.campaign.combat == null || !action.isBlockedDuringCombat()) {
+            "This action is unavailable during active combat"
+        }
+        return when (action) {
         is GameAction.CreateCharacter -> {
             val created = com.vanish994.cairnsolo.rules.createCharacter(action.name, action.rolled)
             val campaignSeed = created.campaign.campaignSeed
@@ -223,6 +238,43 @@ class GameActionResolver(
             GameResult(next, if (action.proposals.isEmpty()) emptyList() else listOf(GameEvent.CanonUpdated(action.proposals.size)))
         }
         is GameAction.AdvanceFaction -> advanceFaction(state, action)
+        }
+    }
+
+    private fun GameAction.isBlockedDuringCombat(): Boolean = when (this) {
+        is GameAction.CreateCharacter,
+        GameAction.ExploreContinue,
+        GameAction.ExploreInvestigate,
+        GameAction.ExploreRest,
+        GameAction.Rest,
+        GameAction.EndCombat,
+        is GameAction.ApplyDamage,
+        is GameAction.AddItem,
+        is GameAction.RemoveItem,
+        is GameAction.Purchase,
+        is GameAction.PerformDowntime,
+        is GameAction.AddDowntimeMilestone,
+        is GameAction.StartTravel,
+        is GameAction.WildernessAct,
+        is GameAction.RollWeather,
+        is GameAction.DungeonAct,
+        GameAction.LightTorch,
+        GameAction.LightLantern,
+        GameAction.ExtinguishLight,
+        GameAction.StartDungeonPanic,
+        GameAction.OvercomeDungeonPanic,
+        GameAction.RollReaction,
+        is GameAction.CheckMorale,
+        is GameAction.HireHireling,
+        GameAction.PayHirelings,
+        is GameAction.CheckHirelingMorale,
+        is GameAction.RecordGrowthEvidence,
+        is GameAction.RecordGrowthEvidenceProposal,
+        is GameAction.RecordGrowthChangeProposal,
+        is GameAction.DecideGrowthChangeProposal,
+        is GameAction.ApplyCanonProposals,
+        is GameAction.AdvanceFaction -> true
+        else -> false
     }
 
     private fun openingNarration(world: WorldState): String {
@@ -396,9 +448,12 @@ class GameActionResolver(
 
     private fun beginCombat(state: GameState, action: GameAction.BeginCombat): GameResult {
         require(state.campaign.combat == null) { "Combat already active" }
+        require(action.opponentWeapon.damage.isNullOrBlank() || isSupportedWeaponDamageExpression(action.opponentWeapon.damage)) {
+            "Dado de dano da arma do oponente incompatível com as regras de combate."
+        }
         val save = rules.save(state.campaign.rules, Attribute.DEX)
         if (save.success) {
-            val combatState = CombatState(action.opponentId, action.opponent, action.opponentWeapon, 1, true)
+            val combatState = CombatState(action.opponentId, action.opponent, action.opponentWeapon, 1, true, action.opponentNarrative)
             val next = state.copy(campaign = state.campaign.copy(combat = combatState, turn = state.campaign.turn + 1))
             return GameResult(next.withHistory("combat-start-${state.campaign.turn}", HistoryEventType.COMBAT_UPDATED, "Combate iniciado contra ${action.opponentId}.", listOf(action.opponentId)), listOf(GameEvent.CombatStarted(action.opponentId, 1, true), GameEvent.SaveResolved(Attribute.DEX, save.roll, true)))
         }
@@ -407,10 +462,14 @@ class GameActionResolver(
         val dead = enemyAttack.target.dead
         val next = state.copy(campaign = state.campaign.copy(
             rules = enemyAttack.target,
-            combat = if (dead) null else CombatState(action.opponentId, action.opponent, action.opponentWeapon, 2, true),
+            combat = if (dead) null else CombatState(action.opponentId, action.opponent, action.opponentWeapon, 2, true, action.opponentNarrative),
             turn = state.campaign.turn + 1
         ))
-        val events = mutableListOf<GameEvent>(GameEvent.CombatStarted(action.opponentId, 1, false), GameEvent.SaveResolved(Attribute.DEX, save.roll, false), GameEvent.CombatAttackResolved(action.opponentId, 1, damage, null, !dead))
+        val events = mutableListOf<GameEvent>(
+            GameEvent.CombatStarted(action.opponentId, 1, false),
+            GameEvent.SaveResolved(Attribute.DEX, save.roll, false),
+            GameEvent.CombatAttackResolved(action.opponentId, 1, null, damage, !dead)
+        )
         if (dead) events += GameEvent.CombatEnded(action.opponentId, false)
         return GameResult(next.withHistory("combat-start-${state.campaign.turn}", HistoryEventType.COMBAT_UPDATED, "Combate iniciado contra ${action.opponentId}; o inimigo agiu primeiro.", listOf(action.opponentId)), events)
     }
@@ -418,7 +477,8 @@ class GameActionResolver(
     private fun combatAttack(state: GameState, action: GameAction.CombatAttack): GameResult {
         val current = state.campaign.combat ?: error("No active combat")
         require(current.playerCanAct) { "Player cannot act this round" }
-        val playerAttack = combat.attack(state.campaign.rules, current.opponent, action.weapon, action.mode)
+        val selectedWeapon = playerWeaponForCombat(state, action.weapon)
+        val playerAttack = combat.attack(state.campaign.rules, current.opponent, selectedWeapon)
         val playerDamage = playerAttack.events.toDamageEvent(playerAttack.target)
         if (playerAttack.target.dead || playerAttack.target.hp == 0) {
             val next = state.copy(campaign = state.campaign.copy(combat = null, turn = state.campaign.turn + 1))
@@ -438,6 +498,23 @@ class GameActionResolver(
         val events = mutableListOf<GameEvent>(GameEvent.CombatAttackResolved(current.opponentId, current.round, playerDamage, enemyDamage, !playerDead))
         if (playerDead) events += GameEvent.CombatEnded(current.opponentId, false)
         return GameResult(next.withHistory("combat-round-${state.campaign.turn}", HistoryEventType.COMBAT_UPDATED, "Rodada ${current.round} resolvida contra ${current.opponentId}.", listOf(current.opponentId)), events)
+    }
+
+    private fun playerWeaponForCombat(state: GameState, requested: WeaponProfile?): WeaponProfile? {
+        if (requested == null) return null
+        val item = state.campaign.rules.inventory.firstOrNull { it.id == requested.id }
+        if (item == null) {
+            require(requested.id == "unarmed") { "A arma escolhida não está no inventário." }
+            return WeaponProfile("unarmed", "d4")
+        }
+        val damage = item.damage
+        require(isSupportedWeaponDamageExpression(damage)) { "Este item não tem dano de arma suportado." }
+        return WeaponProfile(
+            id = item.id,
+            damage = damage,
+            blast = item.tags.any { it.equals("BLAST", ignoreCase = true) },
+            ranged = item.tags.any { it.equals("RANGED", ignoreCase = true) }
+        )
     }
 
     private fun endCombat(state: GameState): GameResult {

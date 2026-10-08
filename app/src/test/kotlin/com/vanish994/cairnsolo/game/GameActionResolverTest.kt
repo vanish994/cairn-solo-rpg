@@ -1,6 +1,7 @@
 package com.vanish994.cairnsolo.game
 
 import com.vanish994.cairnsolo.rules.CharacterState
+import com.vanish994.cairnsolo.rules.InventoryItem
 import com.vanish994.cairnsolo.rules.FixedRandomSource
 import com.vanish994.cairnsolo.rules.RulesEngine
 import com.vanish994.cairnsolo.rules.Scar
@@ -266,8 +267,12 @@ class CombatGameActionResolverTest {
     @Test
     fun combatFlowUsesDexInitiativeThenResolvesAttackAndEndsOnOpponentZeroHp() {
         val enemy = CharacterState(4, 4, 4, 6, 6, 0)
+        val base = state()
+        val armed = base.copy(campaign = base.campaign.copy(
+            rules = base.campaign.rules.copy(inventory = listOf(InventoryItem("sword", damage = "d8")))
+        ))
         val started = resolver(FixedRandomSource(10, d8Value = 6)).resolve(
-            state(), GameAction.BeginCombat("wolf", enemy, WeaponProfile("bite", "d4"))
+            armed, GameAction.BeginCombat("wolf", enemy, WeaponProfile("bite", "d4"))
         )
         assertTrue(started.state.campaign.combat?.playerCanAct == true)
         assertIs<GameEvent.CombatStarted>(started.events.first())
