@@ -15,6 +15,7 @@ import com.vanish994.cairnsolo.rules.Terrain
 import com.vanish994.cairnsolo.rules.Weather
 import com.vanish994.cairnsolo.rules.Watch
 import com.vanish994.cairnsolo.rules.HirelingState
+import com.vanish994.cairnsolo.rules.isSupportedWeaponDamageExpression
 import java.util.Base64
 
 object GameStatePersistenceCodec {
@@ -171,7 +172,9 @@ object GameStatePersistenceCodec {
                 opponentId = opponentId,
                 opponent = CharacterState(int("combatStr", 1), int("combatDex", 1), int("combatWil", 1), int("combatHp", 1), int("combatMaxHp", 1), int("combatArmor", 0)),
                 opponentWeapon = com.vanish994.cairnsolo.rules.WeaponProfile(
-                    string("combatWeaponId", "unarmed"), nullableString("combatWeaponDamage") ?: "d4",
+                    id = string("combatWeaponId", "unarmed"),
+                    damage = nullableString("combatWeaponDamage")
+                        .takeIf { isSupportedWeaponDamageExpression(it) } ?: "d4",
                     blast = bool("combatWeaponBlast", false), ranged = bool("combatWeaponRanged", false)
                 ),
                 round = int("combatRound", 1), playerCanAct = bool("combatPlayerCanAct", true),

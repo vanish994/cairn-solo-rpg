@@ -7,6 +7,7 @@ import com.vanish994.cairnsolo.rules.DowntimeState
 import com.vanish994.cairnsolo.rules.DungeonState
 import com.vanish994.cairnsolo.rules.WildernessState
 import com.vanish994.cairnsolo.rules.HirelingState
+import com.vanish994.cairnsolo.rules.isSupportedWeaponDamageExpression
 import java.util.UUID
 
 data class CharacterIdentity(val id: String = UUID.randomUUID().toString(), val name: String) {
@@ -39,7 +40,13 @@ data class CombatState(
     val round: Int = 1,
     val playerCanAct: Boolean = true,
     val opponentNarrative: CombatOpponentNarrative = CombatOpponentNarrative(opponentId)
-)
+) {
+    init {
+        require(opponentWeapon.damage.isNullOrBlank() || isSupportedWeaponDamageExpression(opponentWeapon.damage)) {
+            "Dado de dano da arma do oponente incompatível com as regras de combate."
+        }
+    }
+}
 
 data class CharacterProfile(
     val age: Int? = null,

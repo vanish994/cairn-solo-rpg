@@ -70,6 +70,21 @@ class CombatAuthorityContractTest {
     }
 
     @Test
+    fun beginCombatRejectsUnsupportedOpponentDamageBeforeInitiative() {
+        assertFailsWith<IllegalArgumentException> {
+            resolver(FixedRandomSource(20)).resolve(
+                state(),
+                GameAction.BeginCombat(
+                    "wolf-alpha",
+                    CharacterState(5, 7, 3, 4, 4, 1),
+                    WeaponProfile("fangs", "4 STR"),
+                    narrative
+                )
+            )
+        }
+    }
+
+    @Test
     fun activeCombatBlocksExplorationRestTravelDungeonAndPurchase() {
         val active = state().copy(campaign = state().campaign.copy(
             combat = CombatState(
@@ -83,6 +98,7 @@ class CombatAuthorityContractTest {
             GameAction.ExploreInvestigate,
             GameAction.ExploreRest,
             GameAction.Rest,
+            GameAction.EndCombat,
             GameAction.ApplyDamage(2),
             GameAction.AddItem(InventoryItem("torch")),
             GameAction.RemoveItem("torch"),
@@ -101,7 +117,9 @@ class CombatAuthorityContractTest {
 
     @Test
     fun activeCombatStillAllowsGuardianIntentAndCombatAttack() {
-        val active = state().copy(campaign = state().campaign.copy(
+        val base = state()
+        val active = base.copy(campaign = base.campaign.copy(
+            rules = base.campaign.rules.copy(inventory = listOf(InventoryItem("sword", damage = "d4"))),
             combat = CombatState(
                 opponentId = "wolf-alpha",
                 opponent = CharacterState(5, 7, 3, 12, 12, 1),
@@ -116,5 +134,35 @@ class CombatAuthorityContractTest {
         val attack = resolver.resolve(intent.state, GameAction.CombatAttack(WeaponProfile("sword", "d4")))
         assertTrue(attack.events.any { it is GameEvent.CombatAttackResolved })
         assertEquals(narrative, attack.state.campaign.combat?.opponentNarrative)
+    }
+
+    @Test
+    fun combatAttackUsesOwnedWeaponDamageAndRejectsUnownedWeapons() {
+        val base = state()
+        val active = base.copy(campaign = base.campaign.copy(
+            rules = base.campaign.rules.copy(inventory = listOf(InventoryItem("sword", damage = "d4"))),
+            combat = CombatState(
+                opponentId = "wolf-alpha",
+                opponent = CharacterState(5, 7, 3, 12, 12, 0),
+                opponentNarrative = narrative
+            )
+        ))
+        val attack = resolver(FixedRandomSource(10, d4Value = 3, d12Value = 12)).resolve(
+            active,
+            GameAction.CombatAttack(WeaponProfile("sword", "d12"))
+        )
+        val attackEvent = assertNotNull(attack.events.filterIsInstance<GameEvent.CombatAttackResolved>().firstOrNull())
+
+        assertEquals(3, attackEvent.damageDealtByPlayer?.rawDamage)
+        val error = assertFailsWith<IllegalArgumentException> {
+            resolver(FixedRandomSource(10)).resolve(active, GameAction.CombatAttack(WeaponProfile("stolen-sword", "d12")))
+        }
+        assertEquals("A arma escolhida não está no inventário.", error.message)
+        assertFailsWith<IllegalArgumentException> {
+            val withTrap = active.copy(campaign = active.campaign.copy(
+                rules = active.campaign.rules.copy(inventory = listOf(InventoryItem("spring-loaded-trap", damage = "4 STR")))
+            ))
+            resolver(FixedRandomSource(10)).resolve(withTrap, GameAction.CombatAttack(WeaponProfile("spring-loaded-trap", "d4")))
+        }
     }
 }
