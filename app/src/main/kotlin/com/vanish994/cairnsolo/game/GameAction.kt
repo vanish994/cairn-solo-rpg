@@ -482,7 +482,10 @@ class GameActionResolver(
         require(isValidRewardId(action.rewardId)) { "Reward id is invalid." }
         require(action.amountGp > 0) { "Gold credit must be positive." }
         val componentId = "${action.rewardId}:gold"
-        if (componentId in state.campaign.appliedRewardIds) return GameResult(state, emptyList())
+        val packageId = "${action.rewardId}:grant"
+        if (componentId in state.campaign.appliedRewardIds || packageId in state.campaign.appliedRewardIds) {
+            return GameResult(state, emptyList())
+        }
 
         val newBalance = marketplace.creditGold(state.campaign.profile.gold, action.amountGp)
         val recorded = state.withHistory(
@@ -507,7 +510,10 @@ class GameActionResolver(
         require(action.amountGp > 0 || action.itemCatalogIds.isNotEmpty()) { "A reward must include gold or at least one item." }
 
         val grantId = "${action.rewardId}:grant"
-        if (grantId in state.campaign.appliedRewardIds) return GameResult(state, emptyList())
+        val goldComponentId = "${action.rewardId}:gold"
+        if (grantId in state.campaign.appliedRewardIds || goldComponentId in state.campaign.appliedRewardIds) {
+            return GameResult(state, emptyList())
+        }
 
         var gold = state.campaign.profile.gold
         var character = state.campaign.rules
@@ -515,7 +521,6 @@ class GameActionResolver(
         val pendingItems = state.campaign.pendingRewardItems.toMutableList()
         val events = mutableListOf<GameEvent>()
 
-        val goldComponentId = "${action.rewardId}:gold"
         if (action.amountGp > 0 && goldComponentId !in appliedIds) {
             gold = marketplace.creditGold(gold, action.amountGp)
             appliedIds += goldComponentId
@@ -581,6 +586,8 @@ class GameActionResolver(
     }
 
     private fun claimPendingRewardItem(state: GameState, action: GameAction.ClaimPendingRewardItem): GameResult {
+        val claimMarker = "pending-claim:${action.pendingId}"
+        if (claimMarker in state.campaign.appliedRewardIds) return GameResult(state, emptyList())
         val pending = state.campaign.pendingRewardItems.firstOrNull { it.id == action.pendingId }
             ?: error("Unknown pending reward item: ${action.pendingId}")
         val template = MarketplaceCatalog.find(pending.catalogItemId)?.item
@@ -601,7 +608,8 @@ class GameActionResolver(
         )
         val progressed = recorded.withRules(updatedCharacter)
         val next = progressed.copy(campaign = progressed.campaign.copy(
-            pendingRewardItems = progressed.campaign.pendingRewardItems.filterNot { it.id == pending.id }
+            pendingRewardItems = progressed.campaign.pendingRewardItems.filterNot { it.id == pending.id },
+            appliedRewardIds = progressed.campaign.appliedRewardIds + claimMarker
         ))
         return GameResult(next, listOf(GameEvent.RewardItemClaimed(pending.id, pending.itemInstanceId)))
     }
