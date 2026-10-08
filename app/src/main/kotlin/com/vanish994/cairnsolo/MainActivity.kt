@@ -77,6 +77,8 @@ class MainActivity : ComponentActivity() {
                 var pendingRule by remember { mutableStateOf<GuardianRuleRequest?>(null) }
                 var lastResolution by remember { mutableStateOf<GuardianRuleResolution?>(null) }
                 var guardianFlow by remember { mutableStateOf(GuardianFlow.EXPLORATION) }
+                var suggestedActions by remember { mutableStateOf(emptyList<String>()) }
+                var guardianIntentDraft by remember { mutableStateOf("") }
                 val actionResolver = remember {
                     GameActionResolver(
                         exploration = ExplorationEngine(KotlinRandomSource()),
@@ -122,6 +124,8 @@ class MainActivity : ComponentActivity() {
                                     guardianError = null
                                     pendingRule = null
                                     lastResolution = null
+                                    suggestedActions = emptyList()
+                                    guardianIntentDraft = ""
                                 }
                             )
                         }
@@ -157,6 +161,8 @@ class MainActivity : ComponentActivity() {
                                     repository.clear()
                                     state = null
                                     screen = AppScreen.CHARACTER
+                                    suggestedActions = emptyList()
+                                    guardianIntentDraft = ""
                                 }
                             )
                             AppScreen.EXPLORATION -> ExplorationScreen(
@@ -188,6 +194,10 @@ class MainActivity : ComponentActivity() {
                                 guardianFlow = guardianFlow,
                                 pendingRule = pendingRule,
                                 lastResolution = lastResolution,
+                                suggestedActions = suggestedActions,
+                                intent = guardianIntentDraft,
+                                onIntentChange = { guardianIntentDraft = it },
+                                onSuggestionSelected = { guardianIntentDraft = it },
                                 onResolveRule = {
                                     pendingRule?.let { request ->
                                         runCatching { guardianRuleResolver.resolve(state!!, request) }
@@ -246,6 +256,7 @@ class MainActivity : ComponentActivity() {
                                                     }.getOrElse { narrated }
                                                     repository.save(next)
                                                     state = next
+                                                    suggestedActions = response.suggestedActions
                                                     val requestError = response.ruleRequest?.let { guardianRuleResolver.validationError(next, it) }
                                                     pendingRule = response.ruleRequest.takeIf { requestError == null }
                                                     guardianError = requestError
@@ -266,6 +277,7 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onGuardianIntent = { intent ->
                                     if (pendingRule == null && lastResolution == null) {
+                                        suggestedActions = emptyList()
                                         val intentState = actionResolver.resolve(
                                             current,
                                             GameAction.GuardianIntent(intent)
@@ -297,6 +309,7 @@ class MainActivity : ComponentActivity() {
                                                     }.getOrElse { narrated }
                                                     repository.save(next)
                                                     state = next
+                                                    suggestedActions = response.suggestedActions
                                                     val requestError = response.ruleRequest?.let { guardianRuleResolver.validationError(next, it) }
                                                     pendingRule = response.ruleRequest.takeIf { requestError == null }
                                                     guardianError = requestError
@@ -393,7 +406,7 @@ private fun SectionCard(modifier: Modifier = Modifier, content: @Composable Colu
 }
 
 @Composable
-private fun GuardianCard(message: String, history: List<String>) {
+private fun GuardianCard(message: String, history: List<String>, modifier: Modifier = Modifier) {
     val scrollState = rememberScrollState()
     val messages = (if (history.lastOrNull() == message) history else history + message)
         .filter { it.isNotBlank() }
@@ -402,7 +415,7 @@ private fun GuardianCard(message: String, history: List<String>) {
         scrollState.animateScrollTo(scrollState.maxValue)
     }
 
-    SectionCard(Modifier.fillMaxSize()) {
+    SectionCard(modifier.fillMaxSize()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 "◈",
@@ -454,6 +467,35 @@ private fun GuardianCard(message: String, history: List<String>) {
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun GuardianSuggestedActions(
+    actions: List<String>,
+    enabled: Boolean,
+    onSuggestionSelected: (String) -> Unit
+) {
+    if (actions.isNotEmpty()) {
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            Text(
+                "PRÓXIMAS AÇÕES",
+                color = CairnAccent,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold
+            )
+            actions.take(3).forEach { action ->
+                AssistChip(
+                    onClick = { onSuggestionSelected(action) },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = enabled,
+                    label = { Text(action, softWrap = true) }
+                )
             }
         }
     }
@@ -516,6 +558,10 @@ private fun ExplorationScreen(
     guardianFlow: GuardianFlow,
     pendingRule: GuardianRuleRequest?,
     lastResolution: GuardianRuleResolution?,
+    suggestedActions: List<String>,
+    intent: String,
+    onIntentChange: (String) -> Unit,
+    onSuggestionSelected: (String) -> Unit,
     onResolveRule: () -> Unit,
     onRejectEncounter: () -> Unit,
     onDismissRequest: () -> Unit,
@@ -526,7 +572,6 @@ private fun ExplorationScreen(
 ) {
     val c = state.campaign
     val r = c.rules
-    var intent by remember { mutableStateOf("") }
 
     Column(
         modifier = Modifier
@@ -579,14 +624,21 @@ private fun ExplorationScreen(
             }
         }
 
-        Box(
-            Modifier
+        Column(
+            modifier = Modifier
                 .weight(1f)
-                .fillMaxWidth()
+                .fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             GuardianCard(
                 message = c.guardianMessage.ifBlank { "O Guardião aguarda sua decisão." },
-                history = c.guardianHistory
+                history = c.guardianHistory,
+                modifier = Modifier.weight(1f)
+            )
+            GuardianSuggestedActions(
+                actions = suggestedActions,
+                enabled = !guardianLoading && pendingRule == null && lastResolution == null,
+                onSuggestionSelected = onSuggestionSelected
             )
         }
 
@@ -651,7 +703,7 @@ private fun ExplorationScreen(
         ) {
             OutlinedTextField(
                 value = intent,
-                onValueChange = { intent = it },
+                onValueChange = onIntentChange,
                 modifier = Modifier
                     .weight(1f)
                     .heightIn(min = 56.dp, max = 96.dp),
@@ -668,7 +720,7 @@ private fun ExplorationScreen(
             IconButton(
                 onClick = {
                     onGuardianIntent(intent.trim())
-                    intent = ""
+                    onIntentChange("")
                 },
                 enabled = intent.isNotBlank() && !guardianLoading && pendingRule == null && lastResolution == null,
                 modifier = Modifier

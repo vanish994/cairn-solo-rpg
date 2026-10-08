@@ -154,7 +154,11 @@ class HttpGuardianClient(
         val ruleRequest = ruleObject?.let(::parseRuleRequest)
         val actions = buildList {
             val array = json.optJSONArray("suggestedActions") ?: JSONArray()
-            for (i in 0 until array.length()) add(array.getString(i))
+            for (i in 0 until array.length()) {
+                if (size >= 3) break
+                val action = array.opt(i) as? String ?: continue
+                if (action.isNotBlank() && action.length <= 160) add(action)
+            }
         }
         val proposals = buildList {
             val array = json.optJSONArray("canonProposals") ?: JSONArray()
