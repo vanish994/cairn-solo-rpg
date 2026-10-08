@@ -31,18 +31,19 @@
 - Cairn Second Edition é a referência normativa; não inventar procedimentos que não estejam no escopo decidido.
 - Toda mudança mecânica passa por `GameActionResolver`; a UI não chama `RulesEngine` diretamente.
 - A proposta do Guardian não é uma ação aceita: só o botão explícito de aceite permite chamar `GameAction.BeginCombat`.
-- O Guardian recebe apenas `GuardianContext` filtrado e um resumo de resultado gerado a partir dos eventos de `GameResult`; nunca recebe `GameState` bruto nem texto de resultado vindo do modelo/jogador.
+- O Guardian recebe apenas `GuardianContext` filtrado, um resumo de resultado gerado a partir dos eventos de `GameResult` e, quando aplicável, o perfil narrativo do oponente já aprovado pelo jogador; nunca recebe `GameState` bruto nem texto de resultado vindo do modelo/jogador.
 - Saves antigos continuam carregáveis; campos narrativos novos têm defaults de migração.
-- Sem novas dependências; commits atômicos em branch e merge apenas após CI verde.
+- Sem novas dependências de produção; `org.json` e Kotlin/JUnit 5 são usados apenas nos classpaths de teste. Commits atômicos em branch e merge apenas após CI verde.
 
 ## Foco de revisão
 
-1. Proposta `BEGIN_COMBAT` ausente/malformada: rejeitar sem iniciar combate nem mutar HP/turno; a narração válida não deve derrubar o restante da resposta.
+1. Proposta `BEGIN_COMBAT` ausente/malformada ou com dado de dano não suportado: preservar a narração, expor erro legível, rejeitar sem iniciar combate nem mutar HP/turno.
 2. Jogador recusa o encontro: `campaign.combat` permanece `null` e nenhum procedimento de iniciativa/ataque é executado.
 3. Falha no save inicial de DEX: o oponente age exatamente uma vez; dano e estado vêm do resolver; perfil narrativo do oponente permanece ligado ao combate.
-4. Combate ativo: bloquear continuação/investigação, descanso, viagem, dungeon e compra; permitir declarar intenção ao Guardian e ações de combate válidas.
+4. Combate ativo: bloquear continuação/investigação, descanso, dano genérico (`ApplyDamage`/`DAMAGE`), `EndCombat` sem procedimento de fuga, viagem, dungeon e compra; permitir declarar intenção ao Guardian e ataques válidos.
 5. Resultado de vitória, morte ou dano crítico: Guardian recebe o resumo autorizado correspondente, sem poder produzir ou aplicar mecânica.
 6. Save/load em combate e migração de save antigo sem perfil narrativo do oponente.
+7. Requests comuns incompletos: não exibir como executáveis; o jogador pode descartar qualquer solicitação pendente sem mutação mecânica.
 
 ---
 
@@ -52,25 +53,28 @@
 - Modificar: `guardian-server/src/main/kotlin/com/vanish994/cairnsolo/guardian/Server.kt`
 - Modificar: `app/src/main/kotlin/com/vanish994/cairnsolo/guardian/GuardianClient.kt`
 - Modificar: `app/src/main/kotlin/com/vanish994/cairnsolo/guardian/GuardianContext.kt`
-- Testar/criar: `app/src/test/kotlin/com/vanish994/cairnsolo/guardian/GuardianClientTest.kt` e `GuardianContextTest.kt`
+- Testar/criar: `app/src/test/kotlin/com/vanish994/cairnsolo/guardian/GuardianClientTest.kt` e `GuardianCombatContextTest.kt`
+- Testar/criar: `guardian-server/src/test/kotlin/com/vanish994/cairnsolo/guardian/ServerTest.kt`
+- Modificar: `guardian-server/build.gradle.kts` para runner JUnit 5 somente em testes
 
 **Interfaces produzidas:**
 - Em `game/GameState.kt`: `CombatOpponentNarrative(name, appearance, behavior, intent, context)`.
 - Em `guardian/GuardianClient.kt`: `GuardianEncounterProposal(opponentId, narrative, stats: CharacterState, weapon: WeaponProfile)` e `GuardianRuleRequest.encounter: GuardianEncounterProposal?`.
 - O JSON de `ruleRequest` usa `type=BEGIN_COMBAT` e `encounter={opponentId,narrative,stats,weapon}`. `narrative` contém os cinco campos da interface; `stats` contém STR/DEX/WIL, HP máximo/atual e Armor; `weapon` contém id, dado de dano, `blast` e `ranged`.
-- `GuardianClient.narrate(state, playerIntent, ruleResult: String? = null)` transporta `ruleResult` somente quando produzido pelo app a partir de eventos do `GameResult`.
+- `GuardianClient.narrate(state, playerIntent, ruleResult: String? = null, encounterContext: CombatOpponentNarrative? = null)` transporta `ruleResult` somente quando produzido pelo app a partir de eventos do `GameResult`; o perfil aprovado vai em campo separado para continuidade narrativa.
 - `GuardianCombatContext` expõe identidade/narrativa, HP/HP máximo, Armor, arma, rodada e `playerCanAct`; não expõe campos internos de persistência.
 
 - [ ] **Passo 1: escrever testes de contrato que falham primeiro**
   - `parseBeginCombatProposalRetainsNarrativeAndStats` verifica os campos narrativos, atributos, HP, Armor e arma.
-  - `invalidBeginCombatProposalIsRejectedWithoutDiscardingNarration` verifica que perfil inválido não vira pedido executável.
-  - `guardianContextContainsOnlyFilteredCombatFacts` verifica a serialização do oponente ativo e ausência de dados internos de save.
-  - `authorizedRuleResultIsIncludedSeparatelyFromPlayerIntent` verifica que somente o argumento `ruleResult` do cliente vai no campo autorizado.
+  - `invalidBeginCombatProposalIsRetainedForVisibleRejection` e `unsupportedWeaponDamageIsRetainedForVisibleRejection` verificam narração preservada, request não executável e erro observável pela validação.
+  - `ServerTest.kt` verifica patterns de campos nonblank, que HP acima de maxHp vira request incompleta sem apagar a narração e que HP válido mantém a proposta.
+  - `guardianReceivesOpponentNarrativeAndOnlyRequiredMechanicalFacts` verifica a serialização do oponente ativo e ausência de atributos ocultos.
+  - `authorizedRuleResultIsSerializedSeparatelyFromPlayerIntent` verifica que `ruleResult` e `encounterContext` são campos separados da intenção.
 - [ ] **Passo 2: executar testes no workflow Android**
   - Antes da implementação, os novos testes devem falhar por contrato ausente, não por sintaxe.
 - [ ] **Passo 3: implementar DTO/parser e schema/prompt do servidor**
   - O prompt permite propor perfil e contexto do adversário, mas proíbe iniciar o combate, narrar resultados ou inventar consequências.
-  - Preservar pedidos e campos existentes; dados incompletos não produzem proposta executável.
+  - Preservar pedidos e campos existentes; schema/parser exigem os campos condicionais de cada request, strings do oponente não podem ser vazias/só espaços, e HP acima de maxHp vira request incompleta para erro visível sem apagar a narração.
 - [ ] **Passo 4: ampliar o contexto público filtrado**
   - Serializar perfil e estado atual do oponente para o Guardian depois do início.
   - Marcar o resumo mecânico como autoritativo somente quando vier do app; não construir `ruleResult` a partir de texto livre.
@@ -85,6 +89,7 @@
 **Arquivos:**
 - Modificar: `app/src/main/kotlin/com/vanish994/cairnsolo/game/GameState.kt`
 - Modificar: `app/src/main/kotlin/com/vanish994/cairnsolo/game/GameAction.kt`
+- Modificar: `app/src/main/kotlin/com/vanish994/cairnsolo/rules/CombatRules.kt`
 - Modificar: `app/src/main/kotlin/com/vanish994/cairnsolo/guardian/GuardianRuleResolver.kt`
 - Modificar: `app/src/test/kotlin/com/vanish994/cairnsolo/game/GameActionResolverTest.kt`
 
@@ -92,21 +97,25 @@
 - `CombatState` armazena `opponentNarrative: CombatOpponentNarrative`, com default compatível para chamadas antigas.
 - `GameAction.BeginCombat(opponentId, opponent, opponentWeapon, opponentNarrative)` mantém defaults para fixtures e chamadas existentes.
 - `GuardianRuleResolver.resolve(state, request)` converte a proposta validada em `BeginCombat`; nenhuma conversão ocorre antes do aceite do jogador.
+- `GuardianRuleResolver.validationError(state, request)` recusa SAVE/DAMAGE/FATIGUE incompletos e DAMAGE/REST/BEGIN_COMBAT incompatíveis com combate ativo antes de criar um card executável.
+- `isSupportedWeaponDamageExpression` define uma gramática compartilhada para as armas do combate; dano textual de armadilha não é exibido como arma e não pode ser rolado pelo motor.
+- `GameActionResolver` reconstrói armas do jogador a partir do inventário e valida a arma adversária antes da iniciativa; o codec migra dano inválido persistido para `d4`.
+- `GuardianRuleResolver.resolve(state, action)` retorna `GuardianRuleResolution(state, resultText, gameResult, encounterNarrative)`; o campo narrativo conserva o perfil confirmado mesmo quando vitória/morte encerra o combate.
 
 - [ ] **Passo 1: escrever testes de resolver**
   - `beginCombatStoresConfirmedOpponentNarrative` verifica o perfil após iniciativa bem-sucedida.
-  - `failedDexInitiativeKeepsNarrativeAndAppliesOneOpponentAttack` verifica perfil e um único contra-ataque.
-  - `activeCombatBlocksExplorationAndRestActions` verifica `ExploreContinue`, `ExploreInvestigate`, `ExploreRest`, `Rest`, `StartTravel`, `DungeonAct` e `Purchase`.
+  - `failedDexInitiativePreservesProfileAndAppliesExactlyOneOpponentAttack` verifica perfil e um único contra-ataque.
+  - `activeCombatBlocksExplorationAndRestActions` verifica também `ApplyDamage` e `EndCombat`, além de `ExploreContinue`, `ExploreInvestigate`, `ExploreRest`, `Rest`, `AddItem`, `RemoveItem`, `StartTravel`, `DungeonAct` e `Purchase`, afirmando a mensagem exata do guard.
   - `activeCombatAllowsGuardianIntentAndCombatAttack` protege agência narrativa e ataque válido.
 - [ ] **Passo 2: executar os testes para confirmar falha**
   - `gradle testDebugUnitTest`; esperado: falha de compilação/assertion nos contratos ainda não implementados.
 - [ ] **Passo 3: persistir narrativa no domínio sem alterar regras de ataque**
   - Copiar `opponentNarrative` para os dois caminhos de iniciativa e preservá-lo em `current.copy` nas rodadas.
-  - A iniciativa e os ataques continuam exclusivamente em `CombatRules`/`GameActionResolver`.
+  - A iniciativa e os ataques continuam exclusivamente em `CombatRules`/`GameActionResolver`; apenas arma possuída ou ataque desarmado é aceito, sem modo de ataque escolhido pelo chamador.
 - [ ] **Passo 4: bloquear ações incompatíveis no resolver**
   - Rejeitar as ações listadas nos testes quando `campaign.combat != null`; não tocar em resultados mecânicos.
 - [ ] **Passo 5: resumir eventos de combate com fatos exatos**
-  - `GuardianRuleResolver` transforma `CombatStarted`, `CombatAttackResolved` e `CombatEnded` em um resumo estável dos valores retornados, incluindo HP/dano/Armor/condição somente se presentes nos eventos.
+  - `GuardianRuleResolver` transforma `CombatStarted`, `CombatAttackResolved` e `CombatEnded` em um resumo estável dos valores retornados, separando `damageDealtByPlayer` e `damageDealtByOpponent` e incluindo dano bruto, Armor absorvida, HP perdido, crítico, morte e cicatriz somente se presentes nos eventos.
 - [ ] **Passo 6: validar testes e commit**
   - Esperado: os testes novos e `combatFlowUsesDexInitiativeThenResolvesAttackAndEndsOnOpponentZeroHp` / `failedFirstDexSaveLetsEnemyActAndAdvancesToRoundTwo` passam.
   - Commit: `feat: resolve confirmed combat through the rules engine`.
@@ -121,16 +130,18 @@
 
 **Interfaces produzidas:**
 - `EncounterProposalCard(proposal, enabled, onAccept, onReject)` mostra identidade, aparência, comportamento, intenção, contexto, estatísticas e arma.
-- `CombatCard(state, weapons, onAttack)` mostra o oponente confirmado, estado atual e ações válidas.
+- `CombatCard(combat, weapons, enabled, onAttack: (WeaponProfile?) -> Unit)` mostra o oponente confirmado, estado atual e ações válidas.
+- `RollRequestCard` oferece descarte sem efeitos, como fallback para qualquer solicitação que não possa ser resolvida.
 
 - [ ] **Passo 1: apresentar proposta sem iniciar combate**
   - Para `BEGIN_COMBAT`, renderizar `EncounterProposalCard` no lugar de `RollRequestCard`.
   - “Aceitar encontro” chama o resolver; “Recusar” limpa o pedido pendente sem chamar `GameActionResolver` nem salvar mudança mecânica.
 - [ ] **Passo 2: conectar o combate ativo**
   - Mostrar `CombatCard` somente enquanto `campaign.combat != null`; desabilitar controles de exploração/descanso nesse estado.
-  - Ações de ataque usam `GameAction.CombatAttack` via `GuardianRuleResolver.resolve(state, action)`; não exibir um botão de fuga/encerramento sem regra normativa implementada.
+  - Ofertar apenas armas cujo dano use dados suportados; armadilhas com dano textual não entram na lista de ataques.
+  - Ações de ataque usam `GameAction.CombatAttack` via `GuardianRuleResolver.resolve(state, action)` e armas são verificadas no inventário; não expor modo de ataque escolhido pelo caller nem botão de fuga/encerramento sem regra normativa implementada.
 - [ ] **Passo 3: devolver apenas o resultado autorizado ao Guardian**
-  - Após qualquer ação mecânica, apresentar os eventos retornados pelo resolver; ao continuar, chamar `narrate` com o resumo `ruleResult` derivado daquele `GameResult` e o comando interno de continuação.
+  - Após qualquer ação mecânica, apresentar os eventos retornados pelo resolver; ao continuar, chamar `narrate` com o resumo `ruleResult` derivado daquele `GameResult`, o perfil narrativo aprovado em `encounterContext` e o comando interno de continuação.
   - O Guardian atualiza a narrativa; não altera HP, Armor, condições, inventário ou estado de combate.
 - [ ] **Passo 4: validar visualmente**
   - No APK do workflow, verificar proposta → recusa sem combate; proposta → aceite → iniciativa; ataque → consequência do engine → narração do Guardian; término autoritativo remove o card.
@@ -148,7 +159,7 @@
 - Modificar: `docs/gates/GATE-6.md`, `docs/STATUS.md`, `docs/ROADMAP.md` e, se necessário, `docs/ARCHITECTURE-MAP.md`
 
 **Interfaces produzidas:**
-- Saves guardam os cinco campos de `CombatOpponentNarrative`; saves antigos sem esses campos carregam um perfil default com `name=opponentId` e detalhes vazios.
+- Saves guardam os cinco campos de `CombatOpponentNarrative` e as flags `blast`/`ranged` da arma; saves antigos sem esses campos carregam um perfil default com `name=opponentId`, detalhes vazios e flags falsas.
 
 - [ ] **Passo 1: escrever `activeCombatRoundTripsOpponentNarrativeAndMechanicalState`**
   - Round-trip mantém identidade, narrativa, stats, HP, Armor, arma, rodada e `playerCanAct`.

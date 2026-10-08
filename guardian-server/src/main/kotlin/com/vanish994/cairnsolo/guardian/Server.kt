@@ -33,7 +33,7 @@ condições, morte, recursos e resultados aleatórios.
 Nunca invente ou altere valores mecânicos.
 Nunca diga que um teste foi bem-sucedido, que dano foi causado ou que um item foi obtido, a menos que o campo ruleResult forneça explicitamente esse fato.
 Quando uma ação exigir resolução mecânica, preencha ruleRequest com um pedido estruturado e deixe o aplicativo resolver. Use SAVE, DAMAGE, FATIGUE, REST, STABILIZE_CRITICAL ou RECOVER_SCAR conforme apropriado; BEGIN_COMBAT é apenas uma proposta de encontro para aprovação do jogador.
-Você também pode propor BEGIN_COMBAT somente quando character.combat estiver ausente. Isso é uma proposta de oponente, não o início do combate: o jogador precisa aceitar no aplicativo. Inclua aparência, comportamento, intenção, contexto, stats e weapon completos; weapon.damage deve usar apenas d4/d6/d8/d10/d12 (por exemplo, d6 ou d6+d8); Armor deve estar entre 0 e 3. Não declare iniciativa, ataque, dano ou qualquer consequência.
+Você também pode propor BEGIN_COMBAT somente quando character.combat estiver ausente. Isso é uma proposta de oponente, não o início do combate: o jogador precisa aceitar no aplicativo. Inclua aparência, comportamento, intenção, contexto, stats e weapon completos; HP deve ser pelo menos 1 e não pode exceder maxHp; weapon.damage deve usar apenas d4/d6/d8/d10/d12 (por exemplo, d6 ou d6+d8); Armor deve estar entre 0 e 3. Não declare iniciativa, ataque, dano ou qualquer consequência.
 Com combate ativo, ataques são iniciados pelos controles do aplicativo. Não use DAMAGE para simular um ataque e não narre seu resultado antes de recebê-lo em ruleResult.
 Você pode propor atualizações narrativas em canonProposals, mas elas não são fatos até serem validadas pelo aplicativo. Use apenas UPSERT_NPC, DISCOVER_LOCATION, ADD_IMPORTANT_ITEM, CREATE_QUEST, ADD_DISCOVERY ou ADD_RUMOR. Nunca altere HP, atributos, inventário, facções, Growth ou outros dados mecânicos.
 O estado growth.evidence contém experiências já registradas pelo domínio. Não crie evidências, habilidades ou aumentos de atributo por conta própria. Se uma experiência parecer um gatilho de Growth, narre a consequência e aguarde o fluxo de Growth do aplicativo.
@@ -72,7 +72,7 @@ fun main() {
             val body = exchange.requestBody.readAllBytes().toString(StandardCharsets.UTF_8)
             val request = JsonParser.parseString(body).asJsonObject
             validateRequest(request)
-            val gemini = callGemini(apiKey, request)
+            val gemini = normalizeCombatProposal(callGemini(apiKey, request))
             respond(exchange, 200, gemini.toString())
         } catch (e: Exception) {
             respond(exchange, 500, gson.toJson(mapOf("error" to (e.message ?: "guardian_error"))))
@@ -116,7 +116,7 @@ Inclua growthChangeProposals como uma lista, mesmo quando vazia. Não invente re
 
     val schema = JsonObject().apply {
         addProperty("type", "object")
-        add("properties", JsonParser.parseString("""
+        val properties = JsonParser.parseString("""
             {
               "narration": {"type":"string"},
               "sceneTitle": {"type":"string"},
@@ -136,7 +136,9 @@ Inclua growthChangeProposals como uma lista, mesmo quando vazia. Não invente re
               "growthEvidenceProposals": {"type":"array","maxItems":3,"items":{"type":"object","properties":{"id":{"type":"string","pattern":"^[a-z0-9-]{3,80}$"},"summary":{"type":"string","minLength":1,"maxLength":1000},"relatedEntityIds":{"type":"array","items":{"type":"string"}},"focusedPattern":{"type":"boolean"},"seriousRisk":{"type":"boolean"},"uniqueInteraction":{"type":"boolean"}},"required":["id","summary","relatedEntityIds","focusedPattern","seriousRisk","uniqueInteraction"],"additionalProperties":false}}
               ,"growthChangeProposals": {"type":"array","maxItems":3,"items":{"type":"object","properties":{"id":{"type":"string","pattern":"^[a-z0-9-]{3,80}$"},"evidenceIds":{"type":"array","minItems":1,"items":{"type":"string","pattern":"^[a-z0-9-]{3,80}$"}},"changeType":{"type":"string","enum":["RAISE_MAX_ATTRIBUTE","KEEP_HIGHER_ATTRIBUTE","GAIN_ABILITY"]},"attribute":{"type":"string","enum":["STR","DEX","WIL"]},"amount":{"type":"integer","minimum":1,"maximum":3},"candidate":{"type":"integer","minimum":3,"maximum":18},"abilityId":{"type":"string","pattern":"^[a-z0-9-]{3,80}$"},"abilityName":{"type":"string","maxLength":160},"abilityDescription":{"type":"string","maxLength":1000},"abilityCost":{"type":"string","maxLength":200},"rationale":{"type":"string","minLength":1,"maxLength":1000}},"required":["id","evidenceIds","changeType","rationale"],"additionalProperties":false}}
             }
-        """).asJsonObject)
+        """).asJsonObject
+        addEncounterStringPatterns(properties)
+        add("properties", properties)
         add("required", JsonParser.parseString(
             """["narration","sceneTitle","sceneDescription","ruleRequest","suggestedActions","canonProposals","growthEvidenceProposals","growthChangeProposals"]"""
         ).asJsonArray)
@@ -196,6 +198,49 @@ Inclua growthChangeProposals como uma lista, mesmo quando vazia. Não invente re
         }
     }
     error("Gemini response did not contain model text")
+}
+
+internal fun addEncounterStringPatterns(properties: JsonObject) {
+    val alternatives = properties.getAsJsonObject("ruleRequest").getAsJsonArray("anyOf")
+    val beginCombat = alternatives.first { candidate ->
+        val types = candidate.asJsonObject
+            .getAsJsonObject("properties")
+            ?.getAsJsonObject("type")
+            ?.getAsJsonArray("enum")
+        types?.any { it.asString == "BEGIN_COMBAT" } == true
+    }.asJsonObject
+    val encounterProperties = beginCombat.getAsJsonObject("properties")
+        .getAsJsonObject("encounter")
+        .getAsJsonObject("properties")
+    encounterProperties.getAsJsonObject("opponentId").addProperty("pattern", "^\\S(?:.*\\S)?$")
+    val narrativeProperties = encounterProperties.getAsJsonObject("narrative").getAsJsonObject("properties")
+    listOf("name", "appearance", "behavior", "intent", "context").forEach { field ->
+        narrativeProperties.getAsJsonObject(field).addProperty("pattern", "\\S")
+    }
+    encounterProperties.getAsJsonObject("weapon").getAsJsonObject("properties")
+        .getAsJsonObject("id").addProperty("pattern", "\\S")
+}
+
+internal fun normalizeCombatProposal(response: JsonObject): JsonObject {
+    val ruleRequest = response.get("ruleRequest")
+        ?.takeIf { it.isJsonObject }
+        ?.asJsonObject ?: return response
+    val type = runCatching { ruleRequest.get("type")?.asString }.getOrNull()
+    if (!type.equals("BEGIN_COMBAT", ignoreCase = true)) return response
+
+    val stats = ruleRequest.get("encounter")
+        ?.takeIf { it.isJsonObject }
+        ?.asJsonObject
+        ?.get("stats")
+        ?.takeIf { it.isJsonObject }
+        ?.asJsonObject
+    val hp = runCatching { stats?.get("hp")?.asInt }.getOrNull()
+    val maxHp = runCatching { stats?.get("maxHp")?.asInt }.getOrNull()
+    if (hp == null || maxHp == null || hp < 1 || maxHp < hp) {
+        // Preserve the scene; the client turns this incomplete proposal into a visible validation error.
+        ruleRequest.remove("encounter")
+    }
+    return response
 }
 
 private fun respond(exchange: HttpExchange, status: Int, body: String) {

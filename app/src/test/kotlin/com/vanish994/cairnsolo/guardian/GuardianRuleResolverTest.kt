@@ -60,7 +60,7 @@ class GuardianRuleResolverTest {
     }
 
     @Test
-    fun incompleteSaveAndDamageRequestsAreRejectedBeforeExecution() {
+    fun incompleteSaveDamageAndEncounterRequestsAreRejectedBeforeExecution() {
         val random = FixedRandomSource(10)
         val rules = GuardianRuleResolver(GameActionResolver(ExplorationEngine(random), RulesEngine(random)))
         val state = newCharacter("Mara", 10, 11, 12)
@@ -72,6 +72,14 @@ class GuardianRuleResolverTest {
         assertEquals(
             "DAMAGE precisa indicar uma quantidade positiva.",
             rules.validationError(state, GuardianRuleRequest("DAMAGE"))
+        )
+        assertEquals(
+            "BEGIN_COMBAT precisa trazer uma proposta completa de encontro.",
+            rules.validationError(state, GuardianRuleRequest("BEGIN_COMBAT"))
+        )
+        assertEquals(
+            "BEGIN_COMBAT precisa trazer uma proposta completa de encontro.",
+            rules.validationError(state, GuardianRuleRequest("BEGIN_COMBAT"))
         )
     }
 

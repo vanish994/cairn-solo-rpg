@@ -47,23 +47,25 @@ class GuardianClientTest {
     }
 
     @Test
-    fun invalidBeginCombatProposalDoesNotDiscardNarration() {
+    fun invalidBeginCombatProposalIsRetainedForVisibleRejection() {
         val response = HttpGuardianClient(baseUrl = "").parseResponse(
             """{"narration":"A cena continua.","sceneTitle":"Trilha","sceneDescription":"Escura.","ruleRequest":{"type":"BEGIN_COMBAT","encounter":{"opponentId":"wolf"}},"suggestedActions":[]}"""
         )
 
         assertEquals("A cena continua.", response.narration)
-        assertNull(response.ruleRequest)
+        assertEquals("BEGIN_COMBAT", response.ruleRequest?.type)
+        assertNull(response.ruleRequest?.encounter)
     }
 
     @Test
-    fun unsupportedWeaponDamageDoesNotBecomeAnExecutableEncounter() {
+    fun unsupportedWeaponDamageIsRetainedForVisibleRejection() {
         val response = HttpGuardianClient(baseUrl = "").parseResponse(
             """{"narration":"A cena continua.","sceneTitle":"Trilha","sceneDescription":"Escura.","ruleRequest":{"type":"BEGIN_COMBAT","encounter":{"opponentId":"wolf-alpha","narrative":{"name":"Lobo","appearance":"Grande.","behavior":"Rosna.","intent":"Ataca.","context":"Na trilha."},"stats":{"str":5,"dex":7,"wil":3,"hp":4,"maxHp":4,"armor":1},"weapon":{"id":"fangs","damage":"d20","blast":false,"ranged":false}}},"suggestedActions":[]}"""
         )
 
         assertEquals("A cena continua.", response.narration)
-        assertNull(response.ruleRequest)
+        assertEquals("BEGIN_COMBAT", response.ruleRequest?.type)
+        assertNull(response.ruleRequest?.encounter)
     }
 
     @Test

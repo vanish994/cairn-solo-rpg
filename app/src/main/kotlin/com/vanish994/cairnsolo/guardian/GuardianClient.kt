@@ -209,9 +209,8 @@ class HttpGuardianClient(
     private fun parseRuleRequest(json: JSONObject): GuardianRuleRequest? {
         val type = json.optString("type").takeIf { it.isNotBlank() } ?: return null
         if (type.equals("BEGIN_COMBAT", ignoreCase = true)) {
-            return runCatching {
-                GuardianRuleRequest(type = "BEGIN_COMBAT", encounter = parseEncounter(json.getJSONObject("encounter")))
-            }.getOrNull()
+            val encounter = runCatching { parseEncounter(json.getJSONObject("encounter")) }.getOrNull()
+            return GuardianRuleRequest(type = "BEGIN_COMBAT", encounter = encounter)
         }
         return runCatching {
             GuardianRuleRequest(
