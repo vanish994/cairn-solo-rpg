@@ -71,6 +71,7 @@ class GuardianClientTest {
 
     @Test
     fun parseSuggestedActionsFiltersBlankExcessAndNonStringEntries() {
+        val overlongSuggestion = "x".repeat(161)
         val response = HttpGuardianClient(baseUrl = "").parseResponse(
             """{
               "narration":"A narração permanece.",
@@ -82,6 +83,7 @@ class GuardianClientTest {
                 42,
                 "Pergunte ao taverneiro sobre a pista",
                 {"not":"a string"},
+                "$overlongSuggestion",
                 "Consulte o registro disponível",
                 "Quarta ação"
               ]
@@ -98,6 +100,18 @@ class GuardianClientTest {
         )
         assertTrue(response.suggestedActions.size <= 3)
         assertTrue(response.suggestedActions.all { it.isNotBlank() && it.length <= 160 })
+    }
+
+    @Test
+    fun parseSuggestedActionsEnforces160CharacterBoundary() {
+        val atLimit = "a".repeat(160)
+        val overLimit = "b".repeat(161)
+        val response = HttpGuardianClient(baseUrl = "").parseResponse(
+            """{"narration":"A narração permanece.","sceneTitle":"Taverna","sceneDescription":"Uma pista conhecida aguarda atenção.","suggestedActions":["$atLimit","$overLimit"]}"""
+        )
+
+        assertEquals(listOf(atLimit), response.suggestedActions)
+        assertEquals("A narração permanece.", response.narration)
     }
 
     @Test

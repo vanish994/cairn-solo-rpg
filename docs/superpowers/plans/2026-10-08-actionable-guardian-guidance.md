@@ -40,9 +40,10 @@
 **Interfaces:**
 - Produce `internal fun suggestedActionsSchema(): JsonObject` com `type=array`, `minItems=1`, `maxItems=3`, e strings `minLength=1`, `maxLength=160`.
 - Produce `internal fun guardianSystemPrompt(): String` para compor a instrução usada pelo request e validar o requisito de grounding.
-- `GuardianResponse.suggestedActions` continua `List<String>`; o parser ignora entradas não string e em branco, limita o máximo a três e preserva narração/cena mesmo se a lista estiver malformada.
+- `GuardianResponse.suggestedActions` continua `List<String>`; o parser ignora entradas não string, em branco e acima de 160 caracteres, limita o máximo a três e preserva narração/cena mesmo se a lista estiver malformada.
+- A instrução específica de sugestões em `guardianSystemPrompt()` usa o cabeçalho estável `AÇÕES SUGERIDAS (suggestedActions):`; o parágrafo desse cabeçalho vincula as sugestões a `availableActions`, cena e cânone e proíbe inventar fatos.
 
-- [ ] Escrever `ServerTest.suggestedActionsSchemaRequiresOneToThreeBoundedStrings`, `ServerTest.promptGroundsActionsInSceneCanonAndAvailableActions`, `GuardianClientTest.parseSuggestedActionsFiltersBlankExcessAndNonStringEntries`, `GuardianClientTest.emptySuggestedActionsDoNotDropNarration` e `GuardianClientTest.malformedSuggestionsDoNotDropNarration`; afirmar limite, grounding e preservação da narração.
+- [ ] Escrever `ServerTest.suggestedActionsSchemaRequiresOneToThreeBoundedStrings`, `ServerTest.promptGroundsActionsInSceneCanonAndAvailableActions`, `GuardianClientTest.parseSuggestedActionsFiltersBlankExcessAndNonStringEntries`, `GuardianClientTest.parseSuggestedActionsEnforces160CharacterBoundary`, `GuardianClientTest.emptySuggestedActionsDoNotDropNarration` e `GuardianClientTest.malformedSuggestionsDoNotDropNarration`; afirmar limite, grounding dentro do bloco da diretiva e preservação da narração.
 
 ```kotlin
 assertEquals(1, suggestedActionsSchema().get("minItems").asInt)

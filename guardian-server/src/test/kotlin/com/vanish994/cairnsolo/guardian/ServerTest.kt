@@ -65,12 +65,15 @@ class ServerTest {
     @Test
     fun promptGroundsActionsInSceneCanonAndAvailableActions() {
         val prompt = guardianSystemPrompt().lowercase()
+        val suggestionInstruction = prompt
+            .substringAfter("ações sugeridas (suggestedactions):", missingDelimiterValue = "")
+            .substringBefore("\n\n")
 
-        assertTrue(prompt.contains("objetivo imediato"))
-        assertTrue(prompt.contains("availableactions"))
-        assertTrue(prompt.contains("cena"))
-        assertTrue(prompt.contains("cânone") || prompt.contains("worldcanon"))
-        assertTrue(prompt.contains("derivad") || prompt.contains("fundamentad") || prompt.contains("basead"))
-        assertTrue(prompt.contains("não invent"))
+        assertTrue(suggestionInstruction.isNotBlank())
+        assertTrue(suggestionInstruction.contains("availableactions"))
+        assertTrue(suggestionInstruction.contains("cena"))
+        assertTrue(suggestionInstruction.contains("cânone") || suggestionInstruction.contains("worldcanon"))
+        assertTrue(suggestionInstruction.contains("apoiad") || suggestionInstruction.contains("derivad") || suggestionInstruction.contains("basead"))
+        assertTrue(suggestionInstruction.contains("não invent"))
     }
 }
