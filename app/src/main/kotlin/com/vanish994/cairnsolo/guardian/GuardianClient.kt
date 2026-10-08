@@ -8,6 +8,10 @@ import com.vanish994.cairnsolo.game.CanonStatus
 import com.vanish994.cairnsolo.game.CanonSource
 import com.vanish994.cairnsolo.game.GrowthEvidenceProposal
 import com.vanish994.cairnsolo.game.GrowthChangeProposal
+import com.vanish994.cairnsolo.game.CombatOpponentNarrative
+import com.vanish994.cairnsolo.rules.CharacterState
+import com.vanish994.cairnsolo.rules.WeaponProfile
+import com.vanish994.cairnsolo.rules.isSupportedWeaponDamageExpression
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -19,8 +23,31 @@ import java.net.URL
 data class GuardianRuleRequest(
     val type: String,
     val attribute: String? = null,
-    val amount: Int? = null
+    val amount: Int? = null,
+    val encounter: GuardianEncounterProposal? = null
 )
+
+data class GuardianEncounterProposal(
+    val opponentId: String,
+    val narrative: CombatOpponentNarrative,
+    val stats: CharacterState,
+    val weapon: WeaponProfile
+) {
+    init {
+        require(opponentId.isNotBlank() && opponentId == opponentId.trim() && opponentId.length <= 80)
+        require(narrative.name.isNotBlank())
+        require(narrative.appearance.isNotBlank())
+        require(narrative.behavior.isNotBlank())
+        require(narrative.intent.isNotBlank())
+        require(narrative.context.isNotBlank())
+        require(stats.maxHp > 0 && stats.hp in 1..stats.maxHp)
+        require(stats.armor in 0..3)
+        require(weapon.id.isNotBlank() && weapon.id.length <= 80)
+        val damageExpression = weapon.damage?.trim().orEmpty()
+        require(damageExpression.isNotBlank() && damageExpression.length <= 32)
+        require(isSupportedWeaponDamageExpression(damageExpression))
+    }
+}
 
 data class GuardianResponse(
     val narration: String,
@@ -35,7 +62,32 @@ data class GuardianResponse(
 )
 
 interface GuardianClient {
-    suspend fun narrate(state: GameState, playerIntent: String): Result<GuardianResponse>
+    suspend fun narrate(
+        state: GameState,
+        playerIntent: String,
+        ruleResult: String? = null,
+        encounterContext: CombatOpponentNarrative? = null
+    ): Result<GuardianResponse>
+}
+
+internal fun guardianRequestPayload(
+    state: GameState,
+    playerIntent: String,
+    ruleResult: String? = null,
+    encounterContext: CombatOpponentNarrative? = null
+): JSONObject = JSONObject().apply {
+    put("playerIntent", playerIntent.trim())
+    put("campaign", GuardianContextBuilder.from(state).toJson())
+    ruleResult?.takeIf { it.isNotBlank() }?.let { put("ruleResult", it.trim()) }
+    encounterContext?.let { profile ->
+        put("encounterContext", JSONObject().apply {
+            put("name", profile.name)
+            put("appearance", profile.appearance)
+            put("behavior", profile.behavior)
+            put("intent", profile.intent)
+            put("context", profile.context)
+        })
+    }
 }
 
 class HttpGuardianClient(
@@ -44,14 +96,16 @@ class HttpGuardianClient(
 
     override suspend fun narrate(
         state: GameState,
-        playerIntent: String
+        playerIntent: String,
+        ruleResult: String?,
+        encounterContext: CombatOpponentNarrative?
     ): Result<GuardianResponse> = withContext(Dispatchers.IO) {
         require(baseUrl.isNotBlank()) { "Guardião online não configurado." }
         require(playerIntent.isNotBlank()) { "A intenção do jogador está vazia." }
 
         var lastFailure: Throwable? = null
         repeat(2) { attempt ->
-            runCatching { narrateOnce(state, playerIntent) }
+            runCatching { narrateOnce(state, playerIntent, ruleResult, encounterContext) }
                 .onSuccess { return@withContext Result.success(it) }
                 .onFailure {
                     lastFailure = it
@@ -61,7 +115,12 @@ class HttpGuardianClient(
         Result.failure(lastFailure ?: IllegalStateException("Falha desconhecida do Guardião"))
     }
 
-    private fun narrateOnce(state: GameState, playerIntent: String): GuardianResponse {
+    private fun narrateOnce(
+        state: GameState,
+        playerIntent: String,
+        ruleResult: String?,
+        encounterContext: CombatOpponentNarrative?
+    ): GuardianResponse {
         val url = baseUrl.trimEnd('/')
         val connection = (URL(url).openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
@@ -72,10 +131,7 @@ class HttpGuardianClient(
             setRequestProperty("Accept", "application/json")
         }
         return try {
-            val payload = JSONObject().apply {
-                put("playerIntent", playerIntent.trim())
-                put("campaign", campaignJson(state))
-            }
+            val payload = guardianRequestPayload(state, playerIntent, ruleResult, encounterContext)
             connection.outputStream.use {
                 it.write(payload.toString().toByteArray(Charsets.UTF_8))
             }
@@ -92,18 +148,10 @@ class HttpGuardianClient(
         }
     }
 
-    private fun campaignJson(state: GameState): JSONObject = GuardianContextBuilder.from(state).toJson()
-
-    private fun parseResponse(body: String): GuardianResponse {
+    internal fun parseResponse(body: String): GuardianResponse {
         val json = JSONObject(body)
         val ruleObject = json.optJSONObject("ruleRequest")
-        val ruleRequest = ruleObject?.let {
-            GuardianRuleRequest(
-                type = it.getString("type"),
-                attribute = it.optString("attribute").takeIf { value -> value.isNotBlank() },
-                amount = if (it.has("amount") && !it.isNull("amount")) it.getInt("amount") else null
-            )
-        }
+        val ruleRequest = ruleObject?.let(::parseRuleRequest)
         val actions = buildList {
             val array = json.optJSONArray("suggestedActions") ?: JSONArray()
             for (i in 0 until array.length()) add(array.getString(i))
@@ -155,6 +203,48 @@ class HttpGuardianClient(
             canonProposals = proposals,
             growthEvidenceProposals = growthProposals,
             growthChangeProposals = changeProposals
+        )
+    }
+
+    private fun parseRuleRequest(json: JSONObject): GuardianRuleRequest? {
+        val type = json.optString("type").takeIf { it.isNotBlank() } ?: return null
+        if (type.equals("BEGIN_COMBAT", ignoreCase = true)) {
+            return runCatching {
+                GuardianRuleRequest(type = "BEGIN_COMBAT", encounter = parseEncounter(json.getJSONObject("encounter")))
+            }.getOrNull()
+        }
+        return runCatching {
+            GuardianRuleRequest(
+                type = type,
+                attribute = json.optString("attribute").takeIf { it.isNotBlank() },
+                amount = if (json.has("amount") && !json.isNull("amount")) json.getInt("amount") else null
+            )
+        }.getOrNull()
+    }
+
+    private fun parseEncounter(json: JSONObject): GuardianEncounterProposal {
+        val narrative = json.getJSONObject("narrative")
+        val stats = json.getJSONObject("stats")
+        val weapon = json.getJSONObject("weapon")
+        return GuardianEncounterProposal(
+            opponentId = json.getString("opponentId"),
+            narrative = CombatOpponentNarrative(
+                name = narrative.getString("name"),
+                appearance = narrative.getString("appearance"),
+                behavior = narrative.getString("behavior"),
+                intent = narrative.getString("intent"),
+                context = narrative.getString("context")
+            ),
+            stats = CharacterState(
+                str = stats.getInt("str"), dex = stats.getInt("dex"), wil = stats.getInt("wil"),
+                hp = stats.getInt("hp"), maxHp = stats.getInt("maxHp"), armor = stats.getInt("armor")
+            ),
+            weapon = WeaponProfile(
+                id = weapon.getString("id"),
+                damage = weapon.getString("damage"),
+                blast = weapon.optBoolean("blast", false),
+                ranged = weapon.optBoolean("ranged", false)
+            )
         )
     }
 

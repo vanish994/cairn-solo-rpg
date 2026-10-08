@@ -15,12 +15,30 @@ data class CharacterIdentity(val id: String = UUID.randomUUID().toString(), val 
 
 data class CompanionState(val id: String, val hp: Int, val maxHp: Int, val armor: Int = 0, val str: Int = 0, val dex: Int = 0, val wil: Int = 0, val slots: Int = 0, val tags: Set<String> = emptySet())
 
+data class CombatOpponentNarrative(
+    val name: String,
+    val appearance: String = "",
+    val behavior: String = "",
+    val intent: String = "",
+    val context: String = ""
+) {
+    init {
+        require(name.isNotBlank())
+        require(name.length <= 160)
+        require(appearance.length <= 1000)
+        require(behavior.length <= 1000)
+        require(intent.length <= 1000)
+        require(context.length <= 1000)
+    }
+}
+
 data class CombatState(
     val opponentId: String,
     val opponent: com.vanish994.cairnsolo.rules.CharacterState,
     val opponentWeapon: com.vanish994.cairnsolo.rules.WeaponProfile = com.vanish994.cairnsolo.rules.WeaponProfile("unarmed", "d4"),
     val round: Int = 1,
-    val playerCanAct: Boolean = true
+    val playerCanAct: Boolean = true,
+    val opponentNarrative: CombatOpponentNarrative = CombatOpponentNarrative(opponentId)
 )
 
 data class CharacterProfile(

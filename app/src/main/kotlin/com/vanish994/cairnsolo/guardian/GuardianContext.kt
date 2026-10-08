@@ -1,6 +1,7 @@
 package com.vanish994.cairnsolo.guardian
 
 import com.vanish994.cairnsolo.game.CampaignHistoryEntry
+import com.vanish994.cairnsolo.game.CombatOpponentNarrative
 import com.vanish994.cairnsolo.game.GameState
 import com.vanish994.cairnsolo.game.WorldCanon
 import com.vanish994.cairnsolo.game.WorldState
@@ -97,9 +98,48 @@ data class GuardianInventoryContext(
     }
 }
 
-data class GuardianCombatContext(val opponentId: String, val round: Int, val playerCanAct: Boolean) {
+data class GuardianCombatContext(
+    val opponentId: String,
+    val round: Int,
+    val playerCanAct: Boolean,
+    val opponent: GuardianCombatOpponentContext
+) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("opponentId", opponentId); put("round", round); put("playerCanAct", playerCanAct)
+        put("opponent", opponent.toJson())
+    }
+}
+
+data class GuardianCombatOpponentContext(
+    val narrative: CombatOpponentNarrative,
+    val hp: Int,
+    val maxHp: Int,
+    val armor: Int,
+    val weapon: GuardianCombatWeaponContext
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("narrative", JSONObject().apply {
+            put("name", narrative.name)
+            put("appearance", narrative.appearance)
+            put("behavior", narrative.behavior)
+            put("intent", narrative.intent)
+            put("context", narrative.context)
+        })
+        put("hp", hp); put("maxHp", maxHp); put("armor", armor)
+        put("weapon", weapon.toJson())
+    }
+}
+
+data class GuardianCombatWeaponContext(
+    val id: String,
+    val damage: String?,
+    val blast: Boolean,
+    val ranged: Boolean
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("id", id)
+        damage?.let { put("damage", it) }
+        put("blast", blast); put("ranged", ranged)
     }
 }
 
@@ -222,7 +262,25 @@ object GuardianContextBuilder {
             rules.scar?.let { add("SCAR:${it.name}") }
         }, gold,
         rules.inventory.take(10).map { GuardianInventoryContext(it.id, it.slotCost, it.damage, it.armor, it.uses) },
-        combat?.let { GuardianCombatContext(it.opponentId, it.round, it.playerCanAct) }
+        combat?.let { fight ->
+            GuardianCombatContext(
+                opponentId = fight.opponentId,
+                round = fight.round,
+                playerCanAct = fight.playerCanAct,
+                opponent = GuardianCombatOpponentContext(
+                    narrative = fight.opponentNarrative,
+                    hp = fight.opponent.hp,
+                    maxHp = fight.opponent.maxHp,
+                    armor = fight.opponent.armor,
+                    weapon = GuardianCombatWeaponContext(
+                        id = fight.opponentWeapon.id,
+                        damage = fight.opponentWeapon.damage,
+                        blast = fight.opponentWeapon.blast,
+                        ranged = fight.opponentWeapon.ranged
+                    )
+                )
+            )
+        }
     )
 
     private fun world(world: WorldState): GuardianWorldContext = GuardianWorldContext(

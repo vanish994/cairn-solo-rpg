@@ -41,6 +41,12 @@ object GameStatePersistenceCodec {
                 val o = fight.opponent
                 put("combatOpponentId", fight.opponentId); put("combatRound", fight.round.toString()); put("combatPlayerCanAct", fight.playerCanAct.toString())
                 put("combatWeaponId", fight.opponentWeapon.id); put("combatWeaponDamage", fight.opponentWeapon.damage ?: "")
+                put("combatWeaponBlast", fight.opponentWeapon.blast.toString()); put("combatWeaponRanged", fight.opponentWeapon.ranged.toString())
+                put("combatNarrativeName", fight.opponentNarrative.name)
+                put("combatNarrativeAppearance", fight.opponentNarrative.appearance)
+                put("combatNarrativeBehavior", fight.opponentNarrative.behavior)
+                put("combatNarrativeIntent", fight.opponentNarrative.intent)
+                put("combatNarrativeContext", fight.opponentNarrative.context)
                 put("combatStr", o.str.toString()); put("combatDex", o.dex.toString()); put("combatWil", o.wil.toString()); put("combatHp", o.hp.toString()); put("combatMaxHp", o.maxHp.toString()); put("combatArmor", o.armor.toString())
             }
             c.worldState?.let { world -> WorldStatePersistenceCodec.encode(world).forEach { (key, value) -> put("world_$key", value) } }
@@ -152,11 +158,24 @@ object GameStatePersistenceCodec {
         val discoveries = (0 until int("canonDiscoveryCount", 0)).mapNotNull { i -> fields("canonDiscovery_${i}").takeIf { it.size >= 5 }?.let { x -> runCatching { CanonDiscovery(x[0], x[1], CanonStatus.valueOf(x[2]), CanonSource.valueOf(x[3]), x[4].toLong()) }.getOrNull() } }
         val history = (0 until int("historyCount", 0)).mapNotNull { i -> fields("history_${i}").takeIf { it.size >= 6 }?.let { x -> runCatching { CampaignHistoryEntry(x[0], x[1].toLong(), HistoryEventType.valueOf(x[2]), x[3], HistorySource.valueOf(x[4]), x[5].split(",").filter { it.isNotBlank() }) }.getOrNull() } }
         val combat = values["combatOpponentId"]?.takeIf { it.isNotBlank() }?.let { opponentId ->
+            val opponentNarrative = runCatching {
+                CombatOpponentNarrative(
+                    name = string("combatNarrativeName").takeIf { it.isNotBlank() } ?: opponentId,
+                    appearance = string("combatNarrativeAppearance"),
+                    behavior = string("combatNarrativeBehavior"),
+                    intent = string("combatNarrativeIntent"),
+                    context = string("combatNarrativeContext")
+                )
+            }.getOrDefault(CombatOpponentNarrative(opponentId))
             CombatState(
                 opponentId = opponentId,
                 opponent = CharacterState(int("combatStr", 1), int("combatDex", 1), int("combatWil", 1), int("combatHp", 1), int("combatMaxHp", 1), int("combatArmor", 0)),
-                opponentWeapon = com.vanish994.cairnsolo.rules.WeaponProfile(string("combatWeaponId", "unarmed"), nullableString("combatWeaponDamage") ?: "d4"),
-                round = int("combatRound", 1), playerCanAct = bool("combatPlayerCanAct", true)
+                opponentWeapon = com.vanish994.cairnsolo.rules.WeaponProfile(
+                    string("combatWeaponId", "unarmed"), nullableString("combatWeaponDamage") ?: "d4",
+                    blast = bool("combatWeaponBlast", false), ranged = bool("combatWeaponRanged", false)
+                ),
+                round = int("combatRound", 1), playerCanAct = bool("combatPlayerCanAct", true),
+                opponentNarrative = opponentNarrative
             )
         }
         val dungeon = values["dungeonLocation"]?.takeIf { it.isNotBlank() }?.let { DungeonState(it, int("dungeonTurn", 0), int("dungeonCycles", 0), runCatching { DungeonLight.valueOf(string("dungeonLight", DungeonLight.DARK.name)) }.getOrDefault(DungeonLight.DARK), int("dungeonTorches", 3), int("dungeonOil", 0), bool("dungeonSafe", false), bool("dungeonDanger", false), bool("dungeonPanicked", false)) }
