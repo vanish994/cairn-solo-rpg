@@ -109,7 +109,7 @@ class CombatAuthorityContractTest {
 
         blockedActions.forEach { action ->
             val error = assertFailsWith<IllegalArgumentException>(action.toString()) {
-                resolver(FixedRandomSource()).resolve(active, action)
+                resolver(FixedRandomSource(10)).resolve(active, action)
             }
             assertEquals("This action is unavailable during active combat", error.message)
         }
