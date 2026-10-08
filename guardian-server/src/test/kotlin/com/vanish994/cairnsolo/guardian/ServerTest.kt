@@ -66,15 +66,44 @@ class ServerTest {
 
     @Test
     fun consistentHpProposalIsPreserved() {
-        val response = JsonParser.parseString(
-            """{"ruleRequest":{"type":"BEGIN_COMBAT","encounter":{"opponents":[{"opponentId":"cultist-a","stats":{"hp":3,"maxHp":4}}]}}}"""
-        ).asJsonObject
+        val response = validEncounterResponse()
 
         val normalized = normalizeCombatProposal(response)
 
         assertEquals(3, normalized.getAsJsonObject("ruleRequest")
             .getAsJsonObject("encounter").getAsJsonArray("opponents")[0].asJsonObject
             .getAsJsonObject("stats").get("hp").asInt)
+    }
+
+    @Test
+    fun fractionalHpProposalIsRejectedWithoutLosingNarration() {
+        val response = validEncounterResponse()
+        val stats = response.getAsJsonObject("ruleRequest").getAsJsonObject("encounter")
+            .getAsJsonArray("opponents")[0].asJsonObject.getAsJsonObject("stats")
+        stats.addProperty("hp", 1.9)
+        stats.addProperty("maxHp", 2.1)
+
+        assertEncounterRejectedWithoutLosingNarration(response)
+    }
+
+    @Test
+    fun invalidArmorWeaponOrNarrativeIsRejectedWithoutLosingNarration() {
+        val invalidResponses = listOf(
+            validEncounterResponse().apply {
+                getAsJsonObject("ruleRequest").getAsJsonObject("encounter").getAsJsonArray("opponents")[0]
+                    .asJsonObject.getAsJsonObject("stats").addProperty("armor", 4)
+            },
+            validEncounterResponse().apply {
+                getAsJsonObject("ruleRequest").getAsJsonObject("encounter").getAsJsonArray("opponents")[0]
+                    .asJsonObject.getAsJsonObject("weapon").addProperty("damage", "d20")
+            },
+            validEncounterResponse().apply {
+                getAsJsonObject("ruleRequest").getAsJsonObject("encounter").getAsJsonArray("opponents")[0]
+                    .asJsonObject.getAsJsonObject("narrative").addProperty("name", "  ")
+            }
+        )
+
+        invalidResponses.forEach(::assertEncounterRejectedWithoutLosingNarration)
     }
 
     @Test
@@ -105,4 +134,16 @@ class ServerTest {
         assertTrue(suggestionInstruction.contains("apoiad") || suggestionInstruction.contains("derivad") || suggestionInstruction.contains("basead"))
         assertTrue(suggestionInstruction.contains("não invent"))
     }
+
+    private fun assertEncounterRejectedWithoutLosingNarration(response: com.google.gson.JsonObject) {
+        val normalized = normalizeCombatProposal(response)
+
+        assertEquals("A cena continua.", normalized.get("narration").asString)
+        assertEquals("BEGIN_COMBAT", normalized.getAsJsonObject("ruleRequest").get("type").asString)
+        assertFalse(normalized.getAsJsonObject("ruleRequest").has("encounter"))
+    }
+
+    private fun validEncounterResponse() = JsonParser.parseString(
+        """{"narration":"A cena continua.","ruleRequest":{"type":"BEGIN_COMBAT","encounter":{"opponents":[{"opponentId":"cultist-a","narrative":{"name":"Cultista","appearance":"Manto escuro.","behavior":"Observa a passagem.","intent":"Protege o altar.","context":"Na capela."},"stats":{"str":5,"dex":7,"wil":8,"hp":3,"maxHp":4,"armor":1},"weapon":{"id":"ritual-dagger","damage":"d4","blast":false,"ranged":false}}]}}}"""
+    ).asJsonObject
 }
