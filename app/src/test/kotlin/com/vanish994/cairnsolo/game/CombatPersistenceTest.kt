@@ -129,6 +129,10 @@ class CombatPersistenceTest {
         val base = newCharacter("Mara", 10, 11, 12)
         val original = base.copy(campaign = base.campaign.copy(combat = combatState()))
         val legacy = GameStatePersistenceCodec.encode(original).toMutableMap().apply {
+            remove("combatOpponentCount")
+            keys.filter { it.startsWith("combatOpponent_") }.toList().forEach { remove(it) }
+            remove("combatMoraleLeaderId")
+            remove("combatResolvedMoraleTriggers")
             remove("combatNarrativeName")
             remove("combatNarrativeAppearance")
             remove("combatNarrativeBehavior")
@@ -149,12 +153,12 @@ class CombatPersistenceTest {
         val base = newCharacter("Mara", 10, 11, 12)
         val original = base.copy(campaign = base.campaign.copy(combat = combatState()))
         val corrupted = GameStatePersistenceCodec.encode(original).toMutableMap().apply {
-            put("combatWeaponDamage", "4 STR")
+            put("combatOpponent_0_weaponDamage", "4 STR")
         }
 
         val restored = assertNotNull(GameStatePersistenceCodec.decode(corrupted))
 
-        assertEquals("d4", restored.campaign.combat?.opponentWeapon?.damage)
+        assertEquals("d4", restored.campaign.combat?.opponents?.single()?.weapon?.damage)
     }
 
     @Test
