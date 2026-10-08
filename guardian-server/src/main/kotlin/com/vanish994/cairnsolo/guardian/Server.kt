@@ -122,36 +122,7 @@ Inclua growthEvidenceProposals como uma lista, mesmo quando vazia. Cada item dev
 Inclua growthChangeProposals como uma lista, mesmo quando vazia. Não invente resultados; use apenas mudanças sustentadas pelas evidências disponíveis.
 """.trimIndent()
 
-    val schema = JsonObject().apply {
-        addProperty("type", "object")
-        val properties = JsonParser.parseString("""
-            {
-              "narration": {"type":"string"},
-              "sceneTitle": {"type":"string"},
-              "sceneDescription": {"type":"string"},
-              "ruleRequest": {"anyOf": [
-                {"type":"null"},
-                {"type":"object","properties":{"type":{"type":"string","enum":["SAVE"]},"attribute":{"type":"string","enum":["STR","DEX","WIL"]}},"required":["type","attribute"],"additionalProperties":false},
-                {"type":"object","properties":{"type":{"type":"string","enum":["DAMAGE"]},"amount":{"type":"integer","minimum":1}},"required":["type","amount"],"additionalProperties":false},
-                {"type":"object","properties":{"type":{"type":"string","enum":["FATIGUE"]},"amount":{"type":"integer","minimum":1}},"required":["type","amount"],"additionalProperties":false},
-                {"type":"object","properties":{"type":{"type":"string","enum":["REST"]}},"required":["type"],"additionalProperties":false},
-                {"type":"object","properties":{"type":{"type":"string","enum":["STABILIZE_CRITICAL"]}},"required":["type"],"additionalProperties":false},
-                {"type":"object","properties":{"type":{"type":"string","enum":["RECOVER_SCAR"]}},"required":["type"],"additionalProperties":false},
-                {"type":"object","properties":{"type":{"type":"string","enum":["BEGIN_COMBAT"]},"encounter":{"type":"object","properties":{"opponentId":{"type":"string","minLength":1,"maxLength":80},"narrative":{"type":"object","properties":{"name":{"type":"string","minLength":1,"maxLength":160},"appearance":{"type":"string","minLength":1,"maxLength":1000},"behavior":{"type":"string","minLength":1,"maxLength":1000},"intent":{"type":"string","minLength":1,"maxLength":1000},"context":{"type":"string","minLength":1,"maxLength":1000}},"required":["name","appearance","behavior","intent","context"],"additionalProperties":false},"stats":{"type":"object","properties":{"str":{"type":"integer","minimum":0},"dex":{"type":"integer","minimum":0},"wil":{"type":"integer","minimum":0},"hp":{"type":"integer","minimum":1},"maxHp":{"type":"integer","minimum":1},"armor":{"type":"integer","minimum":0,"maximum":3}},"required":["str","dex","wil","hp","maxHp","armor"],"additionalProperties":false},"weapon":{"type":"object","properties":{"id":{"type":"string","minLength":1,"maxLength":80},"damage":{"type":"string","minLength":1,"maxLength":32,"pattern":"^d(4|6|8|10|12)(\\s*\\+\\s*d(4|6|8|10|12))*$"},"blast":{"type":"boolean"},"ranged":{"type":"boolean"}},"required":["id","damage","blast","ranged"],"additionalProperties":false}},"required":["opponentId","narrative","stats","weapon"],"additionalProperties":false}},"required":["type","encounter"],"additionalProperties":false}
-              ]},
-              "canonProposals": {"type":"array","maxItems":5,"items":{"type":"object","properties":{"type":{"type":"string","enum":["UPSERT_NPC","DISCOVER_LOCATION","ADD_IMPORTANT_ITEM","CREATE_QUEST","UPDATE_QUEST","ADD_DISCOVERY","ADD_RUMOR"]},"id":{"type":"string","pattern":"^[a-z0-9-]{3,80}$"},"status":{"type":"string","enum":["CONFIRMED","RUMOR","DISCOVERED"]},"source":{"type":"string","enum":["PLAYER","GUARDIAN","NPC","RULES_ENGINE","SYSTEM"]},"name":{"type":"string"},"title":{"type":"string"},"text":{"type":"string"},"description":{"type":"string"},"role":{"type":"string"},"relatedEntityIds":{"type":"array","items":{"type":"string"}}},"required":["type","id","status","source"],"additionalProperties":false}},
-              "growthEvidenceProposals": {"type":"array","maxItems":3,"items":{"type":"object","properties":{"id":{"type":"string","pattern":"^[a-z0-9-]{3,80}$"},"summary":{"type":"string","minLength":1,"maxLength":1000},"relatedEntityIds":{"type":"array","items":{"type":"string"}},"focusedPattern":{"type":"boolean"},"seriousRisk":{"type":"boolean"},"uniqueInteraction":{"type":"boolean"}},"required":["id","summary","relatedEntityIds","focusedPattern","seriousRisk","uniqueInteraction"],"additionalProperties":false}}
-              ,"growthChangeProposals": {"type":"array","maxItems":3,"items":{"type":"object","properties":{"id":{"type":"string","pattern":"^[a-z0-9-]{3,80}$"},"evidenceIds":{"type":"array","minItems":1,"items":{"type":"string","pattern":"^[a-z0-9-]{3,80}$"}},"changeType":{"type":"string","enum":["RAISE_MAX_ATTRIBUTE","KEEP_HIGHER_ATTRIBUTE","GAIN_ABILITY"]},"attribute":{"type":"string","enum":["STR","DEX","WIL"]},"amount":{"type":"integer","minimum":1,"maximum":3},"candidate":{"type":"integer","minimum":3,"maximum":18},"abilityId":{"type":"string","pattern":"^[a-z0-9-]{3,80}$"},"abilityName":{"type":"string","maxLength":160},"abilityDescription":{"type":"string","maxLength":1000},"abilityCost":{"type":"string","maxLength":200},"rationale":{"type":"string","minLength":1,"maxLength":1000}},"required":["id","evidenceIds","changeType","rationale"],"additionalProperties":false}}
-            }
-        """).asJsonObject
-        properties.add("suggestedActions", suggestedActionsSchema())
-        replaceBeginCombatSchema(properties)
-        add("properties", properties)
-        add("required", JsonParser.parseString(
-            """["narration","sceneTitle","sceneDescription","ruleRequest","suggestedActions","canonProposals","growthEvidenceProposals","growthChangeProposals"]"""
-        ).asJsonArray)
-        addProperty("additionalProperties", false)
-    }
+    val schema = guardianResponseSchema()
 
     val requestBody = JsonObject().apply {
         addProperty("model", MODEL)
@@ -178,7 +149,8 @@ Inclua growthChangeProposals como uma lista, mesmo quando vazia. Não invente re
         addProperty("store", true)
     }
 
-    val request = HttpRequest.newBuilder(URI(GEMINI_URL))
+    val geminiUrl = System.getenv("GEMINI_API_URL")?.takeIf { it.isNotBlank() } ?: GEMINI_URL
+    val request = HttpRequest.newBuilder(URI(geminiUrl))
         .header("Content-Type", "application/json")
         .header("x-goog-api-key", apiKey)
         .POST(HttpRequest.BodyPublishers.ofString(requestBody.toString()))
@@ -208,6 +180,39 @@ Inclua growthChangeProposals como uma lista, mesmo quando vazia. Não invente re
     error("Gemini response did not contain model text")
 }
 
+
+// Keep the wire schema within Gemini's documented structured-output subset.
+// String bounds and identifiers are validated by app/domain resolvers.
+internal fun guardianResponseSchema(): JsonObject = JsonObject().apply {
+        addProperty("type", "object")
+        val properties = JsonParser.parseString("""
+            {
+              "narration": {"type":"string"},
+              "sceneTitle": {"type":"string"},
+              "sceneDescription": {"type":"string"},
+              "ruleRequest": {"anyOf": [
+                {"type":"null"},
+                {"type":"object","properties":{"type":{"type":"string","enum":["SAVE"]},"attribute":{"type":"string","enum":["STR","DEX","WIL"]}},"required":["type","attribute"],"additionalProperties":false},
+                {"type":"object","properties":{"type":{"type":"string","enum":["DAMAGE"]},"amount":{"type":"integer","minimum":1}},"required":["type","amount"],"additionalProperties":false},
+                {"type":"object","properties":{"type":{"type":"string","enum":["FATIGUE"]},"amount":{"type":"integer","minimum":1}},"required":["type","amount"],"additionalProperties":false},
+                {"type":"object","properties":{"type":{"type":"string","enum":["REST"]}},"required":["type"],"additionalProperties":false},
+                {"type":"object","properties":{"type":{"type":"string","enum":["STABILIZE_CRITICAL"]}},"required":["type"],"additionalProperties":false},
+                {"type":"object","properties":{"type":{"type":"string","enum":["RECOVER_SCAR"]}},"required":["type"],"additionalProperties":false},
+                {"type":"object","properties":{"type":{"type":"string","enum":["BEGIN_COMBAT"]},"encounter":{"type":"object","properties":{"opponentId":{"type":"string"},"narrative":{"type":"object","properties":{"name":{"type":"string"},"appearance":{"type":"string"},"behavior":{"type":"string"},"intent":{"type":"string"},"context":{"type":"string"}},"required":["name","appearance","behavior","intent","context"],"additionalProperties":false},"stats":{"type":"object","properties":{"str":{"type":"integer","minimum":0},"dex":{"type":"integer","minimum":0},"wil":{"type":"integer","minimum":0},"hp":{"type":"integer","minimum":1},"maxHp":{"type":"integer","minimum":1},"armor":{"type":"integer","minimum":0,"maximum":3}},"required":["str","dex","wil","hp","maxHp","armor"],"additionalProperties":false},"weapon":{"type":"object","properties":{"id":{"type":"string"},"damage":{"type":"string"},"blast":{"type":"boolean"},"ranged":{"type":"boolean"}},"required":["id","damage","blast","ranged"],"additionalProperties":false}},"required":["opponentId","narrative","stats","weapon"],"additionalProperties":false}},"required":["type","encounter"],"additionalProperties":false}
+              ]},
+              "canonProposals": {"type":"array","maxItems":5,"items":{"type":"object","properties":{"type":{"type":"string","enum":["UPSERT_NPC","DISCOVER_LOCATION","ADD_IMPORTANT_ITEM","CREATE_QUEST","UPDATE_QUEST","ADD_DISCOVERY","ADD_RUMOR"]},"id":{"type":"string"},"status":{"type":"string","enum":["CONFIRMED","RUMOR","DISCOVERED"]},"source":{"type":"string","enum":["PLAYER","GUARDIAN","NPC","RULES_ENGINE","SYSTEM"]},"name":{"type":"string"},"title":{"type":"string"},"text":{"type":"string"},"description":{"type":"string"},"role":{"type":"string"},"relatedEntityIds":{"type":"array","items":{"type":"string"}}},"required":["type","id","status","source"],"additionalProperties":false}},
+              "growthEvidenceProposals": {"type":"array","maxItems":3,"items":{"type":"object","properties":{"id":{"type":"string"},"summary":{"type":"string"},"relatedEntityIds":{"type":"array","items":{"type":"string"}},"focusedPattern":{"type":"boolean"},"seriousRisk":{"type":"boolean"},"uniqueInteraction":{"type":"boolean"}},"required":["id","summary","relatedEntityIds","focusedPattern","seriousRisk","uniqueInteraction"],"additionalProperties":false}}
+              ,"growthChangeProposals": {"type":"array","maxItems":3,"items":{"type":"object","properties":{"id":{"type":"string"},"evidenceIds":{"type":"array","minItems":1,"items":{"type":"string"}},"changeType":{"type":"string","enum":["RAISE_MAX_ATTRIBUTE","KEEP_HIGHER_ATTRIBUTE","GAIN_ABILITY"]},"attribute":{"type":"string","enum":["STR","DEX","WIL"]},"amount":{"type":"integer","minimum":1,"maximum":3},"candidate":{"type":"integer","minimum":3,"maximum":18},"abilityId":{"type":"string"},"abilityName":{"type":"string"},"abilityDescription":{"type":"string"},"abilityCost":{"type":"string"},"rationale":{"type":"string"}},"required":["id","evidenceIds","changeType","rationale"],"additionalProperties":false}}
+            }
+        """).asJsonObject
+        properties.add("suggestedActions", suggestedActionsSchema())
+        replaceBeginCombatSchema(properties)
+        add("properties", properties)
+        add("required", JsonParser.parseString(
+            """["narration","sceneTitle","sceneDescription","ruleRequest","suggestedActions","canonProposals","growthEvidenceProposals","growthChangeProposals"]"""
+        ).asJsonArray)
+        addProperty("additionalProperties", false)
+    }
 private fun replaceBeginCombatSchema(properties: JsonObject) {
     val alternatives = properties.getAsJsonObject("ruleRequest").getAsJsonArray("anyOf")
     val index = alternatives.indexOfFirst { candidate ->
@@ -291,8 +296,6 @@ internal fun suggestedActionsSchema(): JsonObject = JsonObject().apply {
     addProperty("maxItems", 3)
     add("items", JsonObject().apply {
         addProperty("type", "string")
-        addProperty("minLength", 1)
-        addProperty("maxLength", 160)
     })
 }
 
