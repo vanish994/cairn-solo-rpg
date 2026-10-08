@@ -27,7 +27,7 @@
 
 1. **Estado/idempotência:** `OFFERED` não altera estado; `PAID` aplica uma vez e payload alterado com o mesmo ID não concede novamente.
 2. **Item não permitido:** catálogo desconhecido ou sem `InventoryItem` não aceita stats do Guardian; GP válido ainda pode ser aplicado e o item gera aviso.
-3. **Capacidade:** item sem espaço fica pendente sem descarte; preencher exatamente o 10º slot não reduz HP.
+3. **Capacidade:** item sem espaço fica pendente sem descarte; preencher exatamente o 10º slot aplica a regra Cairn 2e e reduz HP a 0.
 4. **Payload monetário inválido:** rejeitar valor negativo, overflow do saldo, ID inválido e denominação não-GP sem converter silenciosamente.
 5. **Apresentação:** saldo não aparece no inventário; itens pendentes são visíveis e resgatáveis depois de abrir espaço.
 
