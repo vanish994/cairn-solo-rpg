@@ -86,6 +86,21 @@ class FeedbackMapperTest {
     }
 
     @Test
+    fun mapsGrowthProposalPendingAndDecisionEvents() {
+        val pending = FeedbackMapper.map(GameEvent.GrowthProposalPending("growth-heartseed"), 17)
+        assertEquals(FeedbackType.INFO, pending.type)
+        assertEquals("Uma proposta de Growth aguarda sua decisão.", pending.message)
+
+        val accepted = FeedbackMapper.map(GameEvent.GrowthProposalDecided("growth-heartseed", accepted = true), 18)
+        assertEquals(FeedbackType.INFO, accepted.type)
+        assertEquals("Decisão de Growth registrada.", accepted.message)
+
+        val declined = FeedbackMapper.map(GameEvent.GrowthProposalDecided("growth-heartseed", accepted = false), 19)
+        assertEquals(FeedbackType.INFO, declined.type)
+        assertEquals("Proposta de Growth recusada.", declined.message)
+    }
+
+    @Test
     fun mapsScarRecovery() {
         val entry = FeedbackMapper.map(GameEvent.ScarRecovered("WALLOPED"), 17)
         assertEquals(FeedbackType.SUCCESS, entry.type)
