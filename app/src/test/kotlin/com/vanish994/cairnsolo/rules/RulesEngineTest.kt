@@ -73,6 +73,55 @@ class RulesEngineTest {
     }
 
     @Test
+    fun opponentAtZeroHpGetsNoScar() {
+        val result = RulesEngine(FixedRandomSource(10)).applyDamage(
+            state(hp = 2), 2, recipient = DamageRecipient.OPPONENT
+        )
+
+        assertEquals(0, result.newState.hp)
+        assertEquals(null, result.newState.scar)
+        assertFalse(result.events.any { it is RuleEvent.ScarTriggered })
+        assertFalse(result.newState.dead)
+        assertFalse(result.newState.critical)
+    }
+
+    @Test
+    fun opponentBelowZeroReducesStrengthAndSucceedsOnStrSaveWithoutPcDeathState() {
+        val result = RulesEngine(FixedRandomSource(7)).applyDamage(
+            state(hp = 2, str = 10), 5, recipient = DamageRecipient.OPPONENT
+        )
+
+        assertEquals(0, result.newState.hp)
+        assertEquals(7, result.newState.str)
+        assertEquals(null, result.newState.scar)
+        assertFalse(result.newState.dead)
+        assertFalse(result.newState.critical)
+        assertFalse(result.events.any { it is RuleEvent.ScarTriggered })
+        val event = result.events.filterIsInstance<RuleEvent.CriticalDamage>().single()
+        assertEquals(3, event.excessDamage)
+        assertEquals(7, event.saveRoll)
+        assertTrue(event.saveSuccess)
+    }
+
+    @Test
+    fun opponentBelowZeroReducesStrengthAndFailsStrSaveWithoutPcDeathState() {
+        val result = RulesEngine(FixedRandomSource(8)).applyDamage(
+            state(hp = 2, str = 10), 5, recipient = DamageRecipient.OPPONENT
+        )
+
+        assertEquals(0, result.newState.hp)
+        assertEquals(7, result.newState.str)
+        assertEquals(null, result.newState.scar)
+        assertFalse(result.newState.dead)
+        assertFalse(result.newState.critical)
+        assertFalse(result.events.any { it is RuleEvent.ScarTriggered })
+        val event = result.events.filterIsInstance<RuleEvent.CriticalDamage>().single()
+        assertEquals(3, event.excessDamage)
+        assertEquals(8, event.saveRoll)
+        assertFalse(event.saveSuccess)
+    }
+
+    @Test
     fun lastingScarRecordsLocationAndMayIncreaseMaxHp() {
         val result = RulesEngine(FixedRandomSource(10, 2)).applyDamage(state(hp = 1, maxHp = 1), 1)
         assertEquals(Scar.LASTING, result.newState.scar)

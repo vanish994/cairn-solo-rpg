@@ -28,6 +28,7 @@ import com.vanish994.cairnsolo.guardian.GuardianRuleResolver
 import com.vanish994.cairnsolo.game.GameActionResolver
 import com.vanish994.cairnsolo.game.GameState
 import com.vanish994.cairnsolo.game.CombatState
+import com.vanish994.cairnsolo.game.CombatOpponentStatus
 import com.vanish994.cairnsolo.game.GrowthChangeProposal
 import com.vanish994.cairnsolo.game.ExplorationEngine
 import com.vanish994.cairnsolo.game.LocalGameStateRepository
@@ -174,10 +175,13 @@ class MainActivity : ComponentActivity() {
                                         state = result.state
                                     }
                                 },
-                                onCombatAttack = { weapon ->
+                                onCombatAttack = { targetOpponentId, weapon ->
                                     if (pendingRule == null && lastResolution == null && !guardianLoading) {
                                         runCatching {
-                                            guardianRuleResolver.resolve(state ?: current, GameAction.CombatAttack(weapon))
+                                            guardianRuleResolver.resolve(
+                                                state ?: current,
+                                                GameAction.CombatAttack(targetOpponentId = targetOpponentId, weapon = weapon)
+                                            )
                                         }.onSuccess { resolution ->
                                             repository.save(resolution.state)
                                             state = resolution.state
@@ -234,7 +238,7 @@ class MainActivity : ComponentActivity() {
                                                 resolution.state,
                                                 playerIntent = "CONTINUAR_NARRATIVA",
                                                 ruleResult = resolution.resultText,
-                                                encounterContext = resolution.encounterNarrative
+                                                encounterContext = resolution.encounterContexts
                                             )
                                                 .onSuccess { response ->
                                                     val narrated = resolution.state.applyGuardianResponse(
@@ -552,7 +556,7 @@ private fun StatTile(label: String, value: Int, modifier: Modifier = Modifier) {
 private fun ExplorationScreen(
     state: GameState,
     onAction: (GameAction) -> Unit,
-    onCombatAttack: (WeaponProfile?) -> Unit,
+    onCombatAttack: (String, WeaponProfile?) -> Unit,
     guardianLoading: Boolean,
     guardianError: String?,
     guardianFlow: GuardianFlow,
@@ -934,38 +938,113 @@ private fun CombatCard(
     combat: CombatState,
     weapons: List<WeaponProfile>,
     enabled: Boolean,
-    onAttack: (WeaponProfile?) -> Unit
+    onAttack: (String, WeaponProfile?) -> Unit
 ) {
+    val opponentIds = combat.opponents.map { it.id }
+    val activeOpponents = combat.opponents.filter { it.status == CombatOpponentStatus.ACTIVE }
+    var selectedOpponentId by remember(opponentIds) {
+        mutableStateOf(activeOpponents.firstOrNull()?.id)
+    }
+    val selectedOpponent = activeOpponents.firstOrNull { it.id == selectedOpponentId }
+        ?: activeOpponents.firstOrNull()
+
     SectionCard {
         Text("COMBATE · RODADA ${combat.round}", color = CairnAccent, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-        Text(combat.opponentNarrative.name, color = CairnText, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
         Text(
-            "${combat.opponentNarrative.appearance} · ${combat.opponentNarrative.behavior} · ${combat.opponentNarrative.intent}",
+            "${activeOpponents.size} adversário(s) ativo(s) · ${combat.opponents.size} no encontro",
             color = CairnMuted,
-            style = MaterialTheme.typography.bodySmall,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            style = MaterialTheme.typography.bodySmall
         )
-        Text(
-            "HP ${combat.opponent.hp}/${combat.opponent.maxHp} · ARM ${combat.opponent.armor} · ${combat.opponentWeapon.id} ${combat.opponentWeapon.damage.orEmpty()}",
-            color = CairnText,
-            style = MaterialTheme.typography.labelSmall
-        )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 144.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            combat.opponents.forEach { opponent ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            opponent.narrative.name,
+                            color = CairnText,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            "HP ${opponent.stats.hp}/${opponent.stats.maxHp} · ARM ${opponent.stats.armor} · " +
+                                "${opponent.weapon.id} ${opponent.weapon.damage.orEmpty()}",
+                            color = CairnMuted,
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    }
+                    Text(
+                        combatOpponentStatusLabel(opponent.status),
+                        color = if (opponent.status == CombatOpponentStatus.ACTIVE) CairnAccent else CairnMuted,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+                Text(
+                    "${opponent.narrative.appearance} · ${opponent.narrative.behavior} · ${opponent.narrative.intent}",
+                    color = CairnMuted,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+        if (activeOpponents.isNotEmpty()) {
+            Text("ESCOLHER ALVO", color = CairnAccent, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+            Row(
+                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                activeOpponents.forEach { opponent ->
+                    FilterChip(
+                        selected = opponent.id == selectedOpponent?.id,
+                        onClick = { selectedOpponentId = opponent.id },
+                        enabled = enabled,
+                        label = { Text(opponent.narrative.name, maxLines = 1) }
+                    )
+                }
+            }
+            Text(
+                "Alvo: ${selectedOpponent?.narrative?.name.orEmpty()}",
+                color = CairnText,
+                style = MaterialTheme.typography.labelSmall
+            )
+        }
         if (combat.playerCanAct) {
             Row(
                 modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 weapons.forEach { weapon ->
-                    Button(onClick = { onAttack(weapon) }, enabled = enabled, shape = RoundedCornerShape(7.dp)) {
+                    Button(
+                        onClick = { selectedOpponent?.let { onAttack(it.id, weapon) } },
+                        enabled = enabled && selectedOpponent != null,
+                        shape = RoundedCornerShape(7.dp)
+                    ) {
                         Text("Atacar · ${weapon.id} ${weapon.damage.orEmpty()}")
                     }
                 }
             }
         } else {
-            Text("O oponente age primeiro nesta rodada.", color = CairnMuted, style = MaterialTheme.typography.bodySmall)
+            Text("Os oponentes agem primeiro nesta rodada.", color = CairnMuted, style = MaterialTheme.typography.bodySmall)
         }
     }
+}
+
+private fun combatOpponentStatusLabel(status: CombatOpponentStatus): String = when (status) {
+    CombatOpponentStatus.ACTIVE -> "Ativo"
+    CombatOpponentStatus.DEFEATED -> "Derrotado"
+    CombatOpponentStatus.FLED -> "Fugiu"
 }
 
 private fun guardianFlowLabel(flow: GuardianFlow): String = when (flow) {

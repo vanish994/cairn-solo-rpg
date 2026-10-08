@@ -9,25 +9,52 @@ import kotlin.test.assertTrue
 class ServerTest {
     @Test
     fun encounterSchemaRejectsBlankNarrativeAndIdentifiers() {
-        val properties = JsonParser.parseString(
-            """{"ruleRequest":{"anyOf":[{"type":"null"},{"type":"object","properties":{"type":{"type":"string","enum":["BEGIN_COMBAT"]},"encounter":{"type":"object","properties":{"opponentId":{},"narrative":{"properties":{"name":{},"appearance":{},"behavior":{},"intent":{},"context":{}}},"weapon":{"properties":{"id":{}}}}}}}]}}"""
-        ).asJsonObject
-
-        addEncounterStringPatterns(properties)
-
-        val beginCombat = properties.getAsJsonObject("ruleRequest").getAsJsonArray("anyOf")[1].asJsonObject
-        val encounter = beginCombat.getAsJsonObject("properties").getAsJsonObject("encounter").getAsJsonObject("properties")
-        assertEquals("^\\S(?:.*\\S)?$", encounter.getAsJsonObject("opponentId").get("pattern").asString)
-        assertEquals("\\S", encounter.getAsJsonObject("narrative").getAsJsonObject("properties")
+        val properties = combatEncounterSchema().getAsJsonObject("properties")
+        val opponent = properties.getAsJsonObject("opponents").getAsJsonObject("items").getAsJsonObject("properties")
+        assertEquals("^\\S(?:.*\\S)?$", opponent.getAsJsonObject("opponentId").get("pattern").asString)
+        assertEquals("\\S", opponent.getAsJsonObject("narrative").getAsJsonObject("properties")
             .getAsJsonObject("name").get("pattern").asString)
-        assertEquals("\\S", encounter.getAsJsonObject("weapon").getAsJsonObject("properties")
+        assertEquals("\\S", opponent.getAsJsonObject("weapon").getAsJsonObject("properties")
             .getAsJsonObject("id").get("pattern").asString)
+    }
+
+    @Test
+    fun encounterSchemaRequiresCompleteOpponentList() {
+        val schema = combatEncounterSchema()
+        val required = schema.getAsJsonArray("required").map { it.asString }.toSet()
+        val properties = schema.getAsJsonObject("properties")
+        val opponents = properties.getAsJsonObject("opponents")
+        val opponent = opponents.getAsJsonObject("items")
+        val opponentProperties = opponent.getAsJsonObject("properties")
+
+        assertEquals("array", opponents.get("type").asString)
+        assertEquals(1, opponents.get("minItems").asInt)
+        assertEquals(8, opponents.get("maxItems").asInt)
+        assertTrue("opponents" in required)
+        assertFalse("moraleLeaderId" in required)
+        assertEquals("string", properties.getAsJsonObject("moraleLeaderId").get("type").asString)
+        assertEquals(
+            setOf("opponentId", "narrative", "stats", "weapon"),
+            opponent.getAsJsonArray("required").map { it.asString }.toSet()
+        )
+        assertEquals(
+            setOf("name", "appearance", "behavior", "intent", "context"),
+            opponentProperties.getAsJsonObject("narrative").getAsJsonArray("required").map { it.asString }.toSet()
+        )
+        assertEquals(
+            setOf("str", "dex", "wil", "hp", "maxHp", "armor"),
+            opponentProperties.getAsJsonObject("stats").getAsJsonArray("required").map { it.asString }.toSet()
+        )
+        assertEquals(
+            setOf("id", "damage", "blast", "ranged"),
+            opponentProperties.getAsJsonObject("weapon").getAsJsonArray("required").map { it.asString }.toSet()
+        )
     }
 
     @Test
     fun inconsistentHpProposalIsMadeIncompleteWithoutLosingNarration() {
         val response = JsonParser.parseString(
-            """{"narration":"A cena continua.","ruleRequest":{"type":"BEGIN_COMBAT","encounter":{"stats":{"hp":5,"maxHp":4}}}}"""
+            """{"narration":"A cena continua.","ruleRequest":{"type":"BEGIN_COMBAT","encounter":{"opponents":[{"opponentId":"cultist-a","stats":{"hp":5,"maxHp":4}}]}}}"""
         ).asJsonObject
 
         val normalized = normalizeCombatProposal(response)
@@ -39,14 +66,44 @@ class ServerTest {
 
     @Test
     fun consistentHpProposalIsPreserved() {
-        val response = JsonParser.parseString(
-            """{"ruleRequest":{"type":"BEGIN_COMBAT","encounter":{"stats":{"hp":3,"maxHp":4}}}}"""
-        ).asJsonObject
+        val response = validEncounterResponse()
 
         val normalized = normalizeCombatProposal(response)
 
         assertEquals(3, normalized.getAsJsonObject("ruleRequest")
-            .getAsJsonObject("encounter").getAsJsonObject("stats").get("hp").asInt)
+            .getAsJsonObject("encounter").getAsJsonArray("opponents")[0].asJsonObject
+            .getAsJsonObject("stats").get("hp").asInt)
+    }
+
+    @Test
+    fun fractionalHpProposalIsRejectedWithoutLosingNarration() {
+        val response = validEncounterResponse()
+        val stats = response.getAsJsonObject("ruleRequest").getAsJsonObject("encounter")
+            .getAsJsonArray("opponents")[0].asJsonObject.getAsJsonObject("stats")
+        stats.addProperty("hp", 1.9)
+        stats.addProperty("maxHp", 2.1)
+
+        assertEncounterRejectedWithoutLosingNarration(response)
+    }
+
+    @Test
+    fun invalidArmorWeaponOrNarrativeIsRejectedWithoutLosingNarration() {
+        val invalidResponses = listOf(
+            validEncounterResponse().apply {
+                getAsJsonObject("ruleRequest").getAsJsonObject("encounter").getAsJsonArray("opponents")[0]
+                    .asJsonObject.getAsJsonObject("stats").addProperty("armor", 4)
+            },
+            validEncounterResponse().apply {
+                getAsJsonObject("ruleRequest").getAsJsonObject("encounter").getAsJsonArray("opponents")[0]
+                    .asJsonObject.getAsJsonObject("weapon").addProperty("damage", "d20")
+            },
+            validEncounterResponse().apply {
+                getAsJsonObject("ruleRequest").getAsJsonObject("encounter").getAsJsonArray("opponents")[0]
+                    .asJsonObject.getAsJsonObject("narrative").addProperty("name", "  ")
+            }
+        )
+
+        invalidResponses.forEach(::assertEncounterRejectedWithoutLosingNarration)
     }
 
     @Test
@@ -77,4 +134,32 @@ class ServerTest {
         assertTrue(suggestionInstruction.contains("apoiad") || suggestionInstruction.contains("derivad") || suggestionInstruction.contains("basead"))
         assertTrue(suggestionInstruction.contains("não invent"))
     }
+
+    @Test
+    fun promptDefinesEncounterContextAsApprovedOpponentListWithoutMechanicalAuthority() {
+        val prompt = guardianSystemPrompt().lowercase()
+        val encounterInstruction = prompt
+            .substringAfter("se encountercontext estiver presente", missingDelimiterValue = "")
+            .substringBefore("\n\n")
+
+        assertTrue(encounterInstruction.isNotBlank())
+        assertTrue(encounterInstruction.contains("lista") || encounterInstruction.contains("array"))
+        assertTrue(encounterInstruction.contains("opponentid"))
+        assertTrue(encounterInstruction.contains("narrative"))
+        assertTrue(encounterInstruction.contains("aprovad"))
+        assertTrue(prompt.contains("ruleresult") && prompt.contains("única autoridade"))
+        assertTrue(encounterInstruction.contains("não autoriza") && encounterInstruction.contains("resultados mecânicos"))
+    }
+
+    private fun assertEncounterRejectedWithoutLosingNarration(response: com.google.gson.JsonObject) {
+        val normalized = normalizeCombatProposal(response)
+
+        assertEquals("A cena continua.", normalized.get("narration").asString)
+        assertEquals("BEGIN_COMBAT", normalized.getAsJsonObject("ruleRequest").get("type").asString)
+        assertFalse(normalized.getAsJsonObject("ruleRequest").has("encounter"))
+    }
+
+    private fun validEncounterResponse() = JsonParser.parseString(
+        """{"narration":"A cena continua.","ruleRequest":{"type":"BEGIN_COMBAT","encounter":{"opponents":[{"opponentId":"cultist-a","narrative":{"name":"Cultista","appearance":"Manto escuro.","behavior":"Observa a passagem.","intent":"Protege o altar.","context":"Na capela."},"stats":{"str":5,"dex":7,"wil":8,"hp":3,"maxHp":4,"armor":1},"weapon":{"id":"ritual-dagger","damage":"d4","blast":false,"ranged":false}}]}}}"""
+    ).asJsonObject
 }

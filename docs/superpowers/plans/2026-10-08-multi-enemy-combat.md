@@ -38,7 +38,9 @@
 ### Task 1: Modelos, contrato Guardian e conversão no resolver
 
 **Files:**
+- Modify: `app/build.gradle.kts` — declarar Gson diretamente para preservar lexemas numéricos na validação do payload.
 - Modify: `app/src/main/kotlin/com/vanish994/cairnsolo/game/GameState.kt`
+- Modify: `app/src/main/kotlin/com/vanish994/cairnsolo/game/GameAction.kt` — rota `BeginCombat` plural e construção inicial do estado; a resolução completa por grupos permanece na Task 2.
 - Modify: `app/src/main/kotlin/com/vanish994/cairnsolo/guardian/GuardianClient.kt`, `GuardianContext.kt`, `GuardianRuleResolver.kt`
 - Modify: `guardian-server/src/main/kotlin/com/vanish994/cairnsolo/guardian/Server.kt`
 - Test: `app/src/test/kotlin/com/vanish994/cairnsolo/guardian/GuardianClientTest.kt`, `app/src/test/kotlin/com/vanish994/cairnsolo/guardian/GuardianCombatContextTest.kt`, `app/src/test/kotlin/com/vanish994/cairnsolo/guardian/GuardianRuleResolverTest.kt`, `guardian-server/src/test/kotlin/com/vanish994/cairnsolo/guardian/ServerTest.kt`
@@ -50,9 +52,11 @@
 - Produzir `enum class CombatEndReason { OPPONENTS_DEFEATED, OPPONENTS_FLED, OPPONENTS_DEFEATED_AND_FLED, PLAYER_DEFEATED }`.
 - Produzir `data class GuardianOpponentProposal(val opponentId: String, val narrative: CombatOpponentNarrative, val stats: CharacterState, val weapon: WeaponProfile)` e `data class GuardianEncounterProposal(val opponents: List<GuardianOpponentProposal>, val moraleLeaderId: String? = null)`; exigir 1–8 elementos, IDs únicos e líder nulo ou pertencente à lista.
 - `GuardianClient.narrate(..., encounterContext: List<CombatOpponentNarrative>? = null)` transporta perfis aprovados distintos após o combate.
+- Parser Android e normalizador backend validam inteiros sem truncar ou arredondar números decimais; proposta inválida mantém a narração e rejeita somente o encontro.
 - `GuardianRuleResolution.encounterNarratives: List<CombatOpponentNarrative>` preserva todos os perfis ao retornar a narrativa.
 - `GameAction.BeginCombat(val opponents: List<CombatOpponentState>, val moraleLeaderId: String? = null)`.
 - Produzir `internal fun combatEncounterSchema(): JsonObject` para testar a validação estrutural da lista de encontros no contrato do servidor.
+- Para manter os commits intermediários compiláveis, preservar adapters internos de oponente singular para consumidores atuais de UI/persistência até a Task 3; o novo fluxo Guardian e o estado canônico usam a lista completa. Migrar esses consumidores e remover os adapters na Task 3.
 
 - [ ] Escrever `GuardianClientTest.beginCombatParsesTwoDistinctOpponents`, `GuardianClientTest.rejectsDuplicateOpponentIds`, `GuardianRuleResolverTest.unacceptedEncounterDoesNotStartCombat`, `GuardianRuleResolverTest.acceptedEncounterBeginsCombatWithEveryOpponent` e `ServerTest.encounterSchemaRequiresCompleteOpponentList`; afirmar IDs, dados, armas e narrativas independentes.
 

@@ -2,6 +2,8 @@ package com.vanish994.cairnsolo.guardian
 
 import android.util.Log
 import com.vanish994.cairnsolo.BuildConfig
+import com.google.gson.JsonObject
+import com.google.gson.JsonParser
 import com.vanish994.cairnsolo.game.GameState
 import com.vanish994.cairnsolo.game.CanonProposal
 import com.vanish994.cairnsolo.game.CanonStatus
@@ -20,6 +22,11 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 
+data class GuardianNarrativeOpponentContext(
+    val opponentId: String,
+    val narrative: CombatOpponentNarrative
+)
+
 data class GuardianRuleRequest(
     val type: String,
     val attribute: String? = null,
@@ -27,7 +34,7 @@ data class GuardianRuleRequest(
     val encounter: GuardianEncounterProposal? = null
 )
 
-data class GuardianEncounterProposal(
+data class GuardianOpponentProposal(
     val opponentId: String,
     val narrative: CombatOpponentNarrative,
     val stats: CharacterState,
@@ -42,11 +49,31 @@ data class GuardianEncounterProposal(
         require(narrative.context.isNotBlank())
         require(stats.maxHp > 0 && stats.hp in 1..stats.maxHp)
         require(stats.armor in 0..3)
-        require(weapon.id.isNotBlank() && weapon.id.length <= 80)
+        require(weapon.id.isNotBlank() && weapon.id == weapon.id.trim() && weapon.id.length <= 80)
         val damageExpression = weapon.damage?.trim().orEmpty()
         require(damageExpression.isNotBlank() && damageExpression.length <= 32)
         require(isSupportedWeaponDamageExpression(damageExpression))
     }
+}
+
+data class GuardianEncounterProposal(
+    val opponents: List<GuardianOpponentProposal>,
+    val moraleLeaderId: String? = null
+) {
+    init {
+        require(opponents.size in 1..8) { "An encounter must contain between one and eight opponents." }
+        val ids = opponents.map { it.opponentId }
+        require(ids.distinct().size == ids.size) { "Encounter opponent ids must be unique." }
+        require(moraleLeaderId == null || moraleLeaderId in ids) {
+            "The morale leader must belong to the encounter."
+        }
+    }
+
+    /** Temporary UI adapters; Task 3 will render and confirm the whole encounter list. */
+    val opponentId: String get() = opponents.first().opponentId
+    val narrative: CombatOpponentNarrative get() = opponents.first().narrative
+    val stats: CharacterState get() = opponents.first().stats
+    val weapon: WeaponProfile get() = opponents.first().weapon
 }
 
 data class GuardianResponse(
@@ -66,26 +93,46 @@ interface GuardianClient {
         state: GameState,
         playerIntent: String,
         ruleResult: String? = null,
-        encounterContext: CombatOpponentNarrative? = null
+        encounterContext: List<GuardianNarrativeOpponentContext>? = null
     ): Result<GuardianResponse>
+
+    /** Gives explicit null-context calls a unique most-specific overload. */
+    suspend fun narrate(
+        state: GameState,
+        playerIntent: String,
+        ruleResult: String?,
+        encounterContext: Nothing?
+    ): Result<GuardianResponse> = narrate(
+        state,
+        playerIntent,
+        ruleResult,
+        null as List<GuardianNarrativeOpponentContext>?
+    )
 }
 
 internal fun guardianRequestPayload(
     state: GameState,
     playerIntent: String,
     ruleResult: String? = null,
-    encounterContext: CombatOpponentNarrative? = null
+    encounterContext: List<GuardianNarrativeOpponentContext>? = null
 ): JSONObject = JSONObject().apply {
     put("playerIntent", playerIntent.trim())
     put("campaign", GuardianContextBuilder.from(state).toJson())
     ruleResult?.takeIf { it.isNotBlank() }?.let { put("ruleResult", it.trim()) }
-    encounterContext?.let { profile ->
-        put("encounterContext", JSONObject().apply {
-            put("name", profile.name)
-            put("appearance", profile.appearance)
-            put("behavior", profile.behavior)
-            put("intent", profile.intent)
-            put("context", profile.context)
+    encounterContext?.let { profiles ->
+        put("encounterContext", JSONArray().apply {
+            profiles.forEach { profile ->
+                put(JSONObject().apply {
+                    put("opponentId", profile.opponentId)
+                    put("narrative", JSONObject().apply {
+                        put("name", profile.narrative.name)
+                        put("appearance", profile.narrative.appearance)
+                        put("behavior", profile.narrative.behavior)
+                        put("intent", profile.narrative.intent)
+                        put("context", profile.narrative.context)
+                    })
+                })
+            }
         })
     }
 }
@@ -98,7 +145,7 @@ class HttpGuardianClient(
         state: GameState,
         playerIntent: String,
         ruleResult: String?,
-        encounterContext: CombatOpponentNarrative?
+        encounterContext: List<GuardianNarrativeOpponentContext>?
     ): Result<GuardianResponse> = withContext(Dispatchers.IO) {
         require(baseUrl.isNotBlank()) { "Guardião online não configurado." }
         require(playerIntent.isNotBlank()) { "A intenção do jogador está vazia." }
@@ -119,7 +166,7 @@ class HttpGuardianClient(
         state: GameState,
         playerIntent: String,
         ruleResult: String?,
-        encounterContext: CombatOpponentNarrative?
+        encounterContext: List<GuardianNarrativeOpponentContext>?
     ): GuardianResponse {
         val url = baseUrl.trimEnd('/')
         val connection = (URL(url).openConnection() as HttpURLConnection).apply {
@@ -149,9 +196,13 @@ class HttpGuardianClient(
     }
 
     internal fun parseResponse(body: String): GuardianResponse {
+        val exactJson = JsonParser.parseString(body).asJsonObject
         val json = JSONObject(body)
         val ruleObject = json.optJSONObject("ruleRequest")
-        val ruleRequest = ruleObject?.let(::parseRuleRequest)
+        val exactRuleRequest = exactJson.get("ruleRequest")
+            ?.takeIf { it.isJsonObject }
+            ?.asJsonObject
+        val ruleRequest = ruleObject?.let { parseRuleRequest(it, exactRuleRequest) }
         val actions = buildList {
             val array = json.optJSONArray("suggestedActions") ?: JSONArray()
             for (i in 0 until array.length()) {
@@ -210,10 +261,16 @@ class HttpGuardianClient(
         )
     }
 
-    private fun parseRuleRequest(json: JSONObject): GuardianRuleRequest? {
+    private fun parseRuleRequest(json: JSONObject, exactJson: JsonObject?): GuardianRuleRequest? {
         val type = json.optString("type").takeIf { it.isNotBlank() } ?: return null
         if (type.equals("BEGIN_COMBAT", ignoreCase = true)) {
-            val encounter = runCatching { parseEncounter(json.getJSONObject("encounter")) }.getOrNull()
+            val encounter = runCatching {
+                val exactEncounter = exactJson?.get("encounter")
+                    ?.takeIf { it.isJsonObject }
+                    ?.asJsonObject
+                    ?: throw IllegalArgumentException("BEGIN_COMBAT encounter is missing or invalid")
+                parseEncounter(json.getJSONObject("encounter"), exactEncounter)
+            }.getOrNull()
             return GuardianRuleRequest(type = "BEGIN_COMBAT", encounter = encounter)
         }
         return runCatching {
@@ -225,30 +282,62 @@ class HttpGuardianClient(
         }.getOrNull()
     }
 
-    private fun parseEncounter(json: JSONObject): GuardianEncounterProposal {
-        val narrative = json.getJSONObject("narrative")
-        val stats = json.getJSONObject("stats")
-        val weapon = json.getJSONObject("weapon")
-        return GuardianEncounterProposal(
-            opponentId = json.getString("opponentId"),
-            narrative = CombatOpponentNarrative(
-                name = narrative.getString("name"),
-                appearance = narrative.getString("appearance"),
-                behavior = narrative.getString("behavior"),
-                intent = narrative.getString("intent"),
-                context = narrative.getString("context")
-            ),
-            stats = CharacterState(
-                str = stats.getInt("str"), dex = stats.getInt("dex"), wil = stats.getInt("wil"),
-                hp = stats.getInt("hp"), maxHp = stats.getInt("maxHp"), armor = stats.getInt("armor")
-            ),
-            weapon = WeaponProfile(
-                id = weapon.getString("id"),
-                damage = weapon.getString("damage"),
-                blast = weapon.optBoolean("blast", false),
-                ranged = weapon.optBoolean("ranged", false)
+    private fun parseEncounter(json: JSONObject, exactJson: JsonObject): GuardianEncounterProposal {
+        val opponents = json.getJSONArray("opponents")
+        val exactOpponents = exactJson.get("opponents")
+            ?.takeIf { it.isJsonArray }
+            ?.asJsonArray
+            ?: throw IllegalArgumentException("Encounter opponents must be an array")
+        require(exactOpponents.size() == opponents.length()) { "Encounter opponent data does not match the raw payload" }
+        val proposals = (0 until opponents.length()).map { index ->
+            val opponent = opponents.getJSONObject(index)
+            val exactOpponent = exactOpponents[index]
+                .takeIf { it.isJsonObject }
+                ?.asJsonObject
+                ?: throw IllegalArgumentException("Encounter opponent must be an object")
+            val narrative = opponent.getJSONObject("narrative")
+            val exactStats = exactOpponent.get("stats")
+                ?.takeIf { it.isJsonObject }
+                ?.asJsonObject
+                ?: throw IllegalArgumentException("Encounter opponent stats must be an object")
+            val weapon = opponent.getJSONObject("weapon")
+            GuardianOpponentProposal(
+                opponentId = opponent.getString("opponentId"),
+                narrative = CombatOpponentNarrative(
+                    name = narrative.getString("name"),
+                    appearance = narrative.getString("appearance"),
+                    behavior = narrative.getString("behavior"),
+                    intent = narrative.getString("intent"),
+                    context = narrative.getString("context")
+                ),
+                stats = CharacterState(
+                    str = exactStats.getExactInt("str"), dex = exactStats.getExactInt("dex"), wil = exactStats.getExactInt("wil"),
+                    hp = exactStats.getExactInt("hp"), maxHp = exactStats.getExactInt("maxHp"), armor = exactStats.getExactInt("armor")
+                ),
+                weapon = WeaponProfile(
+                    id = weapon.getString("id"),
+                    damage = weapon.getString("damage"),
+                    blast = weapon.optBoolean("blast", false),
+                    ranged = weapon.optBoolean("ranged", false)
+                )
             )
+        }
+        val moraleLeaderId = when {
+            !json.has("moraleLeaderId") || json.isNull("moraleLeaderId") -> null
+            else -> json.get("moraleLeaderId") as? String
+                ?: throw IllegalArgumentException("moraleLeaderId must be a string")
+        }
+        return GuardianEncounterProposal(
+            opponents = proposals,
+            moraleLeaderId = moraleLeaderId
         )
+    }
+
+    private fun JsonObject.getExactInt(key: String): Int {
+        val value = get(key)
+            ?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isNumber }
+            ?: throw IllegalArgumentException("$key must be an integer")
+        return java.math.BigDecimal(value.asJsonPrimitive.asNumber.toString()).intValueExact()
     }
 
     private fun parseCanonProposal(json: JSONObject): CanonProposal? {

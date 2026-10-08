@@ -33,19 +33,83 @@ data class CombatOpponentNarrative(
     }
 }
 
-data class CombatState(
-    val opponentId: String,
-    val opponent: com.vanish994.cairnsolo.rules.CharacterState,
-    val opponentWeapon: com.vanish994.cairnsolo.rules.WeaponProfile = com.vanish994.cairnsolo.rules.WeaponProfile("unarmed", "d4"),
-    val round: Int = 1,
-    val playerCanAct: Boolean = true,
-    val opponentNarrative: CombatOpponentNarrative = CombatOpponentNarrative(opponentId)
+enum class CombatOpponentStatus { ACTIVE, DEFEATED, FLED }
+
+enum class CombatMoraleTrigger { SINGLE_OPPONENT_ZERO_HP, FIRST_CASUALTY, HALF_GROUP }
+
+enum class CombatEndReason {
+    OPPONENTS_DEFEATED,
+    OPPONENTS_FLED,
+    OPPONENTS_DEFEATED_AND_FLED,
+    PLAYER_DEFEATED
+}
+
+data class CombatOpponentState(
+    val id: String,
+    val narrative: CombatOpponentNarrative,
+    val stats: CharacterState,
+    val weapon: com.vanish994.cairnsolo.rules.WeaponProfile,
+    val status: CombatOpponentStatus = CombatOpponentStatus.ACTIVE
 ) {
     init {
-        require(opponentWeapon.damage.isNullOrBlank() || isSupportedWeaponDamageExpression(opponentWeapon.damage)) {
+        require(id.isNotBlank() && id == id.trim() && id.length <= 80) { "Combat opponent id is invalid." }
+        require(stats.maxHp > 0 && stats.hp in 0..stats.maxHp) { "Combat opponent HP is invalid." }
+        require(weapon.id.isNotBlank() && weapon.id == weapon.id.trim() && weapon.id.length <= 80) {
+            "Combat opponent weapon id is invalid."
+        }
+        require(weapon.damage.isNullOrBlank() || isSupportedWeaponDamageExpression(weapon.damage)) {
             "Dado de dano da arma do oponente incompatível com as regras de combate."
         }
     }
+}
+
+data class CombatState(
+    val opponents: List<CombatOpponentState>,
+    val moraleLeaderId: String? = null,
+    val resolvedMoraleTriggers: Set<CombatMoraleTrigger> = emptySet(),
+    val round: Int = 1,
+    val playerCanAct: Boolean = true
+) {
+    init {
+        require(opponents.size in 1..8) { "Combat must contain between one and eight opponents." }
+        require(opponents.map { it.id }.distinct().size == opponents.size) { "Combat opponent ids must be unique." }
+        require(opponents.any { it.status == CombatOpponentStatus.ACTIVE }) { "Combat must have at least one active opponent." }
+        require(moraleLeaderId == null || opponents.any { it.id == moraleLeaderId }) {
+            "The morale leader must belong to the encounter."
+        }
+    }
+
+    /** Temporary single-opponent adapter for the existing UI, persistence codec, and tests. */
+    constructor(
+        opponentId: String,
+        opponent: CharacterState,
+        opponentWeapon: com.vanish994.cairnsolo.rules.WeaponProfile = com.vanish994.cairnsolo.rules.WeaponProfile("unarmed", "d4"),
+        round: Int = 1,
+        playerCanAct: Boolean = true,
+        opponentNarrative: CombatOpponentNarrative = CombatOpponentNarrative(opponentId)
+    ) : this(
+        opponents = listOf(CombatOpponentState(opponentId, opponentNarrative, opponent, opponentWeapon)),
+        round = round,
+        playerCanAct = playerCanAct
+    )
+
+    val opponentId: String get() = opponents.first().id
+    val opponent: CharacterState get() = opponents.first().stats
+    val opponentWeapon: com.vanish994.cairnsolo.rules.WeaponProfile get() = opponents.first().weapon
+    val opponentNarrative: CombatOpponentNarrative get() = opponents.first().narrative
+
+    /** Temporary adapter for the existing single-opponent combat turn flow. */
+    fun copy(
+        opponent: CharacterState,
+        round: Int = this.round,
+        playerCanAct: Boolean = this.playerCanAct
+    ): CombatState = copy(
+        opponents = opponents.mapIndexed { index, current ->
+            if (index == 0) current.copy(stats = opponent) else current
+        },
+        round = round,
+        playerCanAct = playerCanAct
+    )
 }
 
 data class CharacterProfile(

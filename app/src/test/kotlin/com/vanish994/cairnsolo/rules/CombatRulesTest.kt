@@ -70,4 +70,22 @@ class CombatRulesTest {
         assertEquals(7, result.rawDamage)
         assertEquals(3, result.target.hp)
     }
+
+    @Test
+    fun groupAttackRollsEveryEnemyAndAppliesOnlyHighestDamageOnce() {
+        val result = CombatRules(FixedRandomSource(d20Value = 10, d6Value = 4, d8Value = 5)).attackGroup(
+            target = state(hp = 10, armor = 2),
+            attackers = listOf(
+                CombatAttackSource("cultist-a", WeaponProfile("club", "d6")),
+                CombatAttackSource("cultist-b", WeaponProfile("spear", "d8"))
+            )
+        )
+
+        assertEquals(mapOf("cultist-a" to 4, "cultist-b" to 5), result.damageRolls)
+        val damageEvent = result.events.filterIsInstance<RuleEvent.DamageApplied>().single()
+        assertEquals(5, damageEvent.rawDamage)
+        assertEquals(2, damageEvent.armorAbsorbed)
+        assertEquals(3, damageEvent.hpDamage)
+        assertEquals(7, result.target.hp)
+    }
 }
