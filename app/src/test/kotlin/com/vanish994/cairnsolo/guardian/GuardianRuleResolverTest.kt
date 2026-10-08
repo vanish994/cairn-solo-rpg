@@ -3,6 +3,7 @@ package com.vanish994.cairnsolo.guardian
 import com.vanish994.cairnsolo.game.CombatOpponentNarrative
 import com.vanish994.cairnsolo.game.CombatOpponentState
 import com.vanish994.cairnsolo.game.CombatState
+import com.vanish994.cairnsolo.game.GameAction
 import com.vanish994.cairnsolo.game.ExplorationEngine
 import com.vanish994.cairnsolo.game.GameActionResolver
 import com.vanish994.cairnsolo.game.GameEvent
@@ -93,7 +94,57 @@ class GuardianRuleResolverTest {
         assertEquals(second.stats, combat.opponents[1].stats)
         assertEquals(second.weapon, combat.opponents[1].weapon)
         assertEquals("cultist-b", combat.moraleLeaderId)
+        assertTrue(result.resultText.contains("cultist-a"))
+        assertTrue(result.resultText.contains("cultist-b"))
+        assertEquals(listOf("cultist-a", "cultist-b"), result.encounterContexts.map { it.opponentId })
+        assertEquals(listOf(first.narrative, second.narrative), result.encounterContexts.map { it.narrative })
         assertTrue(result.gameResult.events.any { it is GameEvent.CombatStarted })
+
+        val ended = rules.resolve(result.state, GameAction.EndCombat)
+        assertNull(ended.state.campaign.combat)
+        assertEquals(listOf("cultist-a", "cultist-b"), ended.encounterContexts.map { it.opponentId })
+        assertEquals(listOf(first.narrative, second.narrative), ended.encounterContexts.map { it.narrative })
+    }
+
+    @Test
+    fun attackSummaryIdentifiesSelectedTargetEnemyRollsAndAggregatePlayerDamage() {
+        val random = FixedRandomSource(d20Value = 10, d4Value = 2)
+        val rules = GuardianRuleResolver(GameActionResolver(ExplorationEngine(random), RulesEngine(random)))
+        val base = newCharacter("Mara", 10, 11, 12)
+        val active = base.copy(campaign = base.campaign.copy(
+            combat = CombatState(
+                opponents = listOf(
+                    CombatOpponentState(
+                        "cultist-a",
+                        CombatOpponentNarrative("Cultista da lamparina"),
+                        CharacterState(5, 7, 8, 4, 4, 1),
+                        WeaponProfile("ritual-dagger", "d4")
+                    ),
+                    CombatOpponentState(
+                        "cultist-b",
+                        CombatOpponentNarrative("Cultista do sino"),
+                        CharacterState(8, 4, 6, 6, 6, 2),
+                        WeaponProfile("rusted-spear", "d4")
+                    )
+                ),
+                round = 2,
+                playerCanAct = true
+            )
+        ))
+
+        val result = rules.resolve(active, GameAction.CombatAttack(targetOpponentId = "cultist-b", weapon = null))
+        val attack = result.gameResult.events.filterIsInstance<GameEvent.CombatAttackResolved>().single()
+        assertEquals("cultist-b", attack.targetOpponentId)
+        assertEquals(listOf("cultist-a", "cultist-b"), attack.enemyAttackRolls.map { it.opponentId })
+        assertEquals(listOf(2, 2), attack.enemyAttackRolls.map { it.damageRolled })
+        assertEquals(2, attack.damageDealtByEnemies?.hpDamage)
+        assertEquals(4, result.state.campaign.rules.hp)
+
+        val summary = result.resultText
+        assertTrue(summary.contains("cultist-b"), summary)
+        assertTrue(Regex("cultist-a[^.]*rolou[^.]*2").containsMatchIn(summary), summary)
+        assertTrue(Regex("cultist-b[^.]*rolou[^.]*2").containsMatchIn(summary), summary)
+        assertTrue(summary.contains("2 HP perdido"), summary)
     }
 
     @Test

@@ -135,6 +135,22 @@ class ServerTest {
         assertTrue(suggestionInstruction.contains("não invent"))
     }
 
+    @Test
+    fun promptDefinesEncounterContextAsApprovedOpponentListWithoutMechanicalAuthority() {
+        val prompt = guardianSystemPrompt().lowercase()
+        val encounterInstruction = prompt
+            .substringAfter("se encountercontext estiver presente", missingDelimiterValue = "")
+            .substringBefore("\n\n")
+
+        assertTrue(encounterInstruction.isNotBlank())
+        assertTrue(encounterInstruction.contains("lista") || encounterInstruction.contains("array"))
+        assertTrue(encounterInstruction.contains("opponentid"))
+        assertTrue(encounterInstruction.contains("narrative"))
+        assertTrue(encounterInstruction.contains("aprovad"))
+        assertTrue(prompt.contains("ruleresult") && prompt.contains("única autoridade"))
+        assertTrue(encounterInstruction.contains("não autoriza") && encounterInstruction.contains("resultados mecânicos"))
+    }
+
     private fun assertEncounterRejectedWithoutLosingNarration(response: com.google.gson.JsonObject) {
         val normalized = normalizeCombatProposal(response)
 

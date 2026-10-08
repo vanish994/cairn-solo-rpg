@@ -239,11 +239,17 @@ class GuardianClientTest {
             playerIntent = "CONTINUAR_NARRATIVA",
             ruleResult = "Ataque: 4 bruto; 1 absorvido; 3 HP aplicados.",
             encounterContext = listOf(
-                CombatOpponentNarrative(
-                    "Lobo cinzento", "Grande.", "Ronda em círculos.", "Protege a carcaça.", "Na trilha."
+                GuardianNarrativeOpponentContext(
+                    "cultist-a",
+                    CombatOpponentNarrative(
+                        "Cultista da lamparina", "Manto cinza.", "Observa a trilha.", "Protege o altar.", "À esquerda."
+                    )
                 ),
-                CombatOpponentNarrative(
-                    "Cultista do sino", "Manto cinza.", "Sussurra um cântico.", "Protege o altar.", "Na capela."
+                GuardianNarrativeOpponentContext(
+                    "cultist-b",
+                    CombatOpponentNarrative(
+                        "Cultista do sino", "Capuz vermelho.", "Sussurra um cântico.", "Guarda a saída.", "À direita."
+                    )
                 )
             )
         )
@@ -252,8 +258,12 @@ class GuardianClientTest {
         assertEquals("CONTINUAR_NARRATIVA", payload.getString("playerIntent"))
         assertEquals("Ataque: 4 bruto; 1 absorvido; 3 HP aplicados.", payload.getString("ruleResult"))
         assertEquals(2, encounterContexts.length())
-        assertEquals("Lobo cinzento", encounterContexts.getJSONObject(0).getString("name"))
-        assertEquals("Cultista do sino", encounterContexts.getJSONObject(1).getString("name"))
+        assertEquals("cultist-a", encounterContexts.getJSONObject(0).getString("opponentId"))
+        assertEquals("Cultista da lamparina", encounterContexts.getJSONObject(0)
+            .getJSONObject("narrative").getString("name"))
+        assertEquals("cultist-b", encounterContexts.getJSONObject(1).getString("opponentId"))
+        assertEquals("Cultista do sino", encounterContexts.getJSONObject(1)
+            .getJSONObject("narrative").getString("name"))
         assertEquals("Mara", payload.getJSONObject("campaign").getJSONObject("character").getString("name"))
         assertFalse(payload.getString("playerIntent").contains("Ataque:"))
     }
