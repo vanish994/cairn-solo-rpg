@@ -10,7 +10,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-10-08-playtest-feedback.md` — seção “Recompensas estruturadas”; escolha do usuário em 2026-10-08: “Creditar automaticamente quando o pagamento for estruturado e confirmado na cena”; [Cairn 2e — Marketplace](https://cairnrpg.com/second-edition/players-guide/marketplace/); `docs/CAIRN-2E-RULE-MATRIX.md`.
 
-**Progress (2026-10-08):** As Tasks 1 e 2 foram implementadas em commits pequenos; os testes unitários e do servidor passaram no CI do commit `30d86e9`. A integração HTTP com `https://cairn-guardian.onrender.com` falhou porque o endpoint respondeu 500 após Gemini HTTP 400 (`invalid_request`), então APK release, CI verde, QA manual e merge continuam pendentes. A UI da Task 3 está implementada localmente e ainda aguarda CI.
+**Progress (2026-10-08):** As Tasks 1 e 2 foram implementadas em commits pequenos; os testes unitários e do servidor passaram no CI do commit `30d86e9`. A integração HTTP com `https://cairn-guardian.onrender.com` falhou porque o endpoint respondeu 500 após Gemini HTTP 400 (`invalid_request`), então APK release, CI verde, QA manual e merge continuam pendentes. A UI da Task 3 foi publicada no commit `d5b52b0` e aguarda o workflow desse HEAD.
 
 ## Global Constraints
 
