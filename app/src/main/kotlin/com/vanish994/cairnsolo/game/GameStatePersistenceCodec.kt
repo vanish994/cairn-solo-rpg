@@ -29,6 +29,12 @@ object GameStatePersistenceCodec {
             put("campaignId", c.campaignId); put("campaignSeed", c.campaignSeed); put("characterId", c.character.id); put("characterName", c.character.name)
             put("profileAge", p.age?.toString() ?: ""); put("profileBackground", p.background?.name ?: "")
             put("profileGold", p.gold.toString()); put("profileBondRoll", p.bondRoll?.toString() ?: "")
+            put("appliedRewardCount", c.appliedRewardIds.size.toString())
+            c.appliedRewardIds.sorted().forEachIndexed { i, id -> put("appliedReward_$i", id) }
+            put("pendingRewardCount", c.pendingRewardItems.size.toString())
+            c.pendingRewardItems.forEachIndexed { i, item ->
+                put("pendingReward_$i", listOf(item.id, item.rewardId, item.catalogItemId, item.itemInstanceId).joinToString(SEPARATOR))
+            }
             put("profileSecondBondRoll", p.secondBondRoll?.toString() ?: ""); put("profileOmenRoll", p.omenRoll?.toString() ?: "")
             p.backgroundRolls?.let { put("profileBackgroundRoll1", it.first.toString()); put("profileBackgroundRoll2", it.second.toString()) }
             put("profileBackgroundFeatures", p.backgroundFeatures.joinToString(SEPARATOR)); put("companionCount", p.companions.size.toString())
@@ -169,6 +175,14 @@ object GameStatePersistenceCodec {
         val log = string("log").split(SEPARATOR).filter { it.isNotBlank() }
         val sceneType = runCatching { SceneType.valueOf(string("sceneType", SceneType.EXPLORATION.name)) }.getOrDefault(SceneType.EXPLORATION)
         fun fields(key: String): List<String> = string(key).split(SEPARATOR)
+        val appliedRewardIds = (0 until int("appliedRewardCount", 0))
+            .map { string("appliedReward_$it") }.filter { it.isNotBlank() }.toSet()
+        val pendingRewardItems = (0 until int("pendingRewardCount", 0)).mapNotNull { i ->
+            val parts = string("pendingReward_$i").split(SEPARATOR, limit = 4)
+            if (parts.size != 4) null else runCatching {
+                PendingRewardItem(parts[0], parts[1], parts[2], parts[3])
+            }.getOrNull()
+        }
         val locations = (0 until int("canonLocationCount", 0)).mapNotNull { i -> fields("canonLocation_${i}").takeIf { it.size >= 5 }?.let { x -> runCatching { CanonLocation(x[0], x[1], x[2], CanonStatus.valueOf(x[3]), x[4].toLong()) }.getOrNull() } }
         val npcs = (0 until int("canonNpcCount", 0)).mapNotNull { i -> fields("canonNpc_${i}").takeIf { it.size >= 6 }?.let { x -> runCatching { CanonNpc(x[0], x[1], x[2].takeIf { it.isNotBlank() }, x[3].takeIf { it.isNotBlank() }, CanonStatus.valueOf(x[4]), x[5].toLong()) }.getOrNull() } }
         val items = (0 until int("canonItemCount", 0)).mapNotNull { i -> fields("canonItem_${i}").takeIf { it.size >= 5 }?.let { x -> runCatching { CanonItem(x[0], x[1], x[2].takeIf { it.isNotBlank() }, CanonStatus.valueOf(x[3]), x[4].toLong()) }.getOrNull() } }
@@ -215,7 +229,9 @@ object GameStatePersistenceCodec {
                 growth = GrowthState(growthEvidence, appliedGrowth, growthAbilities, pendingGrowthChanges, declinedGrowth),
                 worldState = worldState,
                 worldCanon = WorldCanon(locations, npcs, items, quests, discoveries),
-                history = history
+                history = history,
+                appliedRewardIds = appliedRewardIds,
+                pendingRewardItems = pendingRewardItems
             ), updatedAtEpochMs = long("updatedAt", 0L)
         )
     }

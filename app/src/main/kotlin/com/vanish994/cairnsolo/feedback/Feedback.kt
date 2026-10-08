@@ -2,6 +2,7 @@ package com.vanish994.cairnsolo.feedback
 
 import com.vanish994.cairnsolo.game.GameEvent
 import com.vanish994.cairnsolo.rules.Attribute
+import com.vanish994.cairnsolo.rules.MarketplaceCatalog
 
 enum class FeedbackType {
     INFO, SUCCESS, WARNING, FAILURE, DAMAGE, CRITICAL, INVENTORY
@@ -35,6 +36,21 @@ object FeedbackMapper {
             is GameEvent.CombatEnded -> if (event.victory) "Combate vencido contra ${event.opponentId}." to FeedbackType.SUCCESS else "Combate encerrado." to FeedbackType.WARNING
             is GameEvent.SpellResolved -> "Magia lançada: ${event.spellId}." to FeedbackType.INFO
             is GameEvent.PurchaseResolved -> "Compra concluída: ${event.itemId}. Ouro restante: ${event.goldRemaining}." to FeedbackType.INVENTORY
+            is GameEvent.GoldCredited -> "Você recebeu ${event.amountGp} po. Saldo: ${event.newBalanceGp} po." to FeedbackType.SUCCESS
+            is GameEvent.RewardItemAdded -> "Item recebido: ${catalogItemName(event.catalogItemId)}." to FeedbackType.INVENTORY
+            is GameEvent.RewardItemPending -> {
+                val needed = (event.slotsRequired - event.freeSlots).coerceAtLeast(0)
+                "${catalogItemName(event.catalogItemId)} aguarda resgate; libere $needed ${if (needed == 1) "espaço" else "espaços"}." to FeedbackType.WARNING
+            }
+            is GameEvent.RewardItemClaimed -> "Item de recompensa resgatado: ${catalogItemName(event.itemInstanceId.substringAfterLast(':'))}." to FeedbackType.SUCCESS
+            is GameEvent.RewardItemRejected -> {
+                val reason = when (event.reason) {
+                    "UNKNOWN_CATALOG_ITEM" -> "não existe no catálogo"
+                    "NOT_AN_INVENTORY_ITEM" -> "não pode ser carregado no inventário"
+                    else -> "não pôde ser concedido"
+                }
+                "Recompensa recusada: ${event.catalogItemId.toDisplayName()} $reason." to FeedbackType.WARNING
+            }
             is GameEvent.DowntimeResolved -> "Downtime concluído: ${event.action.name.lowercase()}." to FeedbackType.SUCCESS
             is GameEvent.WildernessResolved -> "Ação de viagem resolvida: ${event.action.name.lowercase()}." to FeedbackType.INFO
             is GameEvent.DungeonResolved -> "Ação de dungeon resolvida: ${event.action.name.lowercase()}." to FeedbackType.INFO
@@ -78,6 +94,9 @@ object FeedbackMapper {
 
     private fun saveMessage(attribute: Attribute, roll: Int, success: Boolean): String =
         "Teste de " + attribute.displayName() + ": " + roll + " — " + (if (success) "sucesso" else "falha") + "."
+
+    private fun catalogItemName(catalogItemId: String): String =
+        MarketplaceCatalog.find(catalogItemId)?.name ?: catalogItemId.toDisplayName()
 
     private fun idFor(event: GameEvent, turn: Long): String =
         turn.toString() + ":" + event::class.simpleName + ":" + event.hashCode()
