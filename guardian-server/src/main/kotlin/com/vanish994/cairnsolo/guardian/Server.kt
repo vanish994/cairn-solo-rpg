@@ -56,9 +56,10 @@ A resposta DEVE ser somente o objeto JSON solicitado pelo schema.
 """
 
 internal fun guardianSystemPrompt(): String = "$SYSTEM_PROMPT\n\n" +
-    "AÇÕES SUGERIDAS (suggestedActions): apresente de uma a três recomendações opcionais, " +
-        "curtas e concretas para o próximo passo; cada sugestão deve ser apoiada explicitamente " +
-        "nas availableActions, na cena atual e no cânone confirmado (worldCanon), e não invente " +
+    "AÇÕES SUGERIDAS (suggestedActions): declare claramente o objetivo imediato da cena e " +
+        "apresente de uma a três recomendações opcionais, curtas e concretas para o próximo passo; " +
+        "cada sugestão deve ser apoiada explicitamente em availableActions, na cena atual e no " +
+        "campo canon (cânone confirmado), e não invente " +
         "fatos, locais, NPCs, missões ou saídas. São apenas recomendações: não executam ações " +
         "nem alteram o estado do jogo, e o jogador continua livre para escrever outra intenção."
 
