@@ -1,6 +1,7 @@
 package com.vanish994.cairnsolo.guardian
 
 import com.vanish994.cairnsolo.game.CombatOpponentNarrative
+import com.vanish994.cairnsolo.game.CombatOpponentState
 import com.vanish994.cairnsolo.game.CombatState
 import com.vanish994.cairnsolo.game.ExplorationEngine
 import com.vanish994.cairnsolo.game.GameActionResolver
@@ -14,7 +15,8 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
-import kotlin.test.assertIs
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class GuardianRuleResolverTest {
@@ -23,19 +25,75 @@ class GuardianRuleResolverTest {
         val random = FixedRandomSource(10, d8Value = 6)
         val rules = GuardianRuleResolver(GameActionResolver(ExplorationEngine(random), RulesEngine(random)))
         val proposal = GuardianEncounterProposal(
-            opponentId = "wolf-alpha",
-            narrative = CombatOpponentNarrative(
-                "Lobo cinzento", "Grande.", "Ronda em círculos.", "Protege a carcaça.", "Na trilha."
-            ),
-            stats = CharacterState(5, 7, 3, 4, 4, 1),
-            weapon = WeaponProfile("fangs", "d6")
+            opponents = listOf(GuardianOpponentProposal(
+                opponentId = "wolf-alpha",
+                narrative = CombatOpponentNarrative(
+                    "Lobo cinzento", "Grande.", "Ronda em círculos.", "Protege a carcaça.", "Na trilha."
+                ),
+                stats = CharacterState(5, 7, 3, 4, 4, 1),
+                weapon = WeaponProfile("fangs", "d6")
+            ))
         )
 
         val result = rules.resolve(newCharacter("Mara", 10, 11, 12), GuardianRuleRequest("BEGIN_COMBAT", encounter = proposal))
 
-        assertEquals("Lobo cinzento", result.state.campaign.combat?.opponentNarrative?.name)
-        assertIs<GameEvent.CombatStarted>(result.gameResult.events.first())
-        assertTrue(result.resultText.contains("Combate iniciado contra wolf-alpha"))
+        assertEquals("Lobo cinzento", result.state.campaign.combat?.opponents?.single()?.narrative?.name)
+        assertTrue(result.gameResult.events.any { it is GameEvent.CombatStarted })
+        assertTrue(result.resultText.contains("wolf-alpha"))
+    }
+
+    @Test
+    fun unacceptedEncounterDoesNotStartCombat() {
+        val random = FixedRandomSource(10)
+        val rules = GuardianRuleResolver(GameActionResolver(ExplorationEngine(random), RulesEngine(random)))
+        val state = newCharacter("Mara", 10, 11, 12)
+        val request = GuardianRuleRequest(
+            "BEGIN_COMBAT",
+            encounter = GuardianEncounterProposal(
+                opponents = listOf(
+                    cultist("cultist-a", "Cultista da lamparina", CharacterState(5, 7, 8, 4, 4, 1), WeaponProfile("ritual-dagger", "d4")),
+                    cultist("cultist-b", "Cultista do sino", CharacterState(8, 4, 6, 6, 6, 2), WeaponProfile("rusted-spear", "d8"))
+                ),
+                moraleLeaderId = "cultist-b"
+            )
+        )
+
+        val stateBeforeValidation = state
+        assertNull(rules.validationError(state, request))
+        assertEquals(stateBeforeValidation, state)
+        assertNull(state.campaign.combat)
+    }
+
+    @Test
+    fun acceptedEncounterBeginsCombatWithEveryOpponent() {
+        val random = FixedRandomSource(10, d8Value = 6)
+        val rules = GuardianRuleResolver(GameActionResolver(ExplorationEngine(random), RulesEngine(random)))
+        val state = newCharacter("Mara", 10, 11, 12)
+        val first = cultist(
+            "cultist-a", "Cultista da lamparina", CharacterState(5, 7, 8, 4, 4, 1), WeaponProfile("ritual-dagger", "d4")
+        )
+        val second = cultist(
+            "cultist-b", "Cultista do sino", CharacterState(8, 4, 6, 6, 6, 2), WeaponProfile("rusted-spear", "d8", ranged = true)
+        )
+        val acceptedProposal = GuardianEncounterProposal(
+            opponents = listOf(first, second),
+            moraleLeaderId = "cultist-b"
+        )
+
+        // Este resolve representa o fluxo acionado somente depois de o jogador aceitar o encontro inteiro.
+        val result = rules.resolve(state, GuardianRuleRequest("BEGIN_COMBAT", encounter = acceptedProposal))
+
+        val combat = assertNotNull(result.state.campaign.combat)
+        assertEquals(2, combat.opponents.size)
+        assertEquals(listOf("cultist-a", "cultist-b"), combat.opponents.map { it.id })
+        assertEquals(first.narrative, combat.opponents[0].narrative)
+        assertEquals(first.stats, combat.opponents[0].stats)
+        assertEquals(first.weapon, combat.opponents[0].weapon)
+        assertEquals(second.narrative, combat.opponents[1].narrative)
+        assertEquals(second.stats, combat.opponents[1].stats)
+        assertEquals(second.weapon, combat.opponents[1].weapon)
+        assertEquals("cultist-b", combat.moraleLeaderId)
+        assertTrue(result.gameResult.events.any { it is GameEvent.CombatStarted })
     }
 
     @Test
@@ -43,12 +101,14 @@ class GuardianRuleResolverTest {
         val random = FixedRandomSource(20)
         val rules = GuardianRuleResolver(GameActionResolver(ExplorationEngine(random), RulesEngine(random)))
         val proposal = GuardianEncounterProposal(
-            opponentId = "wolf-alpha",
-            narrative = CombatOpponentNarrative(
-                "Lobo cinzento", "Grande.", "Ronda em círculos.", "Protege a carcaça.", "Na trilha."
-            ),
-            stats = CharacterState(5, 7, 3, 4, 4, 1),
-            weapon = WeaponProfile("fangs", "d4")
+            opponents = listOf(GuardianOpponentProposal(
+                opponentId = "wolf-alpha",
+                narrative = CombatOpponentNarrative(
+                    "Lobo cinzento", "Grande.", "Ronda em círculos.", "Protege a carcaça.", "Na trilha."
+                ),
+                stats = CharacterState(5, 7, 3, 4, 4, 1),
+                weapon = WeaponProfile("fangs", "d4")
+            ))
         )
 
         val result = rules.resolve(newCharacter("Mara", 10, 11, 12), GuardianRuleRequest("BEGIN_COMBAT", encounter = proposal))
@@ -90,9 +150,12 @@ class GuardianRuleResolverTest {
         val base = newCharacter("Mara", 10, 11, 12)
         val active = base.copy(campaign = base.campaign.copy(
             combat = CombatState(
-                opponentId = "wolf-alpha",
-                opponent = CharacterState(5, 7, 3, 4, 4, 1),
-                opponentNarrative = CombatOpponentNarrative("Lobo")
+                opponents = listOf(CombatOpponentState(
+                    id = "wolf-alpha",
+                    narrative = CombatOpponentNarrative("Lobo"),
+                    stats = CharacterState(5, 7, 3, 4, 4, 1),
+                    weapon = WeaponProfile("unarmed", "d4")
+                ))
             )
         ))
         val request = GuardianRuleRequest("DAMAGE", amount = 2)
@@ -103,4 +166,16 @@ class GuardianRuleResolverTest {
         )
         assertFailsWith<IllegalArgumentException> { rules.resolve(active, request) }
     }
+
+    private fun cultist(
+        id: String,
+        name: String,
+        stats: CharacterState,
+        weapon: WeaponProfile
+    ) = GuardianOpponentProposal(
+        opponentId = id,
+        narrative = CombatOpponentNarrative(name, "$name", "Observa a passagem.", "Ataca se provocado.", "Na trilha."),
+        stats = stats,
+        weapon = weapon
+    )
 }
