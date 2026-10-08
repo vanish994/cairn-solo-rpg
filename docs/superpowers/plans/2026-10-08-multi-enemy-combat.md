@@ -38,6 +38,7 @@
 ### Task 1: Modelos, contrato Guardian e conversão no resolver
 
 **Files:**
+- Modify: `app/build.gradle.kts` — declarar Gson diretamente para preservar lexemas numéricos na validação do payload.
 - Modify: `app/src/main/kotlin/com/vanish994/cairnsolo/game/GameState.kt`
 - Modify: `app/src/main/kotlin/com/vanish994/cairnsolo/game/GameAction.kt` — rota `BeginCombat` plural e construção inicial do estado; a resolução completa por grupos permanece na Task 2.
 - Modify: `app/src/main/kotlin/com/vanish994/cairnsolo/guardian/GuardianClient.kt`, `GuardianContext.kt`, `GuardianRuleResolver.kt`
@@ -51,6 +52,7 @@
 - Produzir `enum class CombatEndReason { OPPONENTS_DEFEATED, OPPONENTS_FLED, OPPONENTS_DEFEATED_AND_FLED, PLAYER_DEFEATED }`.
 - Produzir `data class GuardianOpponentProposal(val opponentId: String, val narrative: CombatOpponentNarrative, val stats: CharacterState, val weapon: WeaponProfile)` e `data class GuardianEncounterProposal(val opponents: List<GuardianOpponentProposal>, val moraleLeaderId: String? = null)`; exigir 1–8 elementos, IDs únicos e líder nulo ou pertencente à lista.
 - `GuardianClient.narrate(..., encounterContext: List<CombatOpponentNarrative>? = null)` transporta perfis aprovados distintos após o combate.
+- Parser Android e normalizador backend validam inteiros sem truncar ou arredondar números decimais; proposta inválida mantém a narração e rejeita somente o encontro.
 - `GuardianRuleResolution.encounterNarratives: List<CombatOpponentNarrative>` preserva todos os perfis ao retornar a narrativa.
 - `GameAction.BeginCombat(val opponents: List<CombatOpponentState>, val moraleLeaderId: String? = null)`.
 - Produzir `internal fun combatEncounterSchema(): JsonObject` para testar a validação estrutural da lista de encontros no contrato do servidor.
