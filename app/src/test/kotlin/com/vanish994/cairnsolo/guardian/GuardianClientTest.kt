@@ -6,6 +6,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class GuardianClientTest {
     @Test
@@ -66,6 +67,57 @@ class GuardianClientTest {
         assertEquals("A cena continua.", response.narration)
         assertEquals("BEGIN_COMBAT", response.ruleRequest?.type)
         assertNull(response.ruleRequest?.encounter)
+    }
+
+    @Test
+    fun parseSuggestedActionsFiltersBlankExcessAndNonStringEntries() {
+        val response = HttpGuardianClient(baseUrl = "").parseResponse(
+            """{
+              "narration":"A narração permanece.",
+              "sceneTitle":"Taverna",
+              "sceneDescription":"Uma pista conhecida aguarda atenção.",
+              "suggestedActions":[
+                "Examine a pista já conhecida",
+                "   ",
+                42,
+                "Pergunte ao taverneiro sobre a pista",
+                {"not":"a string"},
+                "Consulte o registro disponível",
+                "Quarta ação"
+              ]
+            }"""
+        )
+
+        assertEquals(
+            listOf(
+                "Examine a pista já conhecida",
+                "Pergunte ao taverneiro sobre a pista",
+                "Consulte o registro disponível"
+            ),
+            response.suggestedActions
+        )
+        assertTrue(response.suggestedActions.size <= 3)
+        assertTrue(response.suggestedActions.all { it.isNotBlank() && it.length <= 160 })
+    }
+
+    @Test
+    fun emptySuggestedActionsDoNotDropNarration() {
+        val response = HttpGuardianClient(baseUrl = "").parseResponse(
+            """{"narration":"A narração permanece.","sceneTitle":"Taverna","sceneDescription":"Uma pista conhecida aguarda atenção.","suggestedActions":[]}"""
+        )
+
+        assertEquals("A narração permanece.", response.narration)
+        assertTrue(response.suggestedActions.isEmpty())
+    }
+
+    @Test
+    fun malformedSuggestionsDoNotDropNarration() {
+        val response = HttpGuardianClient(baseUrl = "").parseResponse(
+            """{"narration":"A narração permanece.","sceneTitle":"Taverna","sceneDescription":"Uma pista conhecida aguarda atenção.","suggestedActions":{"unexpected":"object"}}"""
+        )
+
+        assertEquals("A narração permanece.", response.narration)
+        assertTrue(response.suggestedActions.isEmpty())
     }
 
     @Test

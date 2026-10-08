@@ -4,6 +4,7 @@ import com.google.gson.JsonParser
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class ServerTest {
     @Test
@@ -46,5 +47,30 @@ class ServerTest {
 
         assertEquals(3, normalized.getAsJsonObject("ruleRequest")
             .getAsJsonObject("encounter").getAsJsonObject("stats").get("hp").asInt)
+    }
+
+    @Test
+    fun suggestedActionsSchemaRequiresOneToThreeBoundedStrings() {
+        val schema = suggestedActionsSchema()
+        val items = schema.getAsJsonObject("items")
+
+        assertEquals("array", schema.get("type").asString)
+        assertEquals(1, schema.get("minItems").asInt)
+        assertEquals(3, schema.get("maxItems").asInt)
+        assertEquals("string", items.get("type").asString)
+        assertEquals(1, items.get("minLength").asInt)
+        assertEquals(160, items.get("maxLength").asInt)
+    }
+
+    @Test
+    fun promptGroundsActionsInSceneCanonAndAvailableActions() {
+        val prompt = guardianSystemPrompt().lowercase()
+
+        assertTrue(prompt.contains("objetivo imediato"))
+        assertTrue(prompt.contains("availableactions"))
+        assertTrue(prompt.contains("cena"))
+        assertTrue(prompt.contains("cânone") || prompt.contains("worldcanon"))
+        assertTrue(prompt.contains("derivad") || prompt.contains("fundamentad") || prompt.contains("basead"))
+        assertTrue(prompt.contains("não invent"))
     }
 }
