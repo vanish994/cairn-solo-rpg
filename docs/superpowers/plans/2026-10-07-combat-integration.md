@@ -174,6 +174,13 @@
   - Abrir PR; exigir Android Build verde. Verificar testes unitários, Guardian server, integração HTTP e APK release conforme o workflow. Job pulado não conta como validação.
   - Mesclar por squash somente após CI verde; remover a branch remota depois do merge.
 
+## Resultado da execução — 2026-10-08
+
+- PR #16 foi mesclado por squash em `main` no commit `78a014585c30b944d602191b12dca2d207682d58` após o Android Build ficar verde para o HEAD revisado.
+- O Android Build `37739460702`, disparado em `main` após o merge, passou em testes unitários Android, testes do Guardian server, integração HTTP, build release otimizado, verificação do APK e upload do artefato.
+- O sandbox não possuía `gradle` nem `./gradlew`; por isso, a compilação/testes foram validados pelo workflow. A primeira execução do PR encontrou um fixture sem `d20Value`; a chamada foi corrigida e a nova execução passou.
+- A proposta/aceite, a resolução mecânica, o bloqueio de ações, a persistência/migração e a narração autorizada foram entregues. O teste visual em dispositivo real continua pendente; Gate 6 permanece parcial e Gate 8 permanece aberto.
+
 ## Fora deste PR
 
 Completar todos os procedimentos de Cairn 2e, exploração real, catálogo de inimigos/NPCs, dungeon, campanha/mundo persistente e distribuição final do APK são marcos posteriores independentes. Nenhum deles será declarado concluído por este incremento de combate.

@@ -122,6 +122,8 @@ Concluído quando:
 
 Objetivo: combate jogável.
 
+**Estado em 2026-10-08: parcial — fatia vertical integrada pelo PR #16 e validada pelo Android Build em `main`.** O Gate 6 não está fechado: os critérios abaixo abrangem procedimentos de Cairn 2e além do escopo desta entrega.
+
 Entregáveis:
 - participantes;
 - iniciativa/ordem conforme regras adotadas;
@@ -130,6 +132,10 @@ Entregáveis:
 - dano;
 - condições;
 - encerramento.
+
+Entregue nesta fatia: proposta estruturada de oponente pelo Guardian, confirmação/recusa do jogador, iniciativa e ataques resolvidos por `GameActionResolver`/`CombatRules`, dano/HP/Armor autoritativos, bloqueio de ações incompatíveis durante combate, narração baseada nos fatos do resolver e persistência com migração segura.
+
+Pendente para fechar o Gate: validar em dispositivo real e completar procedimentos restantes de condição/encerramento segundo a matriz normativa. Não há ação de fuga ou encerramento voluntário no app; `EndCombat` é bloqueado durante combate ativo até existir procedimento normativo aprovado.
 
 Concluído quando:
 - combate completo pode ser executado sem depender de texto livre da IA.
