@@ -315,9 +315,17 @@ object GameStatePersistenceCodec {
             context = value("narrativeContext")?.takeIf { it.length <= 1000 } ?: ""
         )
         val weaponId = value("weaponId")?.takeIf(::isValidCombatOpponentId) ?: "unarmed"
-        val damage = value("weaponDamage")?.takeIf { it.isNotBlank() && isSupportedWeaponDamageExpression(it) } ?: "d4"
-        val status = value("status")?.let { runCatching { CombatOpponentStatus.valueOf(it) }.getOrNull() }
-            ?: CombatOpponentStatus.ACTIVE
+        val rawDamage = value("weaponDamage")
+        val damage = when {
+            prefix != null && rawDamage == "" -> null
+            rawDamage != null && rawDamage.isNotBlank() && isSupportedWeaponDamageExpression(rawDamage) -> rawDamage
+            else -> "d4"
+        }
+        val rawStatus = value("status")
+        val status = when {
+            prefix == null && rawStatus == null -> CombatOpponentStatus.ACTIVE
+            else -> CombatOpponentStatus.valueOf(rawStatus ?: error("Missing persisted opponent status"))
+        }
         return CombatOpponentState(
             id = id,
             narrative = narrative,
