@@ -70,9 +70,10 @@ class ServerTest {
             .substringBefore("\n\n")
 
         assertTrue(suggestionInstruction.isNotBlank())
+        assertTrue(suggestionInstruction.contains("objetivo imediato"))
         assertTrue(suggestionInstruction.contains("availableactions"))
         assertTrue(suggestionInstruction.contains("cena"))
-        assertTrue(suggestionInstruction.contains("cânone") || suggestionInstruction.contains("worldcanon"))
+        assertTrue(suggestionInstruction.contains("cânone") && Regex("\\bcanon\\b").containsMatchIn(suggestionInstruction))
         assertTrue(suggestionInstruction.contains("apoiad") || suggestionInstruction.contains("derivad") || suggestionInstruction.contains("basead"))
         assertTrue(suggestionInstruction.contains("não invent"))
     }

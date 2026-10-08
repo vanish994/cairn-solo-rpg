@@ -135,6 +135,28 @@ class GuardianClientTest {
     }
 
     @Test
+    fun missingSuggestedActionsDoNotDropNarrationOrScene() {
+        val response = HttpGuardianClient(baseUrl = "").parseResponse(
+            """{"narration":"A narração permanece.","sceneTitle":"Taverna","sceneDescription":"Uma pista conhecida aguarda atenção."}"""
+        )
+
+        assertEquals("A narração permanece.", response.narration)
+        assertEquals("Taverna", response.sceneTitle)
+        assertTrue(response.suggestedActions.isEmpty())
+    }
+
+    @Test
+    fun nullSuggestedActionsDoNotDropNarrationOrScene() {
+        val response = HttpGuardianClient(baseUrl = "").parseResponse(
+            """{"narration":"A narração permanece.","sceneTitle":"Taverna","sceneDescription":"Uma pista conhecida aguarda atenção.","suggestedActions":null}"""
+        )
+
+        assertEquals("A narração permanece.", response.narration)
+        assertEquals("Taverna", response.sceneTitle)
+        assertTrue(response.suggestedActions.isEmpty())
+    }
+
+    @Test
     fun authorizedRuleResultIsSerializedSeparatelyFromPlayerIntent() {
         val payload = guardianRequestPayload(
             newCharacter("Mara", 10, 11, 12),

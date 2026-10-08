@@ -41,9 +41,10 @@
 - Produce `internal fun suggestedActionsSchema(): JsonObject` com `type=array`, `minItems=1`, `maxItems=3`, e strings `minLength=1`, `maxLength=160`.
 - Produce `internal fun guardianSystemPrompt(): String` para compor a instrução usada pelo request e validar o requisito de grounding.
 - `GuardianResponse.suggestedActions` continua `List<String>`; o parser ignora entradas não string, em branco e acima de 160 caracteres, limita o máximo a três e preserva narração/cena mesmo se a lista estiver malformada.
-- A instrução específica de sugestões em `guardianSystemPrompt()` usa o cabeçalho estável `AÇÕES SUGERIDAS (suggestedActions):`; o parágrafo desse cabeçalho vincula as sugestões a `availableActions`, cena e cânone e proíbe inventar fatos.
+- A instrução específica de sugestões em `guardianSystemPrompt()` usa o cabeçalho estável `AÇÕES SUGERIDAS (suggestedActions):`; o parágrafo desse cabeçalho pede um objetivo imediato, vincula as sugestões a `availableActions`, `scene` e ao campo real `canon`, e proíbe inventar fatos.
+- Campo `suggestedActions` ausente, `null`, vazio, não-array ou com membros inválidos vira lista vazia sem descartar narração/cena.
 
-- [ ] Escrever `ServerTest.suggestedActionsSchemaRequiresOneToThreeBoundedStrings`, `ServerTest.promptGroundsActionsInSceneCanonAndAvailableActions`, `GuardianClientTest.parseSuggestedActionsFiltersBlankExcessAndNonStringEntries`, `GuardianClientTest.parseSuggestedActionsEnforces160CharacterBoundary`, `GuardianClientTest.emptySuggestedActionsDoNotDropNarration` e `GuardianClientTest.malformedSuggestionsDoNotDropNarration`; afirmar limite, grounding dentro do bloco da diretiva e preservação da narração.
+- [ ] Escrever `ServerTest.suggestedActionsSchemaRequiresOneToThreeBoundedStrings`, `ServerTest.promptGroundsActionsInSceneCanonAndAvailableActions`, `GuardianClientTest.parseSuggestedActionsFiltersBlankExcessAndNonStringEntries`, `GuardianClientTest.parseSuggestedActionsEnforces160CharacterBoundary`, `GuardianClientTest.emptySuggestedActionsDoNotDropNarration`, `GuardianClientTest.malformedSuggestionsDoNotDropNarration`, `GuardianClientTest.missingSuggestedActionsDoNotDropNarrationOrScene` e `GuardianClientTest.nullSuggestedActionsDoNotDropNarrationOrScene`; afirmar limite, grounding dentro do bloco da diretiva e preservação da narração/cena.
 
 ```kotlin
 assertEquals(1, suggestedActionsSchema().get("minItems").asInt)
