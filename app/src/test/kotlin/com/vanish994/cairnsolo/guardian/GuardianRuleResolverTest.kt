@@ -2,6 +2,7 @@ package com.vanish994.cairnsolo.guardian
 
 import com.vanish994.cairnsolo.game.CombatOpponentNarrative
 import com.vanish994.cairnsolo.game.CombatOpponentState
+import com.vanish994.cairnsolo.game.CombatEndReason
 import com.vanish994.cairnsolo.game.CombatState
 import com.vanish994.cairnsolo.game.GameAction
 import com.vanish994.cairnsolo.game.ExplorationEngine
@@ -99,11 +100,35 @@ class GuardianRuleResolverTest {
         assertEquals(listOf("cultist-a", "cultist-b"), result.encounterContexts.map { it.opponentId })
         assertEquals(listOf(first.narrative, second.narrative), result.encounterContexts.map { it.narrative })
         assertTrue(result.gameResult.events.any { it is GameEvent.CombatStarted })
+    }
 
-        val ended = rules.resolve(result.state, GameAction.EndCombat)
-        assertNull(ended.state.campaign.combat)
-        assertEquals(listOf("cultist-a", "cultist-b"), ended.encounterContexts.map { it.opponentId })
-        assertEquals(listOf(first.narrative, second.narrative), ended.encounterContexts.map { it.narrative })
+    @Test
+    fun opponentContextsRemainAvailableWhenInitiativeEndsCombat() {
+        val random = FixedRandomSource(20, d4Value = 4)
+        val rules = GuardianRuleResolver(GameActionResolver(ExplorationEngine(random), RulesEngine(random)))
+        val base = newCharacter("Mara", 10, 11, 12)
+        val fragile = base.copy(campaign = base.campaign.copy(
+            rules = base.campaign.rules.copy(str = 1, hp = 1, armor = 0)
+        ))
+        val first = cultist(
+            "cultist-a", "Cultista da lamparina", CharacterState(5, 7, 8, 4, 4, 0), WeaponProfile("ritual-dagger", "d4")
+        )
+        val second = cultist(
+            "cultist-b", "Cultista do sino", CharacterState(8, 4, 6, 4, 4, 0), WeaponProfile("rusted-spear", "d4")
+        )
+        val request = GuardianRuleRequest(
+            "BEGIN_COMBAT",
+            encounter = GuardianEncounterProposal(listOf(first, second), moraleLeaderId = "cultist-b")
+        )
+
+        val result = rules.resolve(fragile, request)
+
+        assertNull(result.state.campaign.combat)
+        assertTrue(result.gameResult.events.any {
+            it is GameEvent.CombatEnded && it.reason == CombatEndReason.PLAYER_DEFEATED
+        })
+        assertEquals(listOf("cultist-a", "cultist-b"), result.encounterContexts.map { it.opponentId })
+        assertEquals(listOf(first.narrative, second.narrative), result.encounterContexts.map { it.narrative })
     }
 
     @Test
