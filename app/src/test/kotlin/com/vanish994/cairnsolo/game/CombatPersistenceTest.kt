@@ -6,6 +6,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 
 class CombatPersistenceTest {
     private val narrative = CombatOpponentNarrative(
@@ -69,6 +70,39 @@ class CombatPersistenceTest {
         val restored = assertNotNull(GameStatePersistenceCodec.decode(GameStatePersistenceCodec.encode(original)))
 
         assertEquals(originalCombat, restored.campaign.combat)
+    }
+
+    @Test
+    fun nullableOpponentWeaponDamageRoundTrips() {
+        val base = newCharacter("Mara", 10, 11, 12)
+        val combat = multiOpponentCombatState()
+        val secondOpponent = combat.opponents[1].copy(weapon = WeaponProfile("claws", damage = null))
+        val originalCombat = combat.copy(opponents = listOf(combat.opponents[0], secondOpponent))
+        val original = base.copy(campaign = base.campaign.copy(combat = originalCombat))
+
+        val restored = assertNotNull(GameStatePersistenceCodec.decode(GameStatePersistenceCodec.encode(original)))
+        val restoredCombat = assertNotNull(restored.campaign.combat)
+
+        assertNull(restoredCombat.opponents[1].weapon.damage)
+        assertEquals(originalCombat, restoredCombat)
+    }
+
+    @Test
+    fun missingOrInvalidPluralOpponentStatusDoesNotReactivateOpponent() {
+        val base = newCharacter("Mara", 10, 11, 12)
+        val original = base.copy(campaign = base.campaign.copy(combat = multiOpponentCombatState()))
+        val encoded = GameStatePersistenceCodec.encode(original)
+
+        listOf<String?>(null, "UNKNOWN_STATUS").forEach { status ->
+            val corrupted = encoded.toMutableMap().apply {
+                if (status == null) remove("combatOpponent_0_status")
+                else put("combatOpponent_0_status", status)
+            }
+
+            val restored = assertNotNull(GameStatePersistenceCodec.decode(corrupted))
+            assertNull(restored.campaign.combat)
+            assertEquals(original.campaign.campaignId, restored.campaign.campaignId)
+        }
     }
 
     @Test
