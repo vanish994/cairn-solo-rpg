@@ -32,11 +32,31 @@ sealed interface GameAction {
     data object StabilizeCritical : GameAction
     data object RecoverScar : GameAction
     data class BeginCombat(
-        val opponentId: String,
-        val opponent: CharacterState,
-        val opponentWeapon: WeaponProfile = WeaponProfile("unarmed", "d4"),
-        val opponentNarrative: CombatOpponentNarrative = CombatOpponentNarrative(opponentId)
-    ) : GameAction
+        val opponents: List<CombatOpponentState>,
+        val moraleLeaderId: String? = null
+    ) : GameAction {
+        init {
+            require(opponents.size in 1..8) { "Combat must contain between one and eight opponents." }
+            require(opponents.map { it.id }.distinct().size == opponents.size) { "Combat opponent ids must be unique." }
+            require(opponents.any { it.status == CombatOpponentStatus.ACTIVE }) { "Combat must have at least one active opponent." }
+            require(moraleLeaderId == null || opponents.any { it.id == moraleLeaderId }) {
+                "The morale leader must belong to the encounter."
+            }
+        }
+
+        /** Temporary adapter for existing UI and single-opponent rule tests. */
+        constructor(
+            opponentId: String,
+            opponent: CharacterState,
+            opponentWeapon: WeaponProfile = WeaponProfile("unarmed", "d4"),
+            opponentNarrative: CombatOpponentNarrative = CombatOpponentNarrative(opponentId)
+        ) : this(listOf(CombatOpponentState(opponentId, opponentNarrative, opponent, opponentWeapon)))
+
+        val opponentId: String get() = opponents.first().id
+        val opponent: CharacterState get() = opponents.first().stats
+        val opponentWeapon: WeaponProfile get() = opponents.first().weapon
+        val opponentNarrative: CombatOpponentNarrative get() = opponents.first().narrative
+    }
     data class CombatAttack(val weapon: WeaponProfile? = null) : GameAction
     data object EndCombat : GameAction
     data class CastSpell(val itemId: String, val requiresWilSave: Boolean = false, val failure: com.vanish994.cairnsolo.rules.SpellFailureConsequence = com.vanish994.cairnsolo.rules.SpellFailureConsequence.NONE, val dropItemIdForFatigue: String? = null) : GameAction
@@ -448,30 +468,33 @@ class GameActionResolver(
 
     private fun beginCombat(state: GameState, action: GameAction.BeginCombat): GameResult {
         require(state.campaign.combat == null) { "Combat already active" }
-        require(action.opponentWeapon.damage.isNullOrBlank() || isSupportedWeaponDamageExpression(action.opponentWeapon.damage)) {
-            "Dado de dano da arma do oponente incompatível com as regras de combate."
-        }
+        val initialCombat = CombatState(
+            opponents = action.opponents,
+            moraleLeaderId = action.moraleLeaderId
+        )
+        val firstOpponent = initialCombat.opponents.first()
         val save = rules.save(state.campaign.rules, Attribute.DEX)
         if (save.success) {
-            val combatState = CombatState(action.opponentId, action.opponent, action.opponentWeapon, 1, true, action.opponentNarrative)
-            val next = state.copy(campaign = state.campaign.copy(combat = combatState, turn = state.campaign.turn + 1))
-            return GameResult(next.withHistory("combat-start-${state.campaign.turn}", HistoryEventType.COMBAT_UPDATED, "Combate iniciado contra ${action.opponentId}.", listOf(action.opponentId)), listOf(GameEvent.CombatStarted(action.opponentId, 1, true), GameEvent.SaveResolved(Attribute.DEX, save.roll, true)))
+            val next = state.copy(campaign = state.campaign.copy(combat = initialCombat, turn = state.campaign.turn + 1))
+            return GameResult(next.withHistory("combat-start-${state.campaign.turn}", HistoryEventType.COMBAT_UPDATED, "Combate iniciado contra ${firstOpponent.id}.", listOf(firstOpponent.id)), listOf(GameEvent.CombatStarted(firstOpponent.id, 1, true), GameEvent.SaveResolved(Attribute.DEX, save.roll, true)))
         }
-        val enemyAttack = combat.attack(action.opponent, state.campaign.rules, action.opponentWeapon)
+        // Task 2 will resolve the full enemy side simultaneously; until then, preserve the
+        // existing single-opponent initiative effect while keeping every opponent in state.
+        val enemyAttack = combat.attack(firstOpponent.stats, state.campaign.rules, firstOpponent.weapon)
         val damage = enemyAttack.events.toDamageEvent(enemyAttack.target)
         val dead = enemyAttack.target.dead
         val next = state.copy(campaign = state.campaign.copy(
             rules = enemyAttack.target,
-            combat = if (dead) null else CombatState(action.opponentId, action.opponent, action.opponentWeapon, 2, true, action.opponentNarrative),
+            combat = if (dead) null else initialCombat.copy(round = 2, playerCanAct = true),
             turn = state.campaign.turn + 1
         ))
         val events = mutableListOf<GameEvent>(
-            GameEvent.CombatStarted(action.opponentId, 1, false),
+            GameEvent.CombatStarted(firstOpponent.id, 1, false),
             GameEvent.SaveResolved(Attribute.DEX, save.roll, false),
-            GameEvent.CombatAttackResolved(action.opponentId, 1, null, damage, !dead)
+            GameEvent.CombatAttackResolved(firstOpponent.id, 1, null, damage, !dead)
         )
-        if (dead) events += GameEvent.CombatEnded(action.opponentId, false)
-        return GameResult(next.withHistory("combat-start-${state.campaign.turn}", HistoryEventType.COMBAT_UPDATED, "Combate iniciado contra ${action.opponentId}; o inimigo agiu primeiro.", listOf(action.opponentId)), events)
+        if (dead) events += GameEvent.CombatEnded(firstOpponent.id, false)
+        return GameResult(next.withHistory("combat-start-${state.campaign.turn}", HistoryEventType.COMBAT_UPDATED, "Combate iniciado contra ${firstOpponent.id}; o inimigo agiu primeiro.", listOf(firstOpponent.id)), events)
     }
 
     private fun combatAttack(state: GameState, action: GameAction.CombatAttack): GameResult {

@@ -2,6 +2,7 @@ package com.vanish994.cairnsolo.guardian
 
 import com.vanish994.cairnsolo.game.CampaignHistoryEntry
 import com.vanish994.cairnsolo.game.CombatOpponentNarrative
+import com.vanish994.cairnsolo.game.CombatOpponentStatus
 import com.vanish994.cairnsolo.game.GameState
 import com.vanish994.cairnsolo.game.WorldCanon
 import com.vanish994.cairnsolo.game.WorldState
@@ -99,18 +100,23 @@ data class GuardianInventoryContext(
 }
 
 data class GuardianCombatContext(
-    val opponentId: String,
+    val opponents: List<GuardianCombatOpponentContext>,
     val round: Int,
-    val playerCanAct: Boolean,
-    val opponent: GuardianCombatOpponentContext
+    val playerCanAct: Boolean
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
-        put("opponentId", opponentId); put("round", round); put("playerCanAct", playerCanAct)
-        put("opponent", opponent.toJson())
+        put("round", round); put("playerCanAct", playerCanAct)
+        put("opponents", guardianArray(opponents.map { it.toJson() }))
     }
+
+    /** Temporary singular adapters for consumers not yet migrated in Task 3. */
+    val opponentId: String get() = opponents.first().id
+    val opponent: GuardianCombatOpponentContext get() = opponents.first()
 }
 
 data class GuardianCombatOpponentContext(
+    val id: String,
+    val status: CombatOpponentStatus,
     val narrative: CombatOpponentNarrative,
     val hp: Int,
     val maxHp: Int,
@@ -118,6 +124,8 @@ data class GuardianCombatOpponentContext(
     val weapon: GuardianCombatWeaponContext
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
+        put("id", id)
+        put("status", status.name)
         put("narrative", JSONObject().apply {
             put("name", narrative.name)
             put("appearance", narrative.appearance)
@@ -264,21 +272,24 @@ object GuardianContextBuilder {
         rules.inventory.take(10).map { GuardianInventoryContext(it.id, it.slotCost, it.damage, it.armor, it.uses) },
         combat?.let { fight ->
             GuardianCombatContext(
-                opponentId = fight.opponentId,
-                round = fight.round,
-                playerCanAct = fight.playerCanAct,
-                opponent = GuardianCombatOpponentContext(
-                    narrative = fight.opponentNarrative,
-                    hp = fight.opponent.hp,
-                    maxHp = fight.opponent.maxHp,
-                    armor = fight.opponent.armor,
-                    weapon = GuardianCombatWeaponContext(
-                        id = fight.opponentWeapon.id,
-                        damage = fight.opponentWeapon.damage,
-                        blast = fight.opponentWeapon.blast,
-                        ranged = fight.opponentWeapon.ranged
+                opponents = fight.opponents.map { opponent ->
+                    GuardianCombatOpponentContext(
+                        id = opponent.id,
+                        status = opponent.status,
+                        narrative = opponent.narrative,
+                        hp = opponent.stats.hp,
+                        maxHp = opponent.stats.maxHp,
+                        armor = opponent.stats.armor,
+                        weapon = GuardianCombatWeaponContext(
+                            id = opponent.weapon.id,
+                            damage = opponent.weapon.damage,
+                            blast = opponent.weapon.blast,
+                            ranged = opponent.weapon.ranged
+                        )
                     )
-                )
+                },
+                round = fight.round,
+                playerCanAct = fight.playerCanAct
             )
         }
     )

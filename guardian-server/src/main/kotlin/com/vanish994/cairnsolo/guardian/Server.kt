@@ -33,7 +33,7 @@ condições, morte, recursos e resultados aleatórios.
 Nunca invente ou altere valores mecânicos.
 Nunca diga que um teste foi bem-sucedido, que dano foi causado ou que um item foi obtido, a menos que o campo ruleResult forneça explicitamente esse fato.
 Quando uma ação exigir resolução mecânica, preencha ruleRequest com um pedido estruturado e deixe o aplicativo resolver. Use SAVE, DAMAGE, FATIGUE, REST, STABILIZE_CRITICAL ou RECOVER_SCAR conforme apropriado; BEGIN_COMBAT é apenas uma proposta de encontro para aprovação do jogador.
-Você também pode propor BEGIN_COMBAT somente quando character.combat estiver ausente. Isso é uma proposta de oponente, não o início do combate: o jogador precisa aceitar no aplicativo. Inclua aparência, comportamento, intenção, contexto, stats e weapon completos; HP deve ser pelo menos 1 e não pode exceder maxHp; weapon.damage deve usar apenas d4/d6/d8/d10/d12 (por exemplo, d6 ou d6+d8); Armor deve estar entre 0 e 3. Não declare iniciativa, ataque, dano ou qualquer consequência.
+Você também pode propor BEGIN_COMBAT somente quando character.combat estiver ausente. Isso é uma proposta completa de 1 a 8 oponentes, não o início do combate: o jogador precisa aceitar o encontro inteiro no aplicativo. Use encounter.opponents como lista de objetos, cada um com opponentId único, narrativa completa, stats completos e weapon completa. IDs não podem estar vazios nem ter espaços no início/fim. moraleLeaderId é opcional e, se fornecido, deve corresponder a um ID da lista. Para cada oponente, HP deve ser pelo menos 1 e não pode exceder maxHp; weapon.damage deve usar apenas d4/d6/d8/d10/d12 (por exemplo, d6 ou d6+d8); Armor deve estar entre 0 e 3. Não declare iniciativa, ataque, dano ou qualquer consequência.
 Com combate ativo, ataques são iniciados pelos controles do aplicativo. Não use DAMAGE para simular um ataque e não narre seu resultado antes de recebê-lo em ruleResult.
 Você pode propor atualizações narrativas em canonProposals, mas elas não são fatos até serem validadas pelo aplicativo. Use apenas UPSERT_NPC, DISCOVER_LOCATION, ADD_IMPORTANT_ITEM, CREATE_QUEST, ADD_DISCOVERY ou ADD_RUMOR. Nunca altere HP, atributos, inventário, facções, Growth ou outros dados mecânicos.
 O estado growth.evidence contém experiências já registradas pelo domínio. Não crie evidências, habilidades ou aumentos de atributo por conta própria. Se uma experiência parecer um gatilho de Growth, narre a consequência e aguarde o fluxo de Growth do aplicativo.
@@ -113,8 +113,8 @@ Se ruleResult estiver presente, ele foi produzido pelo Rules Engine e é a únic
 
 Continue a cena de forma coerente. Se a intenção exigir uma resolução mecânica, preencha ruleRequest
 como objeto com type e os campos necessários. Use SAVE (attribute STR/DEX/WIL), DAMAGE (amount),
-FATIGUE (amount), REST, STABILIZE_CRITICAL, RECOVER_SCAR ou BEGIN_COMBAT (encounter completo, somente sem combate ativo).
-BEGIN_COMBAT apenas propõe o encontro para confirmação do jogador. Não informe resultados; o aplicativo resolve.
+FATIGUE (amount), REST, STABILIZE_CRITICAL, RECOVER_SCAR ou BEGIN_COMBAT (encounter com 1–8 oponentes em `opponents`, somente sem combate ativo).
+BEGIN_COMBAT apenas propõe o encontro inteiro para confirmação do jogador. Não informe resultados; o aplicativo resolve.
 Se não houver resolução mecânica, use null.
 Se houver um ruleResult na solicitação, trate-o como resultado autoritativo do motor e narre somente suas consequências mecânicas autorizadas.
 Inclua canonProposals como uma lista, mesmo quando vazia. Cada proposta deve ter type, id, status e source.
@@ -145,7 +145,7 @@ Inclua growthChangeProposals como uma lista, mesmo quando vazia. Não invente re
             }
         """).asJsonObject
         properties.add("suggestedActions", suggestedActionsSchema())
-        addEncounterStringPatterns(properties)
+        replaceBeginCombatSchema(properties)
         add("properties", properties)
         add("required", JsonParser.parseString(
             """["narration","sceneTitle","sceneDescription","ruleRequest","suggestedActions","canonProposals","growthEvidenceProposals","growthChangeProposals"]"""
@@ -208,26 +208,80 @@ Inclua growthChangeProposals como uma lista, mesmo quando vazia. Não invente re
     error("Gemini response did not contain model text")
 }
 
-internal fun addEncounterStringPatterns(properties: JsonObject) {
+private fun replaceBeginCombatSchema(properties: JsonObject) {
     val alternatives = properties.getAsJsonObject("ruleRequest").getAsJsonArray("anyOf")
-    val beginCombat = alternatives.first { candidate ->
+    val index = alternatives.indexOfFirst { candidate ->
         val types = candidate.asJsonObject
             .getAsJsonObject("properties")
             ?.getAsJsonObject("type")
             ?.getAsJsonArray("enum")
         types?.any { it.asString == "BEGIN_COMBAT" } == true
-    }.asJsonObject
-    val encounterProperties = beginCombat.getAsJsonObject("properties")
-        .getAsJsonObject("encounter")
-        .getAsJsonObject("properties")
-    encounterProperties.getAsJsonObject("opponentId").addProperty("pattern", "^\\S(?:.*\\S)?$")
-    val narrativeProperties = encounterProperties.getAsJsonObject("narrative").getAsJsonObject("properties")
-    listOf("name", "appearance", "behavior", "intent", "context").forEach { field ->
-        narrativeProperties.getAsJsonObject(field).addProperty("pattern", "\\S")
     }
-    encounterProperties.getAsJsonObject("weapon").getAsJsonObject("properties")
-        .getAsJsonObject("id").addProperty("pattern", "\\S")
+    check(index >= 0) { "BEGIN_COMBAT schema branch is missing." }
+    alternatives.set(index, JsonObject().apply {
+        addProperty("type", "object")
+        add("properties", JsonObject().apply {
+            add("type", JsonObject().apply {
+                addProperty("type", "string")
+                add("enum", JsonParser.parseString("""["BEGIN_COMBAT"]""").asJsonArray)
+            })
+            add("encounter", combatEncounterSchema())
+        })
+        add("required", JsonParser.parseString("""["type","encounter"]""").asJsonArray)
+        addProperty("additionalProperties", false)
+    })
 }
+
+internal fun combatEncounterSchema(): JsonObject = JsonParser.parseString(
+    """
+    {
+      "type":"object",
+      "properties":{
+        "opponents":{
+          "type":"array","minItems":1,"maxItems":8,
+          "items":{
+            "type":"object",
+            "properties":{
+              "opponentId":{"type":"string","minLength":1,"maxLength":80,"pattern":"^\\S(?:.*\\S)?$"},
+              "narrative":{
+                "type":"object",
+                "properties":{
+                  "name":{"type":"string","minLength":1,"maxLength":160,"pattern":"\\S"},
+                  "appearance":{"type":"string","minLength":1,"maxLength":1000,"pattern":"\\S"},
+                  "behavior":{"type":"string","minLength":1,"maxLength":1000,"pattern":"\\S"},
+                  "intent":{"type":"string","minLength":1,"maxLength":1000,"pattern":"\\S"},
+                  "context":{"type":"string","minLength":1,"maxLength":1000,"pattern":"\\S"}
+                },
+                "required":["name","appearance","behavior","intent","context"],"additionalProperties":false
+              },
+              "stats":{
+                "type":"object",
+                "properties":{
+                  "str":{"type":"integer","minimum":0},"dex":{"type":"integer","minimum":0},"wil":{"type":"integer","minimum":0},
+                  "hp":{"type":"integer","minimum":1},"maxHp":{"type":"integer","minimum":1},
+                  "armor":{"type":"integer","minimum":0,"maximum":3}
+                },
+                "required":["str","dex","wil","hp","maxHp","armor"],"additionalProperties":false
+              },
+              "weapon":{
+                "type":"object",
+                "properties":{
+                  "id":{"type":"string","minLength":1,"maxLength":80,"pattern":"\\S"},
+                  "damage":{"type":"string","minLength":1,"maxLength":32,"pattern":"^d(4|6|8|10|12)(\\s*\\+\\s*d(4|6|8|10|12))*$"},
+                  "blast":{"type":"boolean"},"ranged":{"type":"boolean"}
+                },
+                "required":["id","damage","blast","ranged"],"additionalProperties":false
+              }
+            },
+            "required":["opponentId","narrative","stats","weapon"],"additionalProperties":false
+          }
+        },
+        "moraleLeaderId":{"type":"string","minLength":1,"maxLength":80,"pattern":"^\\S(?:.*\\S)?$"}
+      },
+      "required":["opponents"],"additionalProperties":false
+    }
+    """.trimIndent()
+).asJsonObject
 
 internal fun suggestedActionsSchema(): JsonObject = JsonObject().apply {
     addProperty("type", "array")
@@ -247,20 +301,72 @@ internal fun normalizeCombatProposal(response: JsonObject): JsonObject {
     val type = runCatching { ruleRequest.get("type")?.asString }.getOrNull()
     if (!type.equals("BEGIN_COMBAT", ignoreCase = true)) return response
 
-    val stats = ruleRequest.get("encounter")
+    val encounter = ruleRequest.get("encounter")
         ?.takeIf { it.isJsonObject }
         ?.asJsonObject
-        ?.get("stats")
-        ?.takeIf { it.isJsonObject }
-        ?.asJsonObject
-    val hp = runCatching { stats?.get("hp")?.asInt }.getOrNull()
-    val maxHp = runCatching { stats?.get("maxHp")?.asInt }.getOrNull()
-    if (hp == null || maxHp == null || hp < 1 || maxHp < hp) {
+    if (!isCompleteEncounterProposal(encounter)) {
         // Preserve the scene; the client turns this incomplete proposal into a visible validation error.
         ruleRequest.remove("encounter")
     }
     return response
 }
+
+private fun isCompleteEncounterProposal(encounter: JsonObject?): Boolean {
+    if (encounter == null) return false
+    val opponents = encounter.get("opponents")?.takeIf { it.isJsonArray }?.asJsonArray ?: return false
+    if (opponents.size() !in 1..8) return false
+
+    val opponentIds = mutableSetOf<String>()
+    for (element in opponents) {
+        if (!element.isJsonObject) return false
+        val opponent = element.asJsonObject
+        val id = jsonString(opponent.get("opponentId")) ?: return false
+        if (id.isBlank() || id != id.trim() || id.length > 80 || !opponentIds.add(id)) return false
+
+        val narrative = opponent.get("narrative")?.takeIf { it.isJsonObject }?.asJsonObject ?: return false
+        if (!hasBoundedText(narrative.get("name"), 160) ||
+            listOf("appearance", "behavior", "intent", "context").any { !hasBoundedText(narrative.get(it), 1000) }
+        ) return false
+
+        val stats = opponent.get("stats")?.takeIf { it.isJsonObject }?.asJsonObject ?: return false
+        val attributes = listOf("str", "dex", "wil").map { jsonInteger(stats.get(it)) ?: return false }
+        if (attributes.any { it < 0 }) return false
+        val hp = jsonInteger(stats.get("hp")) ?: return false
+        val maxHp = jsonInteger(stats.get("maxHp")) ?: return false
+        val armor = jsonInteger(stats.get("armor")) ?: return false
+        if (hp < 1 || maxHp < hp || armor !in 0..3) return false
+
+        val weapon = opponent.get("weapon")?.takeIf { it.isJsonObject }?.asJsonObject ?: return false
+        val weaponId = jsonString(weapon.get("id")) ?: return false
+        if (!hasBoundedText(weapon.get("id"), 80, requireTrimmed = true) || weaponId != weaponId.trim()) return false
+        val damage = jsonString(weapon.get("damage")) ?: return false
+        if (damage.isBlank() || damage.length > 32 || !SUPPORTED_COMBAT_DAMAGE.matches(damage)) return false
+        if (jsonBoolean(weapon.get("blast")) == null || jsonBoolean(weapon.get("ranged")) == null) return false
+    }
+
+    if (encounter.has("moraleLeaderId")) {
+        val leaderId = jsonString(encounter.get("moraleLeaderId")) ?: return false
+        if (leaderId.isBlank() || leaderId != leaderId.trim() || leaderId !in opponentIds) return false
+    }
+    return true
+}
+
+private fun jsonString(value: com.google.gson.JsonElement?): String? =
+    value?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isString }?.asString
+
+private fun hasBoundedText(value: com.google.gson.JsonElement?, maxLength: Int, requireTrimmed: Boolean = false): Boolean {
+    val text = jsonString(value) ?: return false
+    return text.isNotBlank() && text.length <= maxLength && (!requireTrimmed || text == text.trim())
+}
+
+private fun jsonInteger(value: com.google.gson.JsonElement?): Int? =
+    value?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isNumber }
+        ?.let { runCatching { java.math.BigDecimal(it.asString).intValueExact() }.getOrNull() }
+
+private fun jsonBoolean(value: com.google.gson.JsonElement?): Boolean? =
+    value?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isBoolean }?.asBoolean
+
+private val SUPPORTED_COMBAT_DAMAGE = Regex("""^d(4|6|8|10|12)(\s*\+\s*d(4|6|8|10|12))*$""")
 
 private fun respond(exchange: HttpExchange, status: Int, body: String) {
     val bytes = body.toByteArray(StandardCharsets.UTF_8)

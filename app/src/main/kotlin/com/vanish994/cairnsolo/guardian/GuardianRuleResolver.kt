@@ -6,14 +6,18 @@ import com.vanish994.cairnsolo.game.GameEvent
 import com.vanish994.cairnsolo.game.GameResult
 import com.vanish994.cairnsolo.game.GameState
 import com.vanish994.cairnsolo.game.CombatOpponentNarrative
+import com.vanish994.cairnsolo.game.CombatOpponentState
 import com.vanish994.cairnsolo.rules.Attribute
 
 data class GuardianRuleResolution(
     val state: GameState,
     val resultText: String,
     val gameResult: GameResult,
-    val encounterNarrative: CombatOpponentNarrative? = null
-)
+    val encounterNarratives: List<CombatOpponentNarrative> = emptyList()
+) {
+    /** Temporary singular adapter for MainActivity until Task 3 consumes the full list. */
+    val encounterNarrative: CombatOpponentNarrative? get() = encounterNarratives.firstOrNull()
+}
 
 class GuardianRuleResolver(
     private val actionResolver: GameActionResolver
@@ -70,10 +74,15 @@ class GuardianRuleResolver(
             "BEGIN_COMBAT" -> {
                 val encounter = request.encounter ?: error("BEGIN_COMBAT requires a complete encounter proposal")
                 GameAction.BeginCombat(
-                    opponentId = encounter.opponentId,
-                    opponent = encounter.stats,
-                    opponentWeapon = encounter.weapon,
-                    opponentNarrative = encounter.narrative
+                    opponents = encounter.opponents.map { proposal ->
+                        CombatOpponentState(
+                            id = proposal.opponentId,
+                            narrative = proposal.narrative,
+                            stats = proposal.stats,
+                            weapon = proposal.weapon
+                        )
+                    },
+                    moraleLeaderId = encounter.moraleLeaderId
                 )
             }
             else -> error("Unsupported Guardian rule request: ${request.type}")
@@ -84,12 +93,14 @@ class GuardianRuleResolver(
 
     fun resolve(state: GameState, action: GameAction): GuardianRuleResolution {
         val result = actionResolver.resolve(state, action)
+        val encounterNarratives = state.campaign.combat?.opponents?.map { it.narrative }
+            ?: (action as? GameAction.BeginCombat)?.opponents?.map { it.narrative }
+            ?: emptyList()
         return GuardianRuleResolution(
             state = result.state,
             resultText = summarize(result.events),
             gameResult = result,
-            encounterNarrative = state.campaign.combat?.opponentNarrative
-                ?: (action as? GameAction.BeginCombat)?.opponentNarrative
+            encounterNarratives = encounterNarratives
         )
     }
 
