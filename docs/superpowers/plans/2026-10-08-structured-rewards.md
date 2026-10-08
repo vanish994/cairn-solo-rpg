@@ -20,6 +20,7 @@
 - Toda mutação passa por `GameActionResolver`; crédito de moeda é validado por `MarketplaceRules.creditGold`, itens/capacidade por `RulesEngine.addItem`; ID de recompensa/componentes impede duplicação em retry.
 - Se faltarem slots, manter o item em `pendingRewardItems` e pedir espaço para resgate; nunca remover um item automaticamente.
 - Ao preencher exatamente os 10 slots, não reduzir HP; atingir a capacidade não equivale a dano em Cairn 2e.
+- Primeiro revisar e mesclar o PR de documentação destes planos; depois criar o branch de feature a partir da `main` atualizada para que spec e plano acompanhem o trabalho.
 - Entregar via branch/PR; exigir Android Build verde antes de merge em `main`.
 
 ## Review Focus
@@ -27,7 +28,7 @@
 1. **Estado/idempotência:** `OFFERED` não altera estado; `PAID` aplica uma vez e payload alterado com o mesmo ID não concede novamente.
 2. **Item não permitido:** catálogo desconhecido ou sem `InventoryItem` não aceita stats do Guardian; GP válido ainda pode ser aplicado e o item gera aviso.
 3. **Capacidade:** item sem espaço fica pendente sem descarte; preencher exatamente o 10º slot não reduz HP.
-4. **Payload monetário inválido:** rejeitar valor negativo/acima do limite, ID inválido e denominação não-GP sem converter silenciosamente.
+4. **Payload monetário inválido:** rejeitar valor negativo, overflow do saldo, ID inválido e denominação não-GP sem converter silenciosamente.
 5. **Apresentação:** saldo não aparece no inventário; itens pendentes são visíveis e resgatáveis depois de abrir espaço.
 
 ---
@@ -45,7 +46,7 @@
 - Produzir `GameAction.AddGold(val rewardId: String, val amountGp: Int)`, `GameAction.GrantReward(val rewardId: String, val amountGp: Int, val itemCatalogIds: List<String>)` e `GameAction.ClaimPendingRewardItem(val pendingId: String)`.
 - Produzir `GameEvent.GoldCredited(val rewardId: String, val amountGp: Int, val newBalanceGp: Int)`, `RewardItemAdded(val itemInstanceId: String, val catalogItemId: String)`, `RewardItemPending(val pendingId: String, val catalogItemId: String, val slotsRequired: Int, val freeSlots: Int)`, `RewardItemClaimed(val pendingId: String, val itemInstanceId: String)` e `RewardItemRejected(val catalogItemId: String, val reason: String)`.
 - `MarketplaceRules.creditGold(currentGoldGp: Int, amountGp: Int): Int` exige saldo não negativo e crédito positivo; usa `Math.addExact` e retorna o novo saldo ou rejeita overflow.
-- `GameActionResolver` também valida diretamente o ID (`^[a-z0-9-]{3,80}$`), `amountGp in 0..1_000_000`, até cinco itens e que pelo menos GP ou um item seja concedido; ação inválida falha sem mutar o estado.
+- `GameActionResolver` também valida diretamente o ID (`^[a-z0-9-]{3,80}$`), `amountGp >= 0`, até cinco itens e que pelo menos GP ou um item seja concedido; `MarketplaceRules.creditGold` usa `Math.addExact` para rejeitar overflow, sem teto de produto arbitrário.
 - `GrantReward` aplica ouro e todos os itens em uma única transição de turno. Guardar `"$rewardId:grant"` como chave do pacote e `"$rewardId:gold"`/`"$rewardId:item:$ordinal"` como chaves de componentes; replay ou payload diferente com o mesmo ID não concede novamente. Itens são materializados por `MarketplaceCatalog.find(catalogItemId)?.item`, nunca por stats enviados pelo Guardian.
 - Cada instância usa `itemInstanceId = "reward:$rewardId:$ordinal:$catalogItemId"`, copia stats do catálogo e guarda a tag `reward-catalog:$catalogItemId`; claim reutiliza a mesma instância.
 
@@ -76,12 +77,13 @@ assertEquals(1, fullInventoryResult.state.campaign.pendingRewardItems.size)
 
 **Interfaces:**
 - Produzir `data class GuardianRewardProposal(val id: String, val status: RewardStatus, val amountGp: Int, val itemCatalogIds: List<String>)` e `enum class RewardStatus { OFFERED, PAID }`.
-- `GuardianRuleRequest` ganha `reward: GuardianRewardProposal?`; `type="REWARD"` aceita objeto estrito `{id,status,amountGp,itemCatalogIds}`. ID deve casar `^[a-z0-9-]{3,80}$`, `amountGp` fica em 0–1.000.000 e há no máximo cinco IDs de item. `PAID` requer GP positivo ou ao menos um item; `OFFERED` nunca altera estado.
-- Produzir `data class RewardableItemContext(val catalogId: String, val name: String, val slotCost: Int)`; `GuardianContext` inclui `goldGp`, `freeSlots` e `rewardableItems` somente para entradas de `MarketplaceCatalog` com item.
+- `GuardianRuleRequest` ganha `reward: GuardianRewardProposal?`; `type="REWARD"` aceita objeto estrito `{id,status,amountGp,itemCatalogIds}`. ID deve casar `^[a-z0-9-]{3,80}$`, `amountGp` fica em 0–`Int.MAX_VALUE` e há no máximo cinco IDs de item. `PAID` requer GP positivo ou ao menos um item; `OFFERED` nunca altera estado.
+- Produzir `data class RewardableItemContext(val catalogId: String, val name: String, val slotCost: Int)`; `GuardianCharacterContext.goldGp` serializa como `character.goldGp` (substitui `character.gold`, sem segundo saldo); `GuardianContext` também inclui `freeSlots` e `rewardableItems` somente para entradas de `MarketplaceCatalog` com item.
 - `GuardianRuleResolver.validationError(state, request)` valida ID/status/quantia/lista; `resolve(state, request)` encaminha `PAID` como uma única `GameAction.GrantReward`, sem alterar estado diretamente.
 - `GuardianRuleResolver.resolve(state, request): GuardianRuleResolution` resolve `OFFERED` sem mutação e despacha `PAID` por uma única chamada a `GameActionResolver.resolve(state, GameAction.GrantReward(...))`, para a recompensa consumir um único turno; IDs desconhecidos geram `RewardItemRejected` sem impedir crédito de GP válido.
+- Se um objeto `REWARD` não puder ser convertido em `GuardianRewardProposal` (status, tipo numérico ou faixa inválidos), o parser mantém `type="REWARD"`, narração e cena, deixa `reward=null` e permite que `validationError` exiba rejeição sem mutação.
 
-- [ ] Escrever testes para `PAID`, `OFFERED`, valor inválido/fora do limite, ID inválido, catálogo desconhecido e unidade não-GP; afirmar que saldo, slots livres e IDs/nome/custo de catálogo estão no contexto.
+- [ ] Escrever `GuardianClientTest.invalidRewardProposalPreservesNarrationForVisibleRejection`; escrever testes para `PAID`, `OFFERED`, valor inválido/fora do limite, ID inválido, catálogo desconhecido e unidade não-GP; afirmar que saldo, slots livres e IDs/nome/custo de catálogo estão no contexto.
 - [ ] Escrever `GuardianRuleResolverTest.offeredRewardDoesNotChangeGameState` e `paidRewardDispatchesGoldAndItemsThroughResolver`.
 - [ ] Escrever `GuardianRuleResolverTest.offeredRewardCanBecomePaidWithSameId`; `OFFERED` não reserva o ID, e a confirmação posterior aplica uma vez.
 
@@ -91,11 +93,11 @@ assertEquals(12, paidResult.state.campaign.profile.gold)
 assertEquals(paidResult.state, paidReplayWithSameId.state)
 ```
 
-- [ ] Escrever `ServerTest` para `REWARD` aceitar GP/IDs válidos e rejeitar campos extras, status inválido, ID malformado, valores negativos/acima do limite e lista de itens acima de cinco; permitir IDs de catálogo repetidos para conceder instâncias distintas.
+- [ ] Escrever `ServerTest` para `REWARD` aceitar GP/IDs válidos e rejeitar campos extras, status inválido, ID malformado, valores negativos/acima de `Int.MAX_VALUE` e lista de itens acima de cinco; permitir IDs de catálogo repetidos para conceder instâncias distintas.
 - [ ] Rodar `gh workflow run android.yml --ref <feature-branch>` com os testes novos; confirmar falha esperada antes da implementação.
 - [ ] Atualizar prompt/schema: emitir `REWARD` com `PAID` somente quando a cena narra transferência já concluída; `OFFERED` para promessa/negociação; usar GP (sem câmbio de cobre), selecionar apenas `rewardableItems` e nunca inventar stats. O schema permite até cinco IDs de item; IDs repetidos representam cópias e recebem instâncias únicas por ordinal.
-- [ ] Implementar parsing e validação no `GuardianRuleResolver`; `PAID` usa uma única `GameAction.GrantReward`, item sem espaço vira pending via `GameActionResolver`, oferta não altera estado, ID fora do catálogo não concede item.
-- [ ] Nos dois caminhos de resposta da `MainActivity` (intenção comum e continuação pós-regra), auto-resolver `REWARD` sem botão de rolagem/confirmação; todos os efeitos passam por `GameActionResolver`.
+- [ ] Implementar parsing tolerante de `REWARD` no `GuardianClient`: conservar narração/cena e `type="REWARD"`, com `reward=null`, se qualquer campo estruturado for inválido; implementar validação no `GuardianRuleResolver` para apresentar erro sem aplicar nada. `PAID` usa uma única `GameAction.GrantReward`, item sem espaço vira pending via `GameActionResolver`, oferta não altera estado, ID fora do catálogo não concede item.
+- [ ] Nos dois caminhos de resposta da `MainActivity` (intenção comum e continuação pós-regra), auto-resolver `REWARD` sem botão de rolagem/confirmação; manter a narração da resposta como texto final e não chamar o Guardian novamente para narrar esse mesmo crédito, evitando loop automático. Todos os efeitos passam por `GameActionResolver`.
 - [ ] Em proposta inconsistente, preservar a narração e mostrar aviso de recompensa não aplicada em vez de ignorar silenciosamente.
 - [ ] Rodar `gh workflow run android.yml --ref <feature-branch>` após a implementação; confirmar unit tests, Guardian server tests, integração HTTP e APK release verdes.
 - [ ] Commit atômico: `feat: resolve confirmed Guardian reward requests`.
@@ -128,7 +130,7 @@ assertEquals("Você recebeu 12 po. Saldo: 12 po.", FeedbackMapper.map(GameEvent.
 
 ### Task 4: Integração
 
-**Branch:** `feature/structured-rewards` (criar a partir de `main`; um PR focado).
+**Branch:** `feature/structured-rewards` (criar a partir da `main` após mesclar o PR de documentação; um PR focado).
 
 - [ ] Abrir PR para `main`; exigir Android Build verde (unit tests, Guardian server tests, integração HTTP e APK release) no HEAD atual.
 - [ ] Aceitação manual: “O taverneiro entrega 12 po” com `PAID` aumenta saldo exatamente em 12 e persiste; `OFFERED` não altera estado; item válido de catálogo vai para o inventário, item sem espaço fica pendente sem apagar outro item; nenhuma moeda aparece como item.

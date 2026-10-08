@@ -17,6 +17,7 @@
 - Manter ações livres: sugestões são opcionais e o campo de texto continua disponível.
 - No máximo três sugestões; tocar numa sugestão apenas preenche o campo, não envia nem executa a ação.
 - Preservar o fluxo de resposta comum e o fluxo de narração após resolução de regra.
+- Primeiro revisar e mesclar o PR de documentação destes planos; depois criar o branch de feature a partir da `main` atualizada para que spec e plano acompanhem o trabalho.
 - Entregar via branch/PR; exigir Android Build verde antes de merge em `main`.
 
 ## Review Focus
@@ -39,15 +40,15 @@
 **Interfaces:**
 - Produce `internal fun suggestedActionsSchema(): JsonObject` com `type=array`, `minItems=1`, `maxItems=3`, e strings `minLength=1`, `maxLength=160`.
 - Produce `internal fun guardianSystemPrompt(): String` para compor a instrução usada pelo request e validar o requisito de grounding.
-- `GuardianResponse.suggestedActions` continua `List<String>`; o parser descarta entradas em branco e limita o máximo a três sem falhar o restante da resposta.
+- `GuardianResponse.suggestedActions` continua `List<String>`; o parser ignora entradas não string e em branco, limita o máximo a três e preserva narração/cena mesmo se a lista estiver malformada.
 
-- [ ] Escrever `ServerTest.suggestedActionsSchemaRequiresOneToThreeBoundedStrings`, `ServerTest.promptGroundsActionsInSceneCanonAndAvailableActions`, `GuardianClientTest.parseSuggestedActionsFiltersBlankAndExcessEntries` e `GuardianClientTest.emptySuggestedActionsDoNotDropNarration`; afirmar limite, grounding e preservação da narração.
+- [ ] Escrever `ServerTest.suggestedActionsSchemaRequiresOneToThreeBoundedStrings`, `ServerTest.promptGroundsActionsInSceneCanonAndAvailableActions`, `GuardianClientTest.parseSuggestedActionsFiltersBlankExcessAndNonStringEntries`, `GuardianClientTest.emptySuggestedActionsDoNotDropNarration` e `GuardianClientTest.malformedSuggestionsDoNotDropNarration`; afirmar limite, grounding e preservação da narração.
 
 ```kotlin
 assertEquals(1, suggestedActionsSchema().get("minItems").asInt)
 assertEquals(3, suggestedActionsSchema().get("maxItems").asInt)
 assertEquals(160, suggestedActionsSchema().get("items").asJsonObject.get("maxLength").asInt)
-assertEquals("A narração permanece.", parsed.narration) // inclusive com lista vazia/entrada inválida
+assertEquals("A narração permanece.", parsed.narration) // inclusive com lista vazia/entrada não string
 assertTrue(parsed.suggestedActions.size <= 3 && parsed.suggestedActions.all { it.isNotBlank() && it.length <= 160 })
 ```
 
@@ -84,7 +85,7 @@ assertFalse(guardianIntentWasSent)        // enviar continua sendo ação explí
 - Verificar `.github/workflows/android.yml`.
 - Atualizar `docs/STATUS.md` e `docs/ARCHITECTURE-MAP.md` somente após CI e verificação manual.
 
-**Branch:** `feature/actionable-guardian-guidance` (criar a partir de `main`; um PR focado).
+**Branch:** `feature/actionable-guardian-guidance` (criar a partir da `main` após mesclar o PR de documentação; um PR focado).
 
 - [ ] Abrir PR para `main` com um exemplo de resposta que indique objetivo imediato e ações sugeridas fundamentadas.
 - [ ] Exigir Android Build verde, incluindo unit tests, testes do Guardian server, integração HTTP e APK release.

@@ -14,14 +14,15 @@
 
 - Seguir Cairn 2e, sem inventar ataques cumulativos: ações do lado ocorrem simultaneamente; ataques acertam automaticamente; vários atacantes contra o mesmo alvo rolam seus dados e aplicam somente o maior resultado.
 - Na primeira rodada, o jogador faz DEX save; o lado adversário age em seguida. Ações declaradas pelo lado resolvem-se simultaneamente.
-- Inimigos fazem WIL saves de moral na primeira baixa e novamente ao perder metade do grupo; cada limiar é processado uma vez, em ordem FIRST_CASUALTY e depois HALF_GROUP, parando se todos já fugiram.
+- Inimigos fazem WIL saves de moral na primeira baixa e novamente quando `2 * defeatedCount >= initialCount`; cada limiar é processado uma vez, em ordem FIRST_CASUALTY e depois HALF_GROUP, parando se todos já fugiram. Se ambos coincidirem, executar ambos como testes distintos no mesmo evento (leitura literal dos dois gatilhos; em um grupo de dois, o sobrevivente pode rolar duas vezes).
 - A moral de inimigos usa save d20 de WIL conforme Cairn 2e; não reutilizar `MoraleRules.check` de `WardenRules.kt`, que hoje é 2d6 para hirelings.
 - NPC/monstro a exatamente 0 HP não ganha Scar e não é automaticamente derrotado. Dano excedente abaixo de 0 reduz STR e exige STR save; falha derrota o NPC, sucesso o mantém no combate. A resolução de dano precisa distinguir PC e NPC sem mudar saves legados de personagem.
-- Um inimigo solitário faz WIL save ao chegar a 0 HP para evitar fugir. Grupo faz testes ao sofrer a primeira baixa e ao perder metade do tamanho inicial; se ambos ocorrerem juntos, resolvê-los na ordem acima, sem repetir um gatilho já processado.
+- Um inimigo solitário faz WIL save ao chegar a 0 HP para evitar fugir. Grupo faz testes ao sofrer a primeira baixa e quando `2 * defeatedCount >= initialCount` (primeiro inteiro que cruza metade do tamanho inicial). Se ambos ocorrerem juntos, resolvê-los como testes distintos na ordem acima, sem repetir um gatilho já processado.
 - Cada sobrevivente faz seu próprio WIL save; quando `moraleLeaderId` está ativo, usar a WIL do líder em lugar da própria. Se o líder já estiver derrotado/fugido, voltar aos saves individuais. Registrar fuga/derrota por combatente.
 - Preservar migração dos saves de combate singular; validar IDs únicos, HP, Armor 0–3 e dados de arma suportados.
 - BEGIN_COMBAT continua sendo uma proposta: o jogador confirma ou recusa o grupo inteiro antes de qualquer `CombatState` ser criado.
 - Não declarar o Gate de combate fechado: fuga do jogador, bestiário e outras lacunas seguem o roadmap.
+- Primeiro revisar e mesclar o PR de documentação destes planos; depois criar o branch de feature a partir da `main` atualizada para que spec e plano acompanhem o trabalho.
 - Entregar via branch/PR; exigir Android Build verde antes de merge em `main`.
 
 ## Review Focus
@@ -58,7 +59,7 @@
 ```kotlin
 assertEquals(setOf("cultist-a", "cultist-b"), proposal.opponents.map { it.opponentId }.toSet())
 assertNull(unacceptedResult.state.campaign.combat) // nenhum combate antes da confirmação
-assertFailsWith<IllegalArgumentException> { GuardianEncounterProposal(listOf(firstOpponent, firstOpponent.copy(opponentId = "cultist-a"))) }
+assertFailsWith<IllegalArgumentException> { GuardianEncounterProposal(listOf(firstOpponent, firstOpponent.copy(opponentId = firstOpponent.opponentId))) }
 ```
 
 - [ ] Rodar a Android Build por `workflow_dispatch` na branch de feature para confirmar a falha dos testes antes da mudança de contrato; o ambiente local não tem Android SDK/Gradle.
@@ -84,7 +85,7 @@ assertFailsWith<IllegalArgumentException> { GuardianEncounterProposal(listOf(fir
 - Atualizar `GameEvent.CombatStarted(opponentIds: List<String>, round: Int, playerCanAct: Boolean)` e `GameEvent.CombatEnded(opponentIds: List<String>, reason: CombatEndReason)` para distinguir inimigos derrotados, fuga do grupo e derrota do jogador.
 
 - [ ] Escrever `CombatRulesTest.groupAttackRollsEveryEnemyAndAppliesOnlyHighestDamage` e testes de Armor; escrever `RulesEngineTest.opponentAtZeroHpGetsNoScar` e testes de dano excedente/STR save para oponente.
-- [ ] Escrever `GameActionResolverTest.multiOpponentCombatStillUsesDexSaveOnFirstRound`, `defeatedOpponentBeforeEnemyPhaseDoesNotAct`, `twoEnemyGroupChecksBothMoraleThresholdsInOrder`, `leaderDefeatedUsesSurvivorWil` e testes para alvo escolhido, WIL de inimigo solitário a 0 HP e fim somente após todos derrotados/fugitivos.
+- [ ] Escrever `GameActionResolverTest.multiOpponentCombatStillUsesDexSaveOnFirstRound`, `defeatedOpponentBeforeEnemyPhaseDoesNotAct`, `twoEnemyGroupChecksBothMoraleThresholdsInOrder`, `threeOpponentGroupChecksHalfAtTwoDefeats`, `leaderDefeatedUsesSurvivorWil` e testes para alvo escolhido, WIL de inimigo solitário a 0 HP e fim somente após todos derrotados/fugitivos.
 
 ```kotlin
 assertEquals(listOf(4, 5), groupAttack.damageRolls.values.sorted())
@@ -132,7 +133,7 @@ assertNotNull(campaignLoadedWithOneCorruptOpponentWeapon) // restante da campanh
 
 **Files:** `docs/STATUS.md`, `docs/ROADMAP.md`, `docs/ARCHITECTURE-MAP.md`, `docs/CAIRN-2E-RULE-MATRIX.md` — atualizar somente após validação.
 
-**Branch:** `feature/multi-enemy-combat` (criar a partir de `main`; um PR focado).
+**Branch:** `feature/multi-enemy-combat` (criar a partir da `main` após mesclar o PR de documentação; um PR focado).
 
 - [ ] Abrir PR para `main`; exigir Android Build verde (unit tests, Guardian server tests, integração HTTP e APK release) no HEAD atual.
 - [ ] Aceitação manual: proposta de dois cultistas mostra dois perfis; o jogador escolhe alvo; ataque inimigo aplica regra de grupo; moral/fuga seguem Cairn 2e; save/reload mantém ambos.
