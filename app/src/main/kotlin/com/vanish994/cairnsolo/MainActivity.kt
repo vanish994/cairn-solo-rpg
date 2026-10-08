@@ -534,193 +534,235 @@ private fun ExplorationScreen(
             .padding(horizontal = 10.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        CairnHeader(
-            "CAIRN",
-            "Exploração",
-            "T" + c.turn + " · " + sceneTypeLabel(c.sceneType) + " · " + guardianFlowLabel(guardianFlow)
-        )
-
-        SectionCard(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(88.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        "CONTEXTO",
-                        color = CairnAccent,
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        c.sceneTitle.ifBlank { "A cena se revela diante de você." },
-                        color = CairnText,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        c.sceneDescription,
-                        color = CairnMuted,
-                        style = MaterialTheme.typography.bodySmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    "HP " + r.hp + "/" + r.maxHp + " · ARM " + r.armor,
-                    color = CairnMuted,
-                    style = MaterialTheme.typography.labelSmall,
-                    maxLines = 1
-                )
-            }
+        // Visual Foundation v1: 6% header / 15% scene / 59% Guardian / 20% actions.
+        Box(Modifier.fillMaxWidth().weight(6f)) {
+            CairnHeader(
+                "CAIRN",
+                c.sceneTitle.ifBlank { "Exploração" },
+                "T" + c.turn + " · " + sceneTypeLabel(c.sceneType)
+            )
         }
 
+        // The scene is intentionally compact: visual context, not the main narrative surface.
         Box(
             Modifier
-                .weight(1f)
                 .fillMaxWidth()
+                .weight(15f)
+                .clip(RoundedCornerShape(8.dp))
+                .background(CairnSurface)
+                .border(1.dp, CairnBorder, RoundedCornerShape(8.dp))
+                .padding(8.dp)
         ) {
-            GuardianCard(
-                message = c.guardianMessage.ifBlank { "O Guardião aguarda sua decisão." },
-                history = c.guardianHistory
-            )
-        }
-
-        pendingRule?.let { request ->
-            if (request.type.equals("BEGIN_COMBAT", ignoreCase = true)) {
-                request.encounter?.let { proposal ->
-                    EncounterProposalCard(
-                        proposal = proposal,
-                        enabled = !guardianLoading && c.combat == null,
-                        onAccept = onResolveRule,
-                        onReject = onRejectEncounter
-                    )
-                } ?: SectionCard {
-                    Text("PROPOSTA INVÁLIDA", color = CairnDanger, fontWeight = FontWeight.Bold)
-                    Text("O encontro não trouxe um perfil completo. Nenhum combate foi iniciado.", color = CairnMuted)
-                    TextButton(onClick = onRejectEncounter) { Text("Descartar") }
-                }
-            } else {
-                RollRequestCard(
-                    request,
-                    enabled = !guardianLoading,
-                    onRoll = onResolveRule,
-                    onDismiss = onDismissRequest
+            Column(
+                Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    "CENA",
+                    color = CairnAccent,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    c.sceneTitle.ifBlank { "A cena se revela diante de você." },
+                    color = CairnText,
+                    style = MaterialTheme.typography.titleSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    c.sceneDescription.ifBlank { "O ambiente aguarda sua decisão." },
+                    color = CairnMuted,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
 
-        c.combat?.let { combat ->
-            val availableWeapons = r.inventory.mapNotNull { item ->
-                item.damage?.takeIf { isSupportedWeaponDamageExpression(it) }?.let { damage ->
-                    WeaponProfile(
-                        id = item.id,
-                        damage = damage,
-                        blast = item.tags.any { it.equals("BLAST", ignoreCase = true) },
-                        ranged = item.tags.any { it.equals("RANGED", ignoreCase = true) }
-                    )
-                }
-            }.ifEmpty { listOf(WeaponProfile("unarmed", "d4")) }
-            CombatCard(
-                combat = combat,
-                weapons = availableWeapons,
-                enabled = !guardianLoading && pendingRule == null && lastResolution == null,
-                onAttack = onCombatAttack
-            )
-        }
-
-        lastResolution?.let { resolution ->
-            RollResultCard(resolution, enabled = !guardianLoading, onContinue = onContinueNarrative)
-        }
-
-        Text(
-            "SUA DECISÃO",
-            color = CairnAccent,
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Bold
-        )
-
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            modifier = Modifier.fillMaxWidth()
+        // The Guardian owns most of the screen. Long narrative scrolls inside this region.
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .weight(59f)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            OutlinedTextField(
-                value = intent,
-                onValueChange = { intent = it },
-                modifier = Modifier
-                    .weight(1f)
-                    .heightIn(min = 56.dp, max = 96.dp),
-                placeholder = {
+            SectionCard(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Text(
-                        "Descreva a intenção do aventureiro…",
-                        style = MaterialTheme.typography.bodySmall
+                        "GUARDIÃO",
+                        color = CairnAccent,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold
                     )
-                },
-                maxLines = 3,
-                enabled = !guardianLoading && pendingRule == null && lastResolution == null,
-                shape = RoundedCornerShape(8.dp)
-            )
-            IconButton(
-                onClick = {
-                    onGuardianIntent(intent.trim())
-                    intent = ""
-                },
-                enabled = intent.isNotBlank() && !guardianLoading && pendingRule == null && lastResolution == null,
-                modifier = Modifier
-                    .size(48.dp)
-                    .background(CairnAccent, RoundedCornerShape(12.dp))
-            ) {
-                if (guardianLoading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(18.dp),
-                        color = CairnBackground,
-                        strokeWidth = 2.dp
+                    Spacer(Modifier.weight(1f))
+                    Text(
+                        guardianFlowLabel(guardianFlow),
+                        color = CairnMuted,
+                        style = MaterialTheme.typography.labelSmall
                     )
-                } else {
-                    Text("➤", color = CairnBackground, fontWeight = FontWeight.Bold)
                 }
+                Spacer(Modifier.height(5.dp))
+                GuardianCard(
+                    message = c.guardianMessage.ifBlank { "O Guardião aguarda sua decisão." },
+                    history = c.guardianHistory
+                )
+            }
+
+            pendingRule?.let { request ->
+                if (request.type.equals("BEGIN_COMBAT", ignoreCase = true)) {
+                    request.encounter?.let { proposal ->
+                        EncounterProposalCard(
+                            proposal = proposal,
+                            enabled = !guardianLoading && c.combat == null,
+                            onAccept = onResolveRule,
+                            onReject = onRejectEncounter
+                        )
+                    }
+                } else {
+                    RollRequestCard(
+                        request,
+                        enabled = !guardianLoading,
+                        onRoll = onResolveRule,
+                        onDismiss = onDismissRequest
+                    )
+                }
+            }
+
+            c.combat?.let { combat ->
+                val availableWeapons = r.inventory.mapNotNull { item ->
+                    item.damage?.takeIf { isSupportedWeaponDamageExpression(it) }?.let { damage ->
+                        WeaponProfile(
+                            id = item.id,
+                            damage = damage,
+                            blast = item.tags.any { it.equals("BLAST", ignoreCase = true) },
+                            ranged = item.tags.any { it.equals("RANGED", ignoreCase = true) }
+                        )
+                    }
+                }.ifEmpty { listOf(WeaponProfile("unarmed", "d4")) }
+
+                CombatCard(
+                    combat = combat,
+                    weapons = availableWeapons,
+                    enabled = !guardianLoading && pendingRule == null && lastResolution == null,
+                    onAttack = onCombatAttack
+                )
+            }
+
+            lastResolution?.let { resolution ->
+                RollResultCard(
+                    resolution,
+                    enabled = !guardianLoading,
+                    onContinue = onContinueNarrative
+                )
+            }
+
+            Text(
+                "SUA INTENÇÃO",
+                color = CairnAccent,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold
+            )
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                OutlinedTextField(
+                    value = intent,
+                    onValueChange = { intent = it },
+                    modifier = Modifier
+                        .weight(1f)
+                        .heightIn(min = 48.dp, max = 80.dp),
+                    placeholder = {
+                        Text(
+                            "Descreva sua intenção…",
+                            style = MaterialTheme.typography.bodySmall,
+                            maxLines = 1
+                        )
+                    },
+                    maxLines = 3,
+                    enabled = !guardianLoading && pendingRule == null && lastResolution == null,
+                    shape = RoundedCornerShape(8.dp)
+                )
+                Button(
+                    onClick = {
+                        onGuardianIntent(intent.trim())
+                        intent = ""
+                    },
+                    enabled = intent.isNotBlank() && !guardianLoading &&
+                        pendingRule == null && lastResolution == null,
+                    modifier = Modifier.size(48.dp),
+                    contentPadding = PaddingValues(0.dp),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text("➤", fontWeight = FontWeight.Bold)
+                }
+            }
+
+            guardianError?.let {
+                Text(
+                    it,
+                    color = CairnDanger,
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
         }
 
-        guardianError?.let {
-            Text(
-                it,
-                color = CairnDanger,
-                style = MaterialTheme.typography.labelSmall,
-                maxLines = 2
-            )
-        }
-
-        ActionButton(
-            "Ficha",
-            Modifier.fillMaxWidth(),
-            outlined = true,
-            onClick = onBack
-        )
-
-        if (c.combat == null) {
-            Text(
-                if (r.deprived) {
-                    "Sem recuperação: o aventureiro está privado de necessidades básicas."
-                } else {
-                    "Descanso seguro recupera todo o HP e remove toda a Fadiga. Não é um avanço narrativo."
-                },
-                color = CairnMuted,
-                style = MaterialTheme.typography.labelSmall,
-                maxLines = 2
-            )
-            ActionButton(
-                "Descanso seguro",
-                Modifier.fillMaxWidth(),
-                outlined = true,
-                enabled = !r.deprived && (r.hp < r.maxHp || r.fatigue > 0)
+        // Compact decision area: four primary actions, no duplicate explanatory text.
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .weight(20f),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Row(
+                Modifier.fillMaxWidth().weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                if (pendingRule == null && lastResolution == null) onAction(GameAction.ExploreRest)
+                ActionButton(
+                    "Continuar",
+                    Modifier.weight(1f),
+                    enabled = !guardianLoading && pendingRule == null && lastResolution == null
+                ) {
+                    if (lastResolution != null) onContinueNarrative()
+                    else onAction(GameAction.ExploreContinue)
+                }
+                ActionButton(
+                    "Investigar",
+                    Modifier.weight(1f),
+                    enabled = !guardianLoading && pendingRule == null && lastResolution == null
+                ) {
+                    onAction(GameAction.ExploreInvestigate)
+                }
+            }
+            Row(
+                Modifier.fillMaxWidth().weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                ActionButton(
+                    "Descansar",
+                    Modifier.weight(1f),
+                    outlined = true,
+                    enabled = !guardianLoading && pendingRule == null && lastResolution == null
+                ) {
+                    onAction(GameAction.ExploreRest)
+                }
+                ActionButton(
+                    "Ficha",
+                    Modifier.weight(1f),
+                    outlined = true,
+                    onClick = onBack
+                )
             }
         }
     }
