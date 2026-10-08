@@ -54,8 +54,8 @@ sealed interface GameAction {
     data class CheckHirelingMorale(val hirelingId: String, val failureOutcome: MoraleOutcome = MoraleOutcome.RETREAT) : GameAction
     data class RecordGrowthEvidence(val evidence: GrowthEvidence) : GameAction
     data class RecordGrowthEvidenceProposal(val proposal: GrowthEvidenceProposal) : GameAction
-    data class ApplyGrowthChangeProposal(val proposal: GrowthChangeProposal) : GameAction
-    data class ApplyGrowth(val proposal: GrowthProposal) : GameAction
+    data class RecordGrowthChangeProposal(val proposal: GrowthChangeProposal) : GameAction
+    data class DecideGrowthChangeProposal(val proposalId: String, val accepted: Boolean) : GameAction
     data class ApplyCanonProposals(val proposals: List<CanonProposal>) : GameAction
     data class AdvanceFaction(val factionId: String, val amount: Int = 1, val reason: String) : GameAction
 }
@@ -89,6 +89,8 @@ sealed interface GameEvent {
     data class HirelingResolved(val hirelingId: String, val outcome: String, val goldRemaining: Int? = null) : GameEvent
     data class GrowthEvidenceRecorded(val evidenceId: String) : GameEvent
     data class GrowthApplied(val proposalId: String) : GameEvent
+    data class GrowthProposalPending(val proposalId: String) : GameEvent
+    data class GrowthProposalDecided(val proposalId: String, val accepted: Boolean) : GameEvent
     data class CanonUpdated(val count: Int) : GameEvent
     data class FactionProgressChanged(val factionId: String, val previous: Int, val current: Int, val goal: String) : GameEvent
 }
@@ -214,8 +216,8 @@ class GameActionResolver(
             val next = growth.recordProposal(state, action.proposal)
             GameResult(next, listOf(GameEvent.GrowthEvidenceRecorded(action.proposal.id)))
         }
-        is GameAction.ApplyGrowth -> applyGrowth(state, action)
-        is GameAction.ApplyGrowthChangeProposal -> applyGrowthChangeProposal(state, action)
+        is GameAction.RecordGrowthChangeProposal -> recordGrowthChangeProposal(state, action)
+        is GameAction.DecideGrowthChangeProposal -> decideGrowthChangeProposal(state, action)
         is GameAction.ApplyCanonProposals -> {
             val next = CanonResolver().apply(state, action.proposals)
             GameResult(next, if (action.proposals.isEmpty()) emptyList() else listOf(GameEvent.CanonUpdated(action.proposals.size)))
@@ -261,32 +263,51 @@ class GameActionResolver(
         return GameResult(next, listOf(GameEvent.FactionProgressChanged(faction.id, previous, current, faction.goals[current.coerceAtMost(faction.goals.lastIndex)])))
     }
 
-    private fun applyGrowth(state: GameState, action: GameAction.ApplyGrowth): GameResult {
-        val result = growth.apply(state, action.proposal)
-        val next = state.copy(
-            campaign = state.campaign.copy(
-                rules = result.character,
-                growth = result.growth,
-                history = (state.campaign.history + result.history).takeLast(500),
-                turn = state.campaign.turn + 1
-            ),
-            updatedAtEpochMs = System.currentTimeMillis()
-        )
-        return GameResult(next, listOf(GameEvent.GrowthApplied(action.proposal.id)))
+    private fun recordGrowthChangeProposal(state: GameState, action: GameAction.RecordGrowthChangeProposal): GameResult {
+        val next = growth.stageProposal(state, action.proposal)
+        return GameResult(next, listOf(GameEvent.GrowthProposalPending(action.proposal.id)))
     }
 
-    private fun applyGrowthChangeProposal(state: GameState, action: GameAction.ApplyGrowthChangeProposal): GameResult {
-        val result = growth.applyProposal(state, action.proposal)
+    private fun decideGrowthChangeProposal(state: GameState, action: GameAction.DecideGrowthChangeProposal): GameResult {
+        val current = state.campaign.growth
+        val proposal = current.pendingChangeProposals.firstOrNull { it.id == action.proposalId }
+            ?: error("No pending Growth proposal: ${action.proposalId}")
+        if (!action.accepted) {
+            val history = CampaignHistoryEntry(
+                id = "growth-declined-${proposal.id}",
+                turn = state.campaign.turn,
+                type = HistoryEventType.GROWTH,
+                summary = "Proposta de Growth recusada: ${proposal.id}.",
+                source = HistorySource.PLAYER,
+                relatedEntityIds = proposal.evidenceIds
+            )
+            val next = state.copy(
+                campaign = state.campaign.copy(
+                    growth = current.copy(
+                        pendingChangeProposals = current.pendingChangeProposals.filterNot { it.id == proposal.id },
+                        declinedProposalIds = (current.declinedProposalIds + proposal.id).takeLast(500)
+                    ),
+                    history = (state.campaign.history + history).takeLast(500),
+                    turn = state.campaign.turn + 1
+                ),
+                updatedAtEpochMs = System.currentTimeMillis()
+            )
+            return GameResult(next, listOf(GameEvent.GrowthProposalDecided(proposal.id, accepted = false)))
+        }
+
+        val result = growth.applyProposal(state, proposal)
         val next = state.copy(
             campaign = state.campaign.copy(
                 rules = result.character,
-                growth = result.growth,
+                growth = result.growth.copy(
+                    pendingChangeProposals = current.pendingChangeProposals.filterNot { it.id == proposal.id }
+                ),
                 history = (state.campaign.history + result.history).takeLast(500),
                 turn = state.campaign.turn + 1
             ),
             updatedAtEpochMs = System.currentTimeMillis()
         )
-        return GameResult(next, listOf(GameEvent.GrowthApplied(action.proposal.id)))
+        return GameResult(next, listOf(GameEvent.GrowthApplied(proposal.id), GameEvent.GrowthProposalDecided(proposal.id, accepted = true)))
     }
 
     private fun hireHireling(state: GameState, action: GameAction.HireHireling): GameResult {

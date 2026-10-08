@@ -105,7 +105,9 @@ data class GrowthAbility(
 data class GrowthState(
     val evidence: List<GrowthEvidence> = emptyList(),
     val appliedProposalIds: List<String> = emptyList(),
-    val abilities: List<GrowthAbility> = emptyList()
+    val abilities: List<GrowthAbility> = emptyList(),
+    val pendingChangeProposals: List<GrowthChangeProposal> = emptyList(),
+    val declinedProposalIds: List<String> = emptyList()
 )
 
 data class GrowthResolution(
@@ -139,12 +141,33 @@ class GrowthResolver {
         return state.copy(campaign = state.campaign.copy(growth = nextGrowth, history = (state.campaign.history + history).takeLast(500), turn = state.campaign.turn + 1))
     }
 
+    fun stageProposal(state: GameState, proposal: GrowthChangeProposal): GameState {
+        val domainProposal = proposal.toDomain()
+        validateProposal(state, domainProposal)
+        val growth = state.campaign.growth
+        require(growth.pendingChangeProposals.none { it.id == proposal.id }) { "Growth proposal is already pending" }
+        require(proposal.id !in growth.declinedProposalIds) { "Growth proposal was already declined" }
+        val history = CampaignHistoryEntry(
+            id = "growth-proposal-${proposal.id}",
+            turn = state.campaign.turn,
+            type = HistoryEventType.GROWTH,
+            summary = "Proposta de Growth aguardando decisão: ${proposal.id}.",
+            source = HistorySource.GUARDIAN,
+            relatedEntityIds = proposal.evidenceIds
+        )
+        return state.copy(
+            campaign = state.campaign.copy(
+                growth = growth.copy(pendingChangeProposals = (growth.pendingChangeProposals + proposal).takeLast(100)),
+                history = (state.campaign.history + history).takeLast(500)
+            ),
+            updatedAtEpochMs = System.currentTimeMillis()
+        )
+    }
+
     fun applyProposal(state: GameState, proposal: GrowthChangeProposal): GrowthResolution = apply(state, proposal.toDomain())
 
     fun apply(state: GameState, proposal: GrowthProposal): GrowthResolution {
-        require(proposal.id !in state.campaign.growth.appliedProposalIds) { "Growth proposal already applied" }
-        val evidence = proposal.evidenceIds.map { id -> state.campaign.growth.evidence.firstOrNull { it.id == id } ?: error("Unknown Growth evidence: $id") }
-        require(evidence.size >= 1 && evidence.sumOf { it.triggerCount } >= 2) { "Growth requires evidence of at least two trigger conditions" }
+        validateProposal(state, proposal)
         val character = when (val change = proposal.change) {
             is GrowthChange.RaiseMaxAttribute -> raiseMaxAttribute(state.campaign.rules, change.attribute, change.amount)
             is GrowthChange.KeepHigherAttribute -> keepHigher(state.campaign.rules, change.attribute, change.candidate)
@@ -162,6 +185,16 @@ class GrowthResolver {
             source = HistorySource.RULES_ENGINE, relatedEntityIds = proposal.evidenceIds
         )
         return GrowthResolution(character, nextGrowth, history)
+    }
+
+    private fun validateProposal(state: GameState, proposal: GrowthProposal) {
+        val growth = state.campaign.growth
+        require(proposal.id !in growth.appliedProposalIds) { "Growth proposal already applied" }
+        val evidence = proposal.evidenceIds.map { id -> growth.evidence.firstOrNull { it.id == id } ?: error("Unknown Growth evidence: $id") }
+        require(evidence.isNotEmpty() && evidence.sumOf { it.triggerCount } >= 2) { "Growth requires evidence of at least two trigger conditions" }
+        if (proposal.change is GrowthChange.GainAbility) {
+            require(growth.abilities.none { it.id == proposal.change.id }) { "Growth ability id already exists" }
+        }
     }
 
     private fun raiseMaxAttribute(state: CharacterState, attribute: Attribute, amount: Int): CharacterState = when (attribute) {
