@@ -15,6 +15,7 @@ import com.vanish994.cairnsolo.rules.Terrain
 import com.vanish994.cairnsolo.rules.Weather
 import com.vanish994.cairnsolo.rules.Watch
 import com.vanish994.cairnsolo.rules.HirelingState
+import java.util.Base64
 
 object GameStatePersistenceCodec {
     private const val SEPARATOR = "\u001F"
@@ -54,6 +55,17 @@ object GameStatePersistenceCodec {
             put("growthProposalCount", c.growth.appliedProposalIds.size.toString()); c.growth.appliedProposalIds.forEachIndexed { i, id -> put("growthProposal_$i", id) }
             put("growthAbilityCount", c.growth.abilities.size.toString())
             c.growth.abilities.forEachIndexed { i, a -> put("growthAbility_$i", listOf(a.id, a.name, a.description, a.cost ?: "", a.acquiredTurn).joinToString(SEPARATOR)) }
+            put("growthPendingChangeCount", c.growth.pendingChangeProposals.size.toString())
+            c.growth.pendingChangeProposals.forEachIndexed { i, proposal ->
+                val fields = listOf(
+                    proposal.id, proposal.evidenceIds.joinToString(","), proposal.changeType, proposal.attribute ?: "",
+                    proposal.amount?.toString() ?: "", proposal.candidate?.toString() ?: "", proposal.abilityId ?: "",
+                    proposal.abilityName ?: "", proposal.abilityDescription ?: "", proposal.abilityCost ?: "", proposal.rationale
+                ).joinToString(SEPARATOR)
+                put("growthPendingChange_$i", Base64.getUrlEncoder().withoutPadding().encodeToString(fields.toByteArray(Charsets.UTF_8)))
+            }
+            put("growthDeclinedProposalCount", c.growth.declinedProposalIds.size.toString())
+            c.growth.declinedProposalIds.forEachIndexed { i, id -> put("growthDeclinedProposal_$i", id) }
             put("canonLocationCount", c.worldCanon.locations.size.toString())
             c.worldCanon.locations.forEachIndexed { i, x -> put("canonLocation_${i}", listOf(x.id, x.name, x.description, x.status.name, x.firstSeenTurn).joinToString(SEPARATOR)) }
             put("canonNpcCount", c.worldCanon.npcs.size.toString())
@@ -155,6 +167,20 @@ object GameStatePersistenceCodec {
         val growthEvidence = (0 until int("growthEvidenceCount", 0)).mapNotNull { i -> string("growthEvidence_$i").split(SEPARATOR).takeIf { it.size >= 7 }?.let { x -> runCatching { GrowthEvidence(x[0], x[1], x[2].toLong(), x[3].split(",").filter { it.isNotBlank() }, x[4].toBoolean(), x[5].toBoolean(), x[6].toBoolean()) }.getOrNull() } }
         val appliedGrowth = (0 until int("growthProposalCount", 0)).map { i -> string("growthProposal_$i") }.filter { it.isNotBlank() }
         val growthAbilities = (0 until int("growthAbilityCount", 0)).mapNotNull { i -> string("growthAbility_$i").split(SEPARATOR).takeIf { it.size >= 5 }?.let { x -> runCatching { GrowthAbility(x[0], x[1], x[2], x[3].takeIf { it.isNotBlank() }, x[4].toLong()) }.getOrNull() } }
+        val pendingGrowthChanges = (0 until int("growthPendingChangeCount", 0)).mapNotNull { i ->
+            val decoded = runCatching {
+                String(Base64.getUrlDecoder().decode(string("growthPendingChange_$i")), Charsets.UTF_8)
+            }.getOrNull() ?: return@mapNotNull null
+            decoded.split(SEPARATOR, limit = 11).takeIf { it.size == 11 }?.let { x -> runCatching {
+                GrowthChangeProposal(
+                    id = x[0], evidenceIds = x[1].split(",").filter { it.isNotBlank() }, changeType = x[2],
+                    attribute = x[3].takeIf { it.isNotBlank() }, amount = x[4].toIntOrNull(), candidate = x[5].toIntOrNull(),
+                    abilityId = x[6].takeIf { it.isNotBlank() }, abilityName = x[7].takeIf { it.isNotBlank() },
+                    abilityDescription = x[8].takeIf { it.isNotBlank() }, abilityCost = x[9].takeIf { it.isNotBlank() }, rationale = x[10]
+                )
+            }.getOrNull() }
+        }
+        val declinedGrowth = (0 until int("growthDeclinedProposalCount", 0)).map { i -> string("growthDeclinedProposal_$i") }.filter { it.isNotBlank() }
         val worldState = WorldStatePersistenceCodec.decode(values)
         return GameState(
             campaign = CampaignState(
@@ -169,7 +195,7 @@ object GameStatePersistenceCodec {
                 wilderness = wilderness,
                 downtime = downtime,
                 hirelings = hirelings,
-                growth = GrowthState(growthEvidence, appliedGrowth, growthAbilities),
+                growth = GrowthState(growthEvidence, appliedGrowth, growthAbilities, pendingGrowthChanges, declinedGrowth),
                 worldState = worldState,
                 worldCanon = WorldCanon(locations, npcs, items, quests, discoveries),
                 history = history

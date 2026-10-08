@@ -26,6 +26,7 @@ import com.vanish994.cairnsolo.guardian.HttpGuardianClient
 import com.vanish994.cairnsolo.guardian.GuardianRuleResolver
 import com.vanish994.cairnsolo.game.GameActionResolver
 import com.vanish994.cairnsolo.game.GameState
+import com.vanish994.cairnsolo.game.GrowthChangeProposal
 import com.vanish994.cairnsolo.game.ExplorationEngine
 import com.vanish994.cairnsolo.game.LocalGameStateRepository
 import com.vanish994.cairnsolo.game.CanonResolver
@@ -208,7 +209,7 @@ class MainActivity : ComponentActivity() {
                                                                 .getOrElse { accumulated }
                                                         }
                                                         val withChanges = response.growthChangeProposals.fold(withGrowth) { accumulated, proposal ->
-                                                            runCatching { actionResolver.resolve(accumulated, GameAction.ApplyGrowthChangeProposal(proposal)).state }
+                                                            runCatching { actionResolver.resolve(accumulated, GameAction.RecordGrowthChangeProposal(proposal)).state }
                                                                 .getOrElse { accumulated }
                                                         }
                                                         actionResolver.resolve(withChanges, GameAction.ApplyCanonProposals(response.canonProposals)).state
@@ -252,7 +253,7 @@ class MainActivity : ComponentActivity() {
                                                                 .getOrElse { accumulated }
                                                         }
                                                         val withChanges = response.growthChangeProposals.fold(withGrowth) { accumulated, proposal ->
-                                                            runCatching { actionResolver.resolve(accumulated, GameAction.ApplyGrowthChangeProposal(proposal)).state }
+                                                            runCatching { actionResolver.resolve(accumulated, GameAction.RecordGrowthChangeProposal(proposal)).state }
                                                                 .getOrElse { accumulated }
                                                         }
                                                         actionResolver.resolve(withChanges, GameAction.ApplyCanonProposals(response.canonProposals)).state
@@ -274,6 +275,14 @@ class MainActivity : ComponentActivity() {
                                             guardianLoading = false
                                         }
                                     }
+                                },
+                                onDecideGrowth = { proposalId, accepted ->
+                                    val result = actionResolver.resolve(
+                                        state ?: current,
+                                        GameAction.DecideGrowthChangeProposal(proposalId, accepted)
+                                    )
+                                    repository.save(result.state)
+                                    state = result.state
                                 },
                                 onBack = { screen = AppScreen.CHARACTER }
                             )
@@ -469,6 +478,7 @@ private fun ExplorationScreen(
     onResolveRule: () -> Unit,
     onContinueNarrative: () -> Unit,
     onGuardianIntent: (String) -> Unit,
+    onDecideGrowth: (String, Boolean) -> Unit,
     onBack: () -> Unit
 ) {
     val c = state.campaign
@@ -630,6 +640,43 @@ private fun ExplorationScreen(
             if (pendingRule == null && lastResolution == null) onAction(GameAction.ExploreRest)
         }
     }
+
+    c.growth.pendingChangeProposals.firstOrNull()?.let { proposal ->
+        GrowthReviewDialog(proposal, onDecideGrowth)
+    }
+}
+
+@Composable
+private fun GrowthReviewDialog(
+    proposal: GrowthChangeProposal,
+    onDecision: (String, Boolean) -> Unit
+) {
+    val proposedChange = when (proposal.changeType.uppercase()) {
+        "RAISE_MAX_ATTRIBUTE" -> "Aumentar o atributo máximo ${proposal.attribute.orEmpty().uppercase()} em ${proposal.amount ?: 1}."
+        "KEEP_HIGHER_ATTRIBUTE" -> "Definir ${proposal.attribute.orEmpty().uppercase()} como ${proposal.candidate ?: "—"}, se for maior."
+        "GAIN_ABILITY" -> "Obter ${proposal.abilityName.orEmpty()}: ${proposal.abilityDescription.orEmpty()}"
+        else -> "Uma mudança de Growth foi proposta."
+    }
+    AlertDialog(
+        onDismissRequest = {},
+        title = { Text("CRESCIMENTO DISPONÍVEL") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(proposedChange, color = CairnText)
+                Text(proposal.rationale, color = CairnMuted)
+                Text("Evidências: ${proposal.evidenceIds.size}", color = CairnAccent, style = MaterialTheme.typography.labelSmall)
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onDecision(proposal.id, true) }) { Text("Aceitar") }
+        },
+        dismissButton = {
+            TextButton(onClick = { onDecision(proposal.id, false) }) { Text("Recusar") }
+        },
+        containerColor = CairnSurface,
+        titleContentColor = CairnAccent,
+        textContentColor = CairnText
+    )
 }
 
 @Composable
