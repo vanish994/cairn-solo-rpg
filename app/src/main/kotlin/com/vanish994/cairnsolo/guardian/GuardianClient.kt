@@ -22,6 +22,11 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 
+data class GuardianNarrativeOpponentContext(
+    val opponentId: String,
+    val narrative: CombatOpponentNarrative
+)
+
 data class GuardianRuleRequest(
     val type: String,
     val attribute: String? = null,
@@ -88,21 +93,8 @@ interface GuardianClient {
         state: GameState,
         playerIntent: String,
         ruleResult: String? = null,
-        encounterContext: List<CombatOpponentNarrative>? = null
+        encounterContext: List<GuardianNarrativeOpponentContext>? = null
     ): Result<GuardianResponse>
-
-    /** Temporary adapter for MainActivity until Task 3 passes the full encounter list. */
-    suspend fun narrate(
-        state: GameState,
-        playerIntent: String,
-        ruleResult: String?,
-        encounterContext: CombatOpponentNarrative?
-    ): Result<GuardianResponse> = narrate(
-        state,
-        playerIntent,
-        ruleResult,
-        listOfNotNull(encounterContext)
-    )
 
     /** Gives explicit null-context calls a unique most-specific overload. */
     suspend fun narrate(
@@ -114,7 +106,7 @@ interface GuardianClient {
         state,
         playerIntent,
         ruleResult,
-        null as List<CombatOpponentNarrative>?
+        null as List<GuardianNarrativeOpponentContext>?
     )
 }
 
@@ -122,7 +114,7 @@ internal fun guardianRequestPayload(
     state: GameState,
     playerIntent: String,
     ruleResult: String? = null,
-    encounterContext: List<CombatOpponentNarrative>? = null
+    encounterContext: List<GuardianNarrativeOpponentContext>? = null
 ): JSONObject = JSONObject().apply {
     put("playerIntent", playerIntent.trim())
     put("campaign", GuardianContextBuilder.from(state).toJson())
@@ -131,11 +123,14 @@ internal fun guardianRequestPayload(
         put("encounterContext", JSONArray().apply {
             profiles.forEach { profile ->
                 put(JSONObject().apply {
-                    put("name", profile.name)
-                    put("appearance", profile.appearance)
-                    put("behavior", profile.behavior)
-                    put("intent", profile.intent)
-                    put("context", profile.context)
+                    put("opponentId", profile.opponentId)
+                    put("narrative", JSONObject().apply {
+                        put("name", profile.narrative.name)
+                        put("appearance", profile.narrative.appearance)
+                        put("behavior", profile.narrative.behavior)
+                        put("intent", profile.narrative.intent)
+                        put("context", profile.narrative.context)
+                    })
                 })
             }
         })
@@ -150,7 +145,7 @@ class HttpGuardianClient(
         state: GameState,
         playerIntent: String,
         ruleResult: String?,
-        encounterContext: List<CombatOpponentNarrative>?
+        encounterContext: List<GuardianNarrativeOpponentContext>?
     ): Result<GuardianResponse> = withContext(Dispatchers.IO) {
         require(baseUrl.isNotBlank()) { "Guardião online não configurado." }
         require(playerIntent.isNotBlank()) { "A intenção do jogador está vazia." }
@@ -171,7 +166,7 @@ class HttpGuardianClient(
         state: GameState,
         playerIntent: String,
         ruleResult: String?,
-        encounterContext: List<CombatOpponentNarrative>?
+        encounterContext: List<GuardianNarrativeOpponentContext>?
     ): GuardianResponse {
         val url = baseUrl.trimEnd('/')
         val connection = (URL(url).openConnection() as HttpURLConnection).apply {

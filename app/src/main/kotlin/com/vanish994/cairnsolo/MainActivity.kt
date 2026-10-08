@@ -234,7 +234,7 @@ class MainActivity : ComponentActivity() {
                                                 resolution.state,
                                                 playerIntent = "CONTINUAR_NARRATIVA",
                                                 ruleResult = resolution.resultText,
-                                                encounterContext = resolution.encounterNarrative
+                                                encounterContext = resolution.encounterContexts
                                             )
                                                 .onSuccess { response ->
                                                     val narrated = resolution.state.applyGuardianResponse(
