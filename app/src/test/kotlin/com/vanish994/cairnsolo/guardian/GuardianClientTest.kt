@@ -135,6 +135,17 @@ class GuardianClientTest {
     }
 
     @Test
+    fun fractionalOpponentStatsAreRetainedForVisibleRejection() {
+        val response = HttpGuardianClient(baseUrl = "").parseResponse(
+            """{"narration":"A cena continua.","sceneTitle":"Trilha","sceneDescription":"Escura.","ruleRequest":{"type":"BEGIN_COMBAT","encounter":{"opponents":[{"opponentId":"cultist-a","narrative":{"name":"Cultista","appearance":"Manto escuro.","behavior":"Observa.","intent":"Protege o altar.","context":"Na capela."},"stats":{"str":5,"dex":7,"wil":8,"hp":1.9,"maxHp":2.1,"armor":1},"weapon":{"id":"ritual-dagger","damage":"d4","blast":false,"ranged":false}}]}},"suggestedActions":[]}"""
+        )
+
+        assertEquals("A cena continua.", response.narration)
+        assertEquals("BEGIN_COMBAT", response.ruleRequest?.type)
+        assertNull(response.ruleRequest?.encounter)
+    }
+
+    @Test
     fun parseSuggestedActionsFiltersBlankExcessAndNonStringEntries() {
         val overlongSuggestion = "x".repeat(161)
         val response = HttpGuardianClient(baseUrl = "").parseResponse(
