@@ -36,4 +36,16 @@ class MarketplaceTest {
         val result = MarketplaceRules().purchase(state(), 40, "chainmail")
         assertEquals(2, result.state.usedSlots)
     }
+
+    @Test
+    fun creditGoldAddsGpAndRejectsOverflow() {
+        val rules = MarketplaceRules()
+
+        assertEquals(12, rules.creditGold(0, 12))
+        assertEquals(Int.MAX_VALUE, rules.creditGold(Int.MAX_VALUE - 12, 12))
+        assertFailsWith<IllegalArgumentException> { rules.creditGold(-1, 1) }
+        assertFailsWith<IllegalArgumentException> { rules.creditGold(0, 0) }
+        assertFailsWith<IllegalArgumentException> { rules.creditGold(0, -1) }
+        assertFailsWith<ArithmeticException> { rules.creditGold(Int.MAX_VALUE, 1) }
+    }
 }

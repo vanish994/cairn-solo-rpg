@@ -18,6 +18,7 @@ import com.vanish994.cairnsolo.rules.WildernessState
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import kotlin.test.assertFailsWith
 
@@ -555,5 +556,156 @@ class CombatGameActionResolverTest {
         assertEquals(listOf("solitary-cultist"), ended.opponentIds)
         assertEquals(CombatEndReason.OPPONENTS_FLED, ended.reason)
         random.assertAllRollsUsed()
+    }
+}
+
+class RewardGameActionResolverTest {
+    private fun state(
+        inventory: List<InventoryItem> = emptyList(),
+        gold: Int = 0,
+        hp: Int = 6
+    ): GameState {
+        val base = newCharacter("Mara", 10, 10, 10)
+        return base.copy(campaign = base.campaign.copy(
+            profile = CharacterProfile(gold = gold),
+            rules = base.campaign.rules.copy(hp = hp, inventory = inventory)
+        ))
+    }
+
+    private fun resolver(): GameActionResolver {
+        val random = FixedRandomSource(d20Value = 10)
+        return GameActionResolver(ExplorationEngine(random), RulesEngine(random))
+    }
+
+    @Test
+    fun creditGoldUpdatesBalanceAndRecordsEvent() {
+        val initial = state(gold = 5)
+        val result = resolver().resolve(initial, GameAction.AddGold("quest-pay", 12))
+
+        assertEquals(17, result.state.campaign.profile.gold)
+        assertEquals(initial.campaign.turn + 1, result.state.campaign.turn)
+        assertEquals(GameEvent.GoldCredited("quest-pay", 12, 17), result.events.single())
+        assertTrue("quest-pay:gold" in result.state.campaign.appliedRewardIds)
+    }
+
+    @Test
+    fun creditGoldIsIdempotent() {
+        val action = GameAction.AddGold("quest-pay", 12)
+        val resolver = resolver()
+        val paid = resolver.resolve(state(gold = 5), action)
+        val replay = resolver.resolve(paid.state, action)
+
+        assertEquals(paid.state, replay.state)
+        assertTrue(replay.events.isEmpty())
+    }
+
+    @Test
+    fun invalidGrantRewardRejected() {
+        val invalidActions = listOf(
+            GameAction.GrantReward("bad/id", 12, emptyList()),
+            GameAction.GrantReward("quest-pay", -1, emptyList()),
+            GameAction.GrantReward("quest-pay", 0, emptyList()),
+            GameAction.GrantReward("quest-pay", 0, List(6) { "dagger" })
+        )
+
+        invalidActions.forEach { action ->
+            assertFailsWith<IllegalArgumentException> { resolver().resolve(state(), action) }
+        }
+    }
+
+    @Test
+    fun grantRewardAppliesGoldAndItemsInOneTurn() {
+        val initial = state()
+        val result = resolver().resolve(initial, GameAction.GrantReward("quest-pay", 12, listOf("dagger")))
+
+        assertEquals(12, result.state.campaign.profile.gold)
+        assertEquals(initial.campaign.turn + 1, result.state.campaign.turn)
+        assertEquals(1, result.state.campaign.rules.inventory.size)
+        val item = result.state.campaign.rules.inventory.single()
+        assertEquals("reward:quest-pay:0:dagger", item.id)
+        assertTrue("reward-catalog:dagger" in item.tags)
+        assertTrue(result.events.any { it == GameEvent.GoldCredited("quest-pay", 12, 12) })
+        assertTrue(result.events.any { it == GameEvent.RewardItemAdded(item.id, "dagger") })
+    }
+
+    @Test
+    fun grantRewardIsIdempotent() {
+        val action = GameAction.GrantReward("quest-pay", 12, listOf("dagger"))
+        val resolver = resolver()
+        val paid = resolver.resolve(state(), action)
+        val replay = resolver.resolve(paid.state, action)
+
+        assertEquals(paid.state, replay.state)
+        assertTrue(replay.events.isEmpty())
+    }
+
+    @Test
+    fun grantRewardWithChangedPayloadIsNoOp() {
+        val resolver = resolver()
+        val paid = resolver.resolve(state(), GameAction.GrantReward("quest-pay", 12, emptyList()))
+        val replay = resolver.resolve(paid.state, GameAction.GrantReward("quest-pay", 99, listOf("spear")))
+
+        assertEquals(paid.state, replay.state)
+        assertTrue(replay.events.isEmpty())
+    }
+
+    @Test
+    fun fullInventoryStoresRewardAsPending() {
+        val fullInventory = List(10) { InventoryItem("existing-$it") }
+        val initial = state(inventory = fullInventory, hp = 0)
+        val result = resolver().resolve(initial, GameAction.GrantReward("quest-pay", 12, listOf("dagger")))
+
+        assertEquals(12, result.state.campaign.profile.gold)
+        assertEquals(fullInventory, result.state.campaign.rules.inventory)
+        assertEquals(1, result.state.campaign.pendingRewardItems.size)
+        assertTrue(result.events.any { it is GameEvent.RewardItemPending && it.catalogItemId == "dagger" })
+    }
+
+    @Test
+    fun claimPendingRewardItemAfterSpaceFreed() {
+        val initial = state(inventory = List(9) { InventoryItem("existing-$it") })
+        val resolver = resolver()
+        val paid = resolver.resolve(initial, GameAction.GrantReward("quest-pack", 0, listOf("chainmail")))
+        val pending = assertNotNull(paid.state.campaign.pendingRewardItems.singleOrNull())
+        val pendingEvent = assertIs<GameEvent.RewardItemPending>(paid.events.first { it is GameEvent.RewardItemPending })
+        assertEquals(2, pendingEvent.slotsRequired)
+        assertEquals(1, pendingEvent.freeSlots)
+
+        val freed = resolver.resolve(paid.state, GameAction.RemoveItem("existing-0"))
+        val claimed = resolver.resolve(freed.state, GameAction.ClaimPendingRewardItem(pending.id))
+
+        assertTrue(claimed.state.campaign.pendingRewardItems.isEmpty())
+        assertEquals("reward:quest-pack:0:chainmail", claimed.state.campaign.rules.inventory.last().id)
+        assertEquals(10, claimed.state.campaign.rules.usedSlots)
+        assertEquals(0, claimed.state.campaign.rules.hp)
+        assertTrue(claimed.events.any { it == GameEvent.RewardItemClaimed(pending.id, pending.itemInstanceId) })
+    }
+
+    @Test
+    fun unsupportedItemIdDoesNotAddItem() {
+        val result = resolver().resolve(state(), GameAction.GrantReward("quest-pay", 12, listOf("made-up-relic")))
+
+        assertEquals(12, result.state.campaign.profile.gold)
+        assertTrue(result.state.campaign.rules.inventory.isEmpty())
+        assertTrue(result.events.any { it == GameEvent.RewardItemRejected("made-up-relic", "UNKNOWN_CATALOG_ITEM") })
+    }
+
+    @Test
+    fun nonItemCatalogEntryCannotBeGranted() {
+        val result = resolver().resolve(state(), GameAction.GrantReward("quest-pay", 0, listOf("horse")))
+
+        assertTrue(result.state.campaign.rules.inventory.isEmpty())
+        assertTrue(result.events.any { it == GameEvent.RewardItemRejected("horse", "NOT_AN_INVENTORY_ITEM") })
+    }
+
+    @Test
+    fun grantRewardFillingTenthSlotReducesHpToZeroAccordingToCairn2e() {
+        val initial = state(inventory = List(9) { InventoryItem("existing-$it") }, hp = 5)
+        val result = resolver().resolve(initial, GameAction.GrantReward("quest-pay", 0, listOf("dagger")))
+
+        assertEquals(0, result.state.campaign.rules.hp)
+        assertEquals(10, result.state.campaign.rules.usedSlots)
+        assertTrue(result.state.campaign.pendingRewardItems.isEmpty())
+        assertEquals("reward:quest-pay:0:dagger", result.state.campaign.rules.inventory.last().id)
     }
 }
