@@ -2,6 +2,8 @@ package com.vanish994.cairnsolo.rules
 
 enum class Attribute { STR, DEX, WIL }
 
+enum class DamageRecipient { PLAYER_CHARACTER, OPPONENT }
+
 data class InventoryItem(
     val id: String,
     val slots: Int = 1,
@@ -91,12 +93,32 @@ class RulesEngine(val random: RandomSource) {
         return SaveResult(state, listOf(RuleEvent.SaveResolved(attribute, roll, success)), roll, success)
     }
 
-    fun applyDamage(state: CharacterState, rawDamage: Int): GameResult {
+    fun applyDamage(
+        state: CharacterState,
+        rawDamage: Int,
+        recipient: DamageRecipient = DamageRecipient.PLAYER_CHARACTER
+    ): GameResult {
         require(rawDamage >= 0)
         val armorAbsorbed = minOf(rawDamage, state.armor)
         val hpDamage = rawDamage - armorAbsorbed
         val remainingHp = state.hp - hpDamage
         val damageEvent = RuleEvent.DamageApplied(rawDamage, armorAbsorbed, hpDamage)
+
+        if (recipient == DamageRecipient.OPPONENT) {
+            if (remainingHp >= 0) {
+                // Cairn 2e: NPCs at exactly 0 HP do not receive a Scar or an automatic defeat.
+                return GameResult(state.copy(hp = remainingHp), listOf(damageEvent))
+            }
+
+            val excessDamage = -remainingHp
+            val newStr = maxOf(0, state.str - excessDamage)
+            val roll = random.d20()
+            val success = saveSucceeds(roll, newStr)
+            return GameResult(
+                state.copy(hp = 0, str = newStr),
+                listOf(damageEvent, RuleEvent.CriticalDamage(excessDamage, newStr, roll, success))
+            )
+        }
 
         if (remainingHp > 0) return GameResult(state.copy(hp = remainingHp), listOf(damageEvent))
 

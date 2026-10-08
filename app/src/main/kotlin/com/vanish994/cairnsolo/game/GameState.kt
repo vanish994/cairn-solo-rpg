@@ -54,7 +54,6 @@ data class CombatOpponentState(
     init {
         require(id.isNotBlank() && id == id.trim() && id.length <= 80) { "Combat opponent id is invalid." }
         require(stats.maxHp > 0 && stats.hp in 0..stats.maxHp) { "Combat opponent HP is invalid." }
-        require(status != CombatOpponentStatus.ACTIVE || stats.hp > 0) { "An active opponent must have positive HP." }
         require(weapon.id.isNotBlank() && weapon.id == weapon.id.trim() && weapon.id.length <= 80) {
             "Combat opponent weapon id is invalid."
         }
