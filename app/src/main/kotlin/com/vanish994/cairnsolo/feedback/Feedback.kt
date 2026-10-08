@@ -43,6 +43,8 @@ object FeedbackMapper {
             is GameEvent.MoraleResolved -> "Moral resolvida: ${event.outcome.name.lowercase()} (2d6=${event.roll}/${event.morale})." to if (event.outcome.name == "STAND") FeedbackType.SUCCESS else FeedbackType.WARNING
             is GameEvent.HirelingResolved -> "Hireling ${event.hirelingId}: ${event.outcome.lowercase()}." to if (event.outcome == "HIRED") FeedbackType.SUCCESS else FeedbackType.INFO
             is GameEvent.GrowthEvidenceRecorded -> "Experiência significativa registrada: ${event.evidenceId}." to FeedbackType.INFO
+            is GameEvent.GrowthProposalPending -> "Uma proposta de Growth aguarda sua decisão." to FeedbackType.INFO
+            is GameEvent.GrowthProposalDecided -> if (event.accepted) "Decisão de Growth registrada." to FeedbackType.INFO else "Proposta de Growth recusada." to FeedbackType.INFO
             is GameEvent.GrowthApplied -> "Growth aplicado: ${event.proposalId}." to FeedbackType.SUCCESS
             is GameEvent.CanonUpdated -> "Cânone atualizado com ${event.count} proposta(s)." to FeedbackType.INFO
             is GameEvent.FactionProgressChanged -> "Facção ${event.factionId}: progresso ${event.previous} → ${event.current}." to FeedbackType.INFO

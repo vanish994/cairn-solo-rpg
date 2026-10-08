@@ -1,12 +1,10 @@
 package com.vanish994.cairnsolo.game
 
-import com.vanish994.cairnsolo.rules.Attribute
 import com.vanish994.cairnsolo.rules.FixedRandomSource
 import com.vanish994.cairnsolo.rules.RulesEngine
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertIs
 
 class GrowthTest {
     private fun evidence(id: String, pattern: Boolean = false, risk: Boolean = false, unique: Boolean = false) = GrowthEvidence(
@@ -19,11 +17,17 @@ class GrowthTest {
         val base = newCharacter("Mara", 10, 10, 10)
         val actions = GameActionResolver(ExplorationEngine(FixedRandomSource(10)), RulesEngine(FixedRandomSource(10)))
         val recorded = actions.resolve(base, GameAction.RecordGrowthEvidence(evidence("heartseed", unique = true, risk = true))).state
-        val proposal = GrowthProposal("growth-heartseed", listOf("heartseed"), GrowthChange.RaiseMaxAttribute(Attribute.WIL), "A exposição e o risco alteraram sua vontade.")
-        val applied = actions.resolve(recorded, GameAction.ApplyGrowth(proposal)).state
+        val proposal = GrowthChangeProposal("growth-heartseed", listOf("heartseed"), "RAISE_MAX_ATTRIBUTE", attribute = "WIL", amount = 1, rationale = "A exposição e o risco alteraram sua vontade.")
+        val staged = actions.resolve(recorded, GameAction.RecordGrowthChangeProposal(proposal)).state
+        assertEquals(10, staged.campaign.rules.wil)
+        assertEquals(listOf(proposal), staged.campaign.growth.pendingChangeProposals)
+        val restoredPending = GameStatePersistenceCodec.decode(GameStatePersistenceCodec.encode(staged))!!
+        assertEquals(staged.campaign.growth, restoredPending.campaign.growth)
+        val applied = actions.resolve(restoredPending, GameAction.DecideGrowthChangeProposal(proposal.id, accepted = true)).state
         assertEquals(11, applied.campaign.rules.wil)
         assertEquals(11, applied.campaign.rules.maxWil)
         assertEquals(listOf("growth-heartseed"), applied.campaign.growth.appliedProposalIds)
+        assertEquals(emptyList(), applied.campaign.growth.pendingChangeProposals)
         assertEquals(HistoryEventType.GROWTH, applied.campaign.history.last().type)
         val restored = GameStatePersistenceCodec.decode(GameStatePersistenceCodec.encode(applied))!!
         assertEquals(applied.campaign.growth, restored.campaign.growth)
@@ -36,7 +40,7 @@ class GrowthTest {
         val actions = GameActionResolver(ExplorationEngine(FixedRandomSource(10)), RulesEngine(FixedRandomSource(10)))
         val recorded = actions.resolve(base, GameAction.RecordGrowthEvidence(evidence("risk-only", risk = true))).state
         assertFailsWith<IllegalArgumentException> {
-            actions.resolve(recorded, GameAction.ApplyGrowth(GrowthProposal("invalid-growth", listOf("risk-only"), GrowthChange.GainAbility("green-skin", "Pele Verde", "A pele se adapta à floresta."), "Uma única cena.")))
+            actions.resolve(recorded, GameAction.RecordGrowthChangeProposal(GrowthChangeProposal("invalid-growth", listOf("risk-only"), "GAIN_ABILITY", abilityId = "green-skin", abilityName = "Pele Verde", abilityDescription = "A pele se adapta à floresta.", rationale = "Uma única cena.")))
         }
     }
 
@@ -57,7 +61,10 @@ class GrowthTest {
         val base = newCharacter("Mara", 10, 10, 10)
         val actions = GameActionResolver(ExplorationEngine(FixedRandomSource(10)), RulesEngine(FixedRandomSource(10)))
         val recorded = actions.resolve(base, GameAction.RecordGrowthEvidence(evidence("relic", pattern = true, unique = true))).state
-        val applied = actions.resolve(recorded, GameAction.ApplyGrowth(GrowthProposal("relic-bond", listOf("relic"), GrowthChange.GainAbility("plant-speech", "Fala das Plantas", "Pode compreender sinais simples de plantas e animais.", "Requer contato com a floresta."), "A relação contínua com a relíquia."))).state
+        val proposal = GrowthChangeProposal("relic-bond", listOf("relic"), "GAIN_ABILITY", abilityId = "plant-speech", abilityName = "Fala das Plantas", abilityDescription = "Pode compreender sinais simples de plantas e animais.", abilityCost = "Requer contato com a floresta.", rationale = "A relação contínua com a relíquia.")
+        val staged = actions.resolve(recorded, GameAction.RecordGrowthChangeProposal(proposal)).state
+        assertEquals(emptyList(), staged.campaign.growth.abilities)
+        val applied = actions.resolve(staged, GameAction.DecideGrowthChangeProposal(proposal.id, true)).state
         assertEquals("plant-speech", applied.campaign.growth.abilities.single().id)
         assertEquals(10, applied.campaign.rules.wil)
     }
@@ -69,12 +76,13 @@ class GrowthTest {
         val withEvidence = actions.resolve(base, GameAction.RecordGrowthEvidenceProposal(
             GrowthEvidenceProposal("trial", "Mara enfrentou o risco e persistiu.", seriousRisk = true, focusedPattern = true)
         )).state
-        val result = actions.resolve(withEvidence, GameAction.ApplyGrowthChangeProposal(
-            GrowthChangeProposal("raise-wil", listOf("trial"), "RAISE_MAX_ATTRIBUTE", attribute = "WIL", amount = 1, rationale = "A experiência sustentou a mudança.")
-        ))
+        val proposal = GrowthChangeProposal("raise-wil", listOf("trial"), "RAISE_MAX_ATTRIBUTE", attribute = "WIL", amount = 1, rationale = "A experiência sustentou a mudança.")
+        val pending = actions.resolve(withEvidence, GameAction.RecordGrowthChangeProposal(proposal)).state
+        assertEquals(10, pending.campaign.rules.wil)
+        val result = actions.resolve(pending, GameAction.DecideGrowthChangeProposal(proposal.id, true))
         assertEquals(11, result.state.campaign.rules.wil)
         assertEquals(11, result.state.campaign.rules.maxWil)
-        assertIs<GameEvent.GrowthApplied>(result.events.single())
+        assertEquals(true, result.events.any { it is GameEvent.GrowthApplied })
     }
 
     @Test
@@ -82,17 +90,45 @@ class GrowthTest {
         val base = newCharacter("Mara", 10, 10, 10)
         val actions = GameActionResolver(ExplorationEngine(FixedRandomSource(10)), RulesEngine(FixedRandomSource(10)))
         assertFailsWith<IllegalStateException> {
-            actions.resolve(base, GameAction.ApplyGrowthChangeProposal(
+            actions.resolve(base, GameAction.RecordGrowthChangeProposal(
                 GrowthChangeProposal("invalid", listOf("missing"), "GAIN_ABILITY", abilityId = "stone-skin", abilityName = "Pele de Pedra", abilityDescription = "Resiste a perigos", rationale = "Sem evidência não vale.")
             ))
         }
         val evidence = actions.resolve(base, GameAction.RecordGrowthEvidenceProposal(
             GrowthEvidenceProposal("stone-trial", "Mara sobreviveu ao colapso.", seriousRisk = true, uniqueInteraction = true)
         )).state
-        val result = actions.resolve(evidence, GameAction.ApplyGrowthChangeProposal(
-            GrowthChangeProposal("stone-growth", listOf("stone-trial"), "GAIN_ABILITY", abilityId = "stone-skin", abilityName = "Pele de Pedra", abilityDescription = "Resiste a perigos", rationale = "A sobrevivência deixou uma marca.")
-        ))
+        val proposal = GrowthChangeProposal("stone-growth", listOf("stone-trial"), "GAIN_ABILITY", abilityId = "stone-skin", abilityName = "Pele de Pedra", abilityDescription = "Resiste a perigos", rationale = "A sobrevivência deixou uma marca.")
+        val pending = actions.resolve(evidence, GameAction.RecordGrowthChangeProposal(proposal)).state
+        val result = actions.resolve(pending, GameAction.DecideGrowthChangeProposal(proposal.id, true))
         assertEquals("stone-skin", result.state.campaign.growth.abilities.single().id)
+    }
+
+    @Test
+    fun decliningGrowthDoesNotChangeCharacterAndPersistsDecision() {
+        val base = newCharacter("Mara", 10, 10, 10)
+        val actions = GameActionResolver(ExplorationEngine(FixedRandomSource(10)), RulesEngine(FixedRandomSource(10)))
+        val evidence = actions.resolve(base, GameAction.RecordGrowthEvidenceProposal(
+            GrowthEvidenceProposal("trial", "Mara enfrentou o risco e persistiu.", seriousRisk = true, uniqueInteraction = true)
+        )).state
+        val proposal = GrowthChangeProposal("raise-str", listOf("trial"), "RAISE_MAX_ATTRIBUTE", attribute = "STR", amount = 1, rationale = "A experiência fortaleceu Mara.")
+        val pending = actions.resolve(evidence, GameAction.RecordGrowthChangeProposal(proposal)).state
+        val declined = actions.resolve(pending, GameAction.DecideGrowthChangeProposal(proposal.id, accepted = false)).state
+        assertEquals(10, declined.campaign.rules.str)
+        assertEquals(emptyList(), declined.campaign.growth.pendingChangeProposals)
+        assertEquals(listOf(proposal.id), declined.campaign.growth.declinedProposalIds)
+        assertEquals(declined.campaign.growth, GameStatePersistenceCodec.decode(GameStatePersistenceCodec.encode(declined))!!.campaign.growth)
+    }
+
+    @Test
+    fun olderSavesWithoutGrowthReviewFieldsRemainReadable() {
+        val base = newCharacter("Mara", 10, 10, 10)
+        val legacyValues = GameStatePersistenceCodec.encode(base).toMutableMap().apply {
+            remove("growthPendingChangeCount")
+            remove("growthDeclinedProposalCount")
+        }
+        val restored = GameStatePersistenceCodec.decode(legacyValues)!!
+        assertEquals(emptyList(), restored.campaign.growth.pendingChangeProposals)
+        assertEquals(emptyList(), restored.campaign.growth.declinedProposalIds)
     }
 
     @Test
