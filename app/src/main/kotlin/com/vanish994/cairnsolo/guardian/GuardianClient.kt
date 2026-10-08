@@ -63,6 +63,12 @@ data class GuardianEncounterProposal(
             "The morale leader must belong to the encounter."
         }
     }
+
+    /** Temporary UI adapters; Task 3 will render and confirm the whole encounter list. */
+    val opponentId: String get() = opponents.first().opponentId
+    val narrative: CombatOpponentNarrative get() = opponents.first().narrative
+    val stats: CharacterState get() = opponents.first().stats
+    val weapon: WeaponProfile get() = opponents.first().weapon
 }
 
 data class GuardianResponse(
