@@ -55,6 +55,13 @@ Não conduza o jogador por escolhas obrigatórias: apresente a situação e deix
 A resposta DEVE ser somente o objeto JSON solicitado pelo schema.
 """
 
+internal fun guardianSystemPrompt(): String = "$SYSTEM_PROMPT\n\n" +
+    "AÇÕES SUGERIDAS (suggestedActions): apresente de uma a três recomendações opcionais, " +
+        "curtas e concretas para o próximo passo; cada sugestão deve ser apoiada explicitamente " +
+        "nas availableActions, na cena atual e no cânone confirmado (worldCanon), e não invente " +
+        "fatos, locais, NPCs, missões ou saídas. São apenas recomendações: não executam ações " +
+        "nem alteram o estado do jogo, e o jogador continua livre para escrever outra intenção."
+
 fun main() {
     val port = System.getenv("PORT")?.toIntOrNull() ?: 8080
     val server = HttpServer.create(InetSocketAddress("0.0.0.0", port), 0)
@@ -131,12 +138,12 @@ Inclua growthChangeProposals como uma lista, mesmo quando vazia. Não invente re
                 {"type":"object","properties":{"type":{"type":"string","enum":["RECOVER_SCAR"]}},"required":["type"],"additionalProperties":false},
                 {"type":"object","properties":{"type":{"type":"string","enum":["BEGIN_COMBAT"]},"encounter":{"type":"object","properties":{"opponentId":{"type":"string","minLength":1,"maxLength":80},"narrative":{"type":"object","properties":{"name":{"type":"string","minLength":1,"maxLength":160},"appearance":{"type":"string","minLength":1,"maxLength":1000},"behavior":{"type":"string","minLength":1,"maxLength":1000},"intent":{"type":"string","minLength":1,"maxLength":1000},"context":{"type":"string","minLength":1,"maxLength":1000}},"required":["name","appearance","behavior","intent","context"],"additionalProperties":false},"stats":{"type":"object","properties":{"str":{"type":"integer","minimum":0},"dex":{"type":"integer","minimum":0},"wil":{"type":"integer","minimum":0},"hp":{"type":"integer","minimum":1},"maxHp":{"type":"integer","minimum":1},"armor":{"type":"integer","minimum":0,"maximum":3}},"required":["str","dex","wil","hp","maxHp","armor"],"additionalProperties":false},"weapon":{"type":"object","properties":{"id":{"type":"string","minLength":1,"maxLength":80},"damage":{"type":"string","minLength":1,"maxLength":32,"pattern":"^d(4|6|8|10|12)(\\s*\\+\\s*d(4|6|8|10|12))*$"},"blast":{"type":"boolean"},"ranged":{"type":"boolean"}},"required":["id","damage","blast","ranged"],"additionalProperties":false}},"required":["opponentId","narrative","stats","weapon"],"additionalProperties":false}},"required":["type","encounter"],"additionalProperties":false}
               ]},
-              "suggestedActions": {"type":"array","items":{"type":"string"}},
               "canonProposals": {"type":"array","maxItems":5,"items":{"type":"object","properties":{"type":{"type":"string","enum":["UPSERT_NPC","DISCOVER_LOCATION","ADD_IMPORTANT_ITEM","CREATE_QUEST","UPDATE_QUEST","ADD_DISCOVERY","ADD_RUMOR"]},"id":{"type":"string","pattern":"^[a-z0-9-]{3,80}$"},"status":{"type":"string","enum":["CONFIRMED","RUMOR","DISCOVERED"]},"source":{"type":"string","enum":["PLAYER","GUARDIAN","NPC","RULES_ENGINE","SYSTEM"]},"name":{"type":"string"},"title":{"type":"string"},"text":{"type":"string"},"description":{"type":"string"},"role":{"type":"string"},"relatedEntityIds":{"type":"array","items":{"type":"string"}}},"required":["type","id","status","source"],"additionalProperties":false}},
               "growthEvidenceProposals": {"type":"array","maxItems":3,"items":{"type":"object","properties":{"id":{"type":"string","pattern":"^[a-z0-9-]{3,80}$"},"summary":{"type":"string","minLength":1,"maxLength":1000},"relatedEntityIds":{"type":"array","items":{"type":"string"}},"focusedPattern":{"type":"boolean"},"seriousRisk":{"type":"boolean"},"uniqueInteraction":{"type":"boolean"}},"required":["id","summary","relatedEntityIds","focusedPattern","seriousRisk","uniqueInteraction"],"additionalProperties":false}}
               ,"growthChangeProposals": {"type":"array","maxItems":3,"items":{"type":"object","properties":{"id":{"type":"string","pattern":"^[a-z0-9-]{3,80}$"},"evidenceIds":{"type":"array","minItems":1,"items":{"type":"string","pattern":"^[a-z0-9-]{3,80}$"}},"changeType":{"type":"string","enum":["RAISE_MAX_ATTRIBUTE","KEEP_HIGHER_ATTRIBUTE","GAIN_ABILITY"]},"attribute":{"type":"string","enum":["STR","DEX","WIL"]},"amount":{"type":"integer","minimum":1,"maximum":3},"candidate":{"type":"integer","minimum":3,"maximum":18},"abilityId":{"type":"string","pattern":"^[a-z0-9-]{3,80}$"},"abilityName":{"type":"string","maxLength":160},"abilityDescription":{"type":"string","maxLength":1000},"abilityCost":{"type":"string","maxLength":200},"rationale":{"type":"string","minLength":1,"maxLength":1000}},"required":["id","evidenceIds","changeType","rationale"],"additionalProperties":false}}
             }
         """).asJsonObject
+        properties.add("suggestedActions", suggestedActionsSchema())
         addEncounterStringPatterns(properties)
         add("properties", properties)
         add("required", JsonParser.parseString(
@@ -156,7 +163,7 @@ Inclua growthChangeProposals como uma lista, mesmo quando vazia. Não invente re
             ?.let {
                 addProperty("previous_interaction_id", it)
             }
-        addProperty("system_instruction", SYSTEM_PROMPT)
+        addProperty("system_instruction", guardianSystemPrompt())
         add("generation_config", JsonParser.parseString(
             """{"max_output_tokens":700,"thinking_level":"low"}"""
         ))
@@ -219,6 +226,17 @@ internal fun addEncounterStringPatterns(properties: JsonObject) {
     }
     encounterProperties.getAsJsonObject("weapon").getAsJsonObject("properties")
         .getAsJsonObject("id").addProperty("pattern", "\\S")
+}
+
+internal fun suggestedActionsSchema(): JsonObject = JsonObject().apply {
+    addProperty("type", "array")
+    addProperty("minItems", 1)
+    addProperty("maxItems", 3)
+    add("items", JsonObject().apply {
+        addProperty("type", "string")
+        addProperty("minLength", 1)
+        addProperty("maxLength", 160)
+    })
 }
 
 internal fun normalizeCombatProposal(response: JsonObject): JsonObject {
