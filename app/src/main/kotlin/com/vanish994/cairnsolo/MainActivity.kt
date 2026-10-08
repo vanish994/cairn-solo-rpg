@@ -36,6 +36,10 @@ import com.vanish994.cairnsolo.game.CanonResolver
 import com.vanish994.cairnsolo.guardian.GuardianRuleRequest
 import com.vanish994.cairnsolo.guardian.GuardianRuleResolution
 import com.vanish994.cairnsolo.guardian.GuardianEncounterProposal
+import com.vanish994.cairnsolo.feedback.FeedbackEntry
+import com.vanish994.cairnsolo.feedback.FeedbackMapper
+import com.vanish994.cairnsolo.feedback.FeedbackType
+import com.vanish994.cairnsolo.feedback.inventoryItemLabel
 import com.vanish994.cairnsolo.rules.*
 import kotlin.random.Random
 
@@ -75,6 +79,7 @@ class MainActivity : ComponentActivity() {
                 val scope = rememberCoroutineScope()
                 var guardianLoading by remember { mutableStateOf(false) }
                 var guardianError by remember { mutableStateOf<String?>(null) }
+                var rewardFeedback by remember { mutableStateOf(emptyList<FeedbackEntry>()) }
                 var pendingRule by remember { mutableStateOf<GuardianRuleRequest?>(null) }
                 var lastResolution by remember { mutableStateOf<GuardianRuleResolution?>(null) }
                 var guardianFlow by remember { mutableStateOf(GuardianFlow.EXPLORATION) }
@@ -123,6 +128,7 @@ class MainActivity : ComponentActivity() {
                                     guardianFlow = GuardianFlow.EXPLORATION
                                     guardianLoading = false
                                     guardianError = null
+                                    rewardFeedback = emptyList()
                                     pendingRule = null
                                     lastResolution = null
                                     suggestedActions = emptyList()
@@ -136,6 +142,7 @@ class MainActivity : ComponentActivity() {
                             AppScreen.CHARACTER -> CharacterSheet(
                                 state = current,
                                 combatActive = current.campaign.combat != null,
+                                rewardFeedback = rewardFeedback,
                                 onDamage = {
                                     val next = actionResolver.resolve(current, GameAction.ApplyDamage(2)).state
                                     repository.save(next)
@@ -158,11 +165,18 @@ class MainActivity : ComponentActivity() {
                                     repository.save(next)
                                     state = next
                                 },
+                                onClaimReward = { pendingId ->
+                                    val result = actionResolver.resolve(current, GameAction.ClaimPendingRewardItem(pendingId))
+                                    repository.save(result.state)
+                                    state = result.state
+                                    rewardFeedback = FeedbackMapper.mapAll(result.events, result.state.campaign.turn)
+                                },
                                 onDelete = {
                                     repository.clear()
                                     state = null
                                     screen = AppScreen.CHARACTER
                                     suggestedActions = emptyList()
+                                    rewardFeedback = emptyList()
                                     guardianIntentDraft = ""
                                 }
                             )
@@ -199,6 +213,7 @@ class MainActivity : ComponentActivity() {
                                 pendingRule = pendingRule,
                                 lastResolution = lastResolution,
                                 suggestedActions = suggestedActions,
+                                rewardFeedback = rewardFeedback,
                                 intent = guardianIntentDraft,
                                 onIntentChange = { guardianIntentDraft = it },
                                 onSuggestionSelected = { guardianIntentDraft = it },
@@ -233,6 +248,7 @@ class MainActivity : ComponentActivity() {
                                         guardianFlow = GuardianFlow.CONSEQUENCE_NARRATION
                                         guardianLoading = true
                                         guardianError = null
+                                        rewardFeedback = emptyList()
                                         scope.launch {
                                             guardianClient.narrate(
                                                 resolution.state,
@@ -262,14 +278,22 @@ class MainActivity : ComponentActivity() {
                                                     val rewardRequest = response.ruleRequest?.takeIf { it.type.equals("REWARD", ignoreCase = true) }
                                                     var finalState = next
                                                     var rewardError: String? = null
+                                                    var responseRewardFeedback = emptyList<FeedbackEntry>()
                                                     if (requestError == null && rewardRequest != null) {
                                                         runCatching { guardianRuleResolver.resolve(next, rewardRequest) }
-                                                            .onSuccess { finalState = it.state }
+                                                            .onSuccess { resolution ->
+                                                                finalState = resolution.state
+                                                                responseRewardFeedback = FeedbackMapper.mapAll(
+                                                                    resolution.gameResult.events,
+                                                                    resolution.state.campaign.turn
+                                                                )
+                                                            }
                                                             .onFailure { rewardError = it.message ?: "Não foi possível aplicar a recompensa confirmada." }
                                                     }
                                                     repository.save(finalState)
                                                     state = finalState
                                                     suggestedActions = response.suggestedActions
+                                                    rewardFeedback = responseRewardFeedback
                                                     pendingRule = response.ruleRequest?.takeIf {
                                                         requestError == null && !it.type.equals("REWARD", ignoreCase = true)
                                                     }
@@ -292,6 +316,7 @@ class MainActivity : ComponentActivity() {
                                 onGuardianIntent = { intent ->
                                     if (pendingRule == null && lastResolution == null) {
                                         suggestedActions = emptyList()
+                                        rewardFeedback = emptyList()
                                         val intentState = actionResolver.resolve(
                                             current,
                                             GameAction.GuardianIntent(intent)
@@ -325,14 +350,22 @@ class MainActivity : ComponentActivity() {
                                                     val rewardRequest = response.ruleRequest?.takeIf { it.type.equals("REWARD", ignoreCase = true) }
                                                     var finalState = next
                                                     var rewardError: String? = null
+                                                    var responseRewardFeedback = emptyList<FeedbackEntry>()
                                                     if (requestError == null && rewardRequest != null) {
                                                         runCatching { guardianRuleResolver.resolve(next, rewardRequest) }
-                                                            .onSuccess { finalState = it.state }
+                                                            .onSuccess { resolution ->
+                                                                finalState = resolution.state
+                                                                responseRewardFeedback = FeedbackMapper.mapAll(
+                                                                    resolution.gameResult.events,
+                                                                    resolution.state.campaign.turn
+                                                                )
+                                                            }
                                                             .onFailure { rewardError = it.message ?: "Não foi possível aplicar a recompensa confirmada." }
                                                     }
                                                     repository.save(finalState)
                                                     state = finalState
                                                     suggestedActions = response.suggestedActions
+                                                    rewardFeedback = responseRewardFeedback
                                                     pendingRule = response.ruleRequest?.takeIf {
                                                         requestError == null && !it.type.equals("REWARD", ignoreCase = true)
                                                     }
@@ -583,6 +616,7 @@ private fun ExplorationScreen(
     pendingRule: GuardianRuleRequest?,
     lastResolution: GuardianRuleResolution?,
     suggestedActions: List<String>,
+    rewardFeedback: List<FeedbackEntry>,
     intent: String,
     onIntentChange: (String) -> Unit,
     onSuggestionSelected: (String) -> Unit,
@@ -659,6 +693,7 @@ private fun ExplorationScreen(
                 history = c.guardianHistory,
                 modifier = Modifier.weight(1f)
             )
+            RewardFeedbackCard(rewardFeedback)
             GuardianSuggestedActions(
                 actions = suggestedActions,
                 enabled = !guardianLoading && pendingRule == null && lastResolution == null,
@@ -839,6 +874,22 @@ private fun GrowthReviewDialog(
         titleContentColor = CairnAccent,
         textContentColor = CairnText
     )
+}
+
+@Composable
+private fun RewardFeedbackCard(entries: List<FeedbackEntry>) {
+    if (entries.isEmpty()) return
+    SectionCard {
+        Text("RECOMPENSA", color = CairnAccent, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+        entries.takeLast(6).forEach { entry ->
+            val color = when (entry.type) {
+                FeedbackType.WARNING, FeedbackType.FAILURE, FeedbackType.DAMAGE, FeedbackType.CRITICAL -> CairnDanger
+                FeedbackType.SUCCESS, FeedbackType.INVENTORY -> CairnAccent
+                FeedbackType.INFO -> CairnMuted
+            }
+            Text(entry.message, color = color, style = MaterialTheme.typography.bodySmall)
+        }
+    }
 }
 
 @Composable
@@ -1237,11 +1288,13 @@ private fun CharacterCreation(
 private fun CharacterSheet(
     state: GameState,
     combatActive: Boolean,
+    rewardFeedback: List<FeedbackEntry>,
     onDamage: () -> Unit,
     onExplore: () -> Unit,
     onRest: () -> Unit,
     onAddItem: () -> Unit,
     onRemoveItem: (String) -> Unit,
+    onClaimReward: (String) -> Unit,
     onDelete: () -> Unit
 ) {
     val c = state.campaign
@@ -1260,6 +1313,7 @@ private fun CharacterSheet(
                 Text("HP " + r.hp + "/" + r.maxHp, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                 Text("FOR " + r.str + "   DES " + r.dex + "   VON " + r.wil)
                 Text("Armadura " + r.armor + "   Espaços " + r.usedSlots + "/10", color = CairnMuted)
+                Text("Ouro " + c.profile.gold + " GP", color = CairnAccent, fontWeight = FontWeight.SemiBold)
                 c.profile.background?.let { Text(backgroundLabel(it), color = CairnAccent) }
                 if (r.deprived) Text("Privado", color = CairnDanger)
                 if (r.critical) Text("Dano crítico", color = CairnDanger)
@@ -1291,7 +1345,7 @@ private fun CharacterSheet(
                 if (r.inventory.isEmpty()) Text("Nenhum item", color = CairnMuted)
                 r.inventory.forEach { item ->
                     ListItem(
-                        headlineContent = { Text(item.id) },
+                        headlineContent = { Text(inventoryItemLabel(item)) },
                         supportingContent = {
                             Text(buildList {
                                 add(item.slotCost.toString() + if (item.slotCost == 1) " espaço" else " espaços")
@@ -1305,8 +1359,39 @@ private fun CharacterSheet(
                 }
                 Spacer(Modifier.height(4.dp))
                 OutlinedButton(onClick = onAddItem, enabled = r.freeSlots > 0 && !combatActive, modifier = Modifier.fillMaxWidth()) { Text("Adicionar item") }
+                if (c.pendingRewardItems.isNotEmpty()) {
+                    Spacer(Modifier.height(10.dp))
+                    Text("RECOMPENSAS PENDENTES", color = CairnAccent, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                    Text("A recompensa fica guardada até você liberar espaço no inventário.", color = CairnMuted, style = MaterialTheme.typography.bodySmall)
+                    c.pendingRewardItems.forEach { pending ->
+                        val entry = MarketplaceCatalog.find(pending.catalogItemId)
+                        val template = entry?.item
+                        val slotsRequired = template?.slotCost ?: 0
+                        val canClaim = template != null && r.freeSlots >= slotsRequired && !combatActive
+                        val slotsMissing = (slotsRequired - r.freeSlots).coerceAtLeast(0)
+                        ListItem(
+                            headlineContent = { Text(entry?.name ?: pending.catalogItemId) },
+                            supportingContent = {
+                                val detail = when {
+                                    template == null -> "Item indisponível no catálogo."
+                                    combatActive -> "Retorne à exploração para resgatar."
+                                    canClaim -> "$slotsRequired ${if (slotsRequired == 1) "espaço" else "espaços"} · ${r.freeSlots} livre(s)"
+                                    else -> "Libere $slotsMissing ${if (slotsMissing == 1) "espaço" else "espaços"} para resgatar."
+                                }
+                                Text(detail)
+                            },
+                            trailingContent = {
+                                TextButton(onClick = { onClaimReward(pending.id) }, enabled = canClaim) { Text("Resgatar") }
+                            }
+                        )
+                    }
+                    if (r.freeSlots == 0) {
+                        Text("Cairn 2e: ocupar os 10 espaços reduz HP a 0. Libere espaço antes de resgatar.", color = CairnDanger, style = MaterialTheme.typography.labelSmall)
+                    }
+                }
             }
         }
+        item { RewardFeedbackCard(rewardFeedback) }
         item {
             OutlinedButton(onClick = onDamage, enabled = !combatActive, modifier = Modifier.fillMaxWidth()) { Text("Receber 2 de dano (teste)") }
         }

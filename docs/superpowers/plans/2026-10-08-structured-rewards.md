@@ -10,6 +10,8 @@
 
 **Spec:** `docs/superpowers/specs/2026-10-08-playtest-feedback.md` — seção “Recompensas estruturadas”; escolha do usuário em 2026-10-08: “Creditar automaticamente quando o pagamento for estruturado e confirmado na cena”; [Cairn 2e — Marketplace](https://cairnrpg.com/second-edition/players-guide/marketplace/); `docs/CAIRN-2E-RULE-MATRIX.md`.
 
+**Progress (2026-10-08):** As Tasks 1 e 2 foram implementadas em commits pequenos; os testes unitários e do servidor passaram no CI do commit `30d86e9`. A integração HTTP com `https://cairn-guardian.onrender.com` falhou porque o endpoint respondeu 500 após Gemini HTTP 400 (`invalid_request`), então APK release, CI verde, QA manual e merge continuam pendentes. A UI da Task 3 está implementada localmente e ainda aguarda CI.
+
 ## Global Constraints
 
 - O Marketplace oficial diz que todos os preços são em **gold pieces (GP)**; manter GP como unidade mecânica e não inventar câmbio de cobre para ouro.
@@ -109,23 +111,23 @@ assertEquals(paidResult.state, paidReplayWithSameId.state)
 - Test: `app/src/test/kotlin/com/vanish994/cairnsolo/feedback/FeedbackMapperTest.kt`, `app/src/test/kotlin/com/vanish994/cairnsolo/game/GameActionResolverTest.kt`
 
 **Interfaces:**
-- A ficha mostra `Ouro: <saldo> po` em seção própria, separada de `INVENTÁRIO`.
+- A ficha mostra `Ouro: <saldo> GP` em seção própria, separada de `INVENTÁRIO`.
 - A seção de recompensas pendentes mostra nome, slots necessários e botão `Resgatar` habilitado somente quando há espaço suficiente.
 - `inventoryItemLabel(item: InventoryItem): String` resolve `reward-catalog:<catalogId>` para `MarketplaceCatalog.find(catalogId)?.name`; itens antigos mantêm o rótulo atual.
 - `GoldCredited`, `RewardItemAdded`, `RewardItemPending`, `RewardItemClaimed` e `RewardItemRejected` produzem feedback localizado com resultado preciso.
 
-- [ ] Escrever `FeedbackMapperTest.goldCreditedShowsAmountAndNewBalance`, `rewardItemAddedShowsCatalogName`, `rewardItemPendingShowsSlotsNeeded` e `rewardItemRejectedExplainsUnsupportedCatalogId`.
+- [x] Cobrir crédito GP, item entregue, item pendente, item rejeitado, resgate e rótulo de catálogo em `FeedbackMapperTest`.
 
 ```kotlin
-assertEquals("Você recebeu 12 po. Saldo: 12 po.", FeedbackMapper.map(GameEvent.GoldCredited("quest-pay", 12, 12), turn = 1).message)
+assertEquals("Você recebeu 12 GP. Saldo: 12 GP.", FeedbackMapper.map(GameEvent.GoldCredited("quest-pay", 12, 12), turn = 1).message)
 ```
 
-- [ ] Rodar `gh workflow run android.yml --ref <feature-branch>` com os testes de feedback/ficha; confirmar falha esperada antes da implementação.
-- [ ] Mostrar `CharacterProfile.gold` na `CharacterSheet`; manter GP fora da lista de itens e fora do cálculo de slots.
-- [ ] Mostrar os itens pendentes com nome vindo de `MarketplaceCatalog`; ao resgatar, chamar `GameAction.ClaimPendingRewardItem` via `GameActionResolver`.
-- [ ] Se não houver espaço, explicar quantos slots liberar e preservar todos os itens; nunca chamar `RemoveItem` sem ação explícita do jogador.
-- [ ] Mapear eventos em português brasileiro; não exibir crédito para `OFFERED`.
-- [ ] Rodar `gh workflow run android.yml --ref <feature-branch>` e conferir manualmente pagamento de 12 po, item de catálogo no inventário, item pendente quando cheio, resgate depois de abrir espaço e save/reload.
+- [ ] Validar os novos testes de feedback/ficha com `gh workflow run android.yml --ref feature/structured-rewards`; a última execução falhou na integração HTTP externa antes do APK.
+- [x] Mostrar `CharacterProfile.gold` na `CharacterSheet`; manter GP fora da lista de itens e fora do cálculo de slots.
+- [x] Mostrar os itens pendentes com nome vindo de `MarketplaceCatalog`; ao resgatar, chamar `GameAction.ClaimPendingRewardItem` via `GameActionResolver`.
+- [x] Se não houver espaço, explicar quantos slots liberar e preservar todos os itens; nunca chamar `RemoveItem` sem ação explícita do jogador.
+- [x] Mapear eventos em português brasileiro; não exibir crédito para `OFFERED`.
+- [ ] Rodar `gh workflow run android.yml --ref <feature-branch>` e conferir manualmente pagamento de 12 GP, item de catálogo no inventário, item pendente quando cheio, resgate depois de abrir espaço e save/reload.
 - [ ] Commit atômico: `feat: show balance and claim reward items`.
 
 ### Task 4: Integração
@@ -133,5 +135,5 @@ assertEquals("Você recebeu 12 po. Saldo: 12 po.", FeedbackMapper.map(GameEvent.
 **Branch:** `feature/structured-rewards` (criar a partir da `main` após mesclar o PR de documentação; um PR focado).
 
 - [ ] Abrir PR para `main`; exigir Android Build verde (unit tests, Guardian server tests, integração HTTP e APK release) no HEAD atual.
-- [ ] Aceitação manual: “O taverneiro entrega 12 po” com `PAID` aumenta saldo exatamente em 12 e persiste; `OFFERED` não altera estado; item válido de catálogo vai para o inventário, item sem espaço fica pendente sem apagar outro item; nenhuma moeda aparece como item.
+- [ ] Aceitação manual: “O taverneiro entrega 12 GP” com `PAID` aumenta saldo exatamente em 12 e persiste; `OFFERED` não altera estado; item válido de catálogo vai para o inventário, item sem espaço fica pendente sem apagar outro item; nenhuma moeda aparece como item.
 - [ ] Atualizar `docs/STATUS.md` e `docs/ARCHITECTURE-MAP.md` após CI; merge somente com checks verdes.
