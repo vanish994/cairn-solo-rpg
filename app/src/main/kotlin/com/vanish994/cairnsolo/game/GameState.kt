@@ -35,7 +35,7 @@ data class CombatOpponentNarrative(
 
 enum class CombatOpponentStatus { ACTIVE, DEFEATED, FLED }
 
-enum class CombatMoraleTrigger { FIRST_CASUALTY, HALF_GROUP }
+enum class CombatMoraleTrigger { SINGLE_OPPONENT_ZERO_HP, FIRST_CASUALTY, HALF_GROUP }
 
 enum class CombatEndReason {
     OPPONENTS_DEFEATED,
