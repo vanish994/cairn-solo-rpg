@@ -5,18 +5,48 @@ import com.vanish994.cairnsolo.game.GameActionResolver
 import com.vanish994.cairnsolo.game.GameEvent
 import com.vanish994.cairnsolo.game.GameResult
 import com.vanish994.cairnsolo.game.GameState
+import com.vanish994.cairnsolo.game.CombatOpponentNarrative
 import com.vanish994.cairnsolo.rules.Attribute
 
 data class GuardianRuleResolution(
     val state: GameState,
     val resultText: String,
-    val gameResult: GameResult
+    val gameResult: GameResult,
+    val encounterNarrative: CombatOpponentNarrative? = null
 )
 
 class GuardianRuleResolver(
     private val actionResolver: GameActionResolver
 ) {
+    fun validationError(state: GameState, request: GuardianRuleRequest): String? {
+        val type = request.type.uppercase()
+        when (type) {
+            "SAVE" -> if (request.attribute?.uppercase() !in setOf("STR", "DEX", "WIL")) {
+                return "SAVE precisa indicar o atributo STR, DEX ou WIL."
+            }
+            "DAMAGE", "FATIGUE" -> if (request.amount == null || request.amount < 1) {
+                return "$type precisa indicar uma quantidade positiva."
+            }
+            "REST", "STABILIZE_CRITICAL", "RECOVER_SCAR" -> Unit
+            "BEGIN_COMBAT" -> if (request.encounter == null) {
+                return "BEGIN_COMBAT precisa trazer uma proposta completa de encontro."
+            }
+            else -> return "Pedido de regra do Guardião não suportado: ${request.type}"
+        }
+        if (state.campaign.combat != null) {
+            return when (type) {
+                "DAMAGE" -> "Pedidos DAMAGE do Guardião não podem causar dano durante combate; use uma ação de ataque do motor de regras."
+                "REST" -> "Pedidos REST não podem ser resolvidos durante combate ativo."
+                "BEGIN_COMBAT" -> "Já existe um combate ativo."
+                else -> null
+            }
+        }
+        return null
+    }
+
     fun resolve(state: GameState, request: GuardianRuleRequest): GuardianRuleResolution {
+        val validationError = validationError(state, request)
+        require(validationError == null) { validationError ?: "Invalid Guardian rule request" }
         val action = when (request.type.uppercase()) {
             "SAVE" -> GameAction.Save(
                 attribute = when (request.attribute?.uppercase()) {
@@ -37,14 +67,29 @@ class GuardianRuleResolver(
             "REST" -> GameAction.Rest
             "STABILIZE_CRITICAL" -> GameAction.StabilizeCritical
             "RECOVER_SCAR" -> GameAction.RecoverScar
+            "BEGIN_COMBAT" -> {
+                val encounter = request.encounter ?: error("BEGIN_COMBAT requires a complete encounter proposal")
+                GameAction.BeginCombat(
+                    opponentId = encounter.opponentId,
+                    opponent = encounter.stats,
+                    opponentWeapon = encounter.weapon,
+                    opponentNarrative = encounter.narrative
+                )
+            }
             else -> error("Unsupported Guardian rule request: ${request.type}")
         }
 
+        return resolve(state, action)
+    }
+
+    fun resolve(state: GameState, action: GameAction): GuardianRuleResolution {
         val result = actionResolver.resolve(state, action)
         return GuardianRuleResolution(
             state = result.state,
             resultText = summarize(result.events),
-            gameResult = result
+            gameResult = result,
+            encounterNarrative = state.campaign.combat?.opponentNarrative
+                ?: (action as? GameAction.BeginCombat)?.opponentNarrative
         )
     }
 
@@ -58,6 +103,16 @@ class GuardianRuleResolver(
                         (if (event.success) "sucesso" else "falha") + "."
                 is GameEvent.DamageResolved ->
                     "Dano: ${event.rawDamage} bruto, ${event.armorAbsorbed} absorvido pela armadura, ${event.hpDamage} aplicado ao HP."
+                is GameEvent.CombatStarted ->
+                    "Combate iniciado contra ${event.opponentId}, rodada ${event.round}; " +
+                        (if (event.playerCanAct) "o jogador age primeiro." else "o oponente age primeiro.")
+                is GameEvent.CombatAttackResolved -> listOfNotNull(
+                    event.damageDealtByPlayer?.let { combatDamageFact("Dano causado pelo jogador ao oponente", it) },
+                    event.damageDealtByOpponent?.let { combatDamageFact("Dano causado pelo oponente ao jogador", it) }
+                ).joinToString(" ").ifBlank { "Ataque resolvido contra ${event.opponentId}." }
+                is GameEvent.CombatEnded ->
+                    if (event.victory) "O combate contra ${event.opponentId} terminou com vitória do jogador."
+                    else "O combate contra ${event.opponentId} terminou sem vitória do jogador."
                 is GameEvent.RestCompleted ->
                     "Descanso: recuperou ${event.hpRecovered} HP e ${event.fatigueRecovered} Fadiga."
                 is GameEvent.FatigueAdded ->
@@ -69,5 +124,12 @@ class GuardianRuleResolver(
                 else -> event.toString()
             }
         }
+    }
+
+    private fun combatDamageFact(label: String, damage: GameEvent.DamageResolved): String = buildString {
+        append("$label: ${damage.rawDamage} bruto, ${damage.armorAbsorbed} absorvido pela armadura, ${damage.hpDamage} HP perdido.")
+        if (damage.critical) append(" Resultado crítico.")
+        if (damage.dead) append(" Alvo morto.")
+        damage.scar?.let { append(" Cicatriz registrada: $it.") }
     }
 }
