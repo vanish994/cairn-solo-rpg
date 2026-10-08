@@ -8,7 +8,7 @@
 
 **Integração de campanha, Guardian e UI de chat**
 
-Status: 🟡 núcleo de regras e módulos de campanha integrados; UI em transição para chat; combate/Growth precisam fechar o ciclo E2E
+Status: 🟡 primeira fatia vertical de combate integrada e validada por CI; ainda faltam teste visual em dispositivo, procedimentos normativos adicionais e conclusão do Gate 8.
 
 ## Gate 0 — Concluído
 
@@ -116,16 +116,19 @@ O descanso de exploração agora usa `RulesEngine.safeRest()`. Isso evita criar 
 - [x] Combate, magia, dungeon, wilderness, downtime, marketplace, reações, moral, hirelings, Growth e cânone possuem módulos de domínio e ações de integração.
 - [x] Persistência inclui os módulos novos e possui testes de round-trip em partes relevantes.
 - [x] Backend Guardian usa fluxo estruturado de propostas e modelo Flash-Lite.
+- [x] PR #15: propostas de Growth exigem decisão explícita do jogador e passaram pelo Android Build.
+- [x] PR #16: Guardian propõe encontro, jogador aceita/recusa, resolver conduz combate e Guardian narra fatos mecânicos autorizados.
+- [x] Combate ativo bloqueia ações incompatíveis; armas do jogador são reconstruídas do inventário e saves com dado de arma inválido usam `d4` seguro.
+- [x] Propostas incompletas de combate preservam a narração e exibem validação; o backend rejeita strings em branco e HP acima de `maxHp`.
 
 ## Próximo incremento
 
-- conectar `BEGIN_COMBAT`/`BeginCombat` ao fluxo do Guardian e à UI de combate;
-- bloquear ações de exploração enquanto `campaign.combat` estiver ativo;
-- criar revisão aceitar/recusar para Growth validado;
-- diferenciar descanso seguro, descanso breve e acampamento inseguro por contexto de cena;
-- concluir o teste E2E: criação → abertura única → exploração → encontro → combate → Growth → save/load;
-- sincronizar a matriz normativa com o código real e atualizar os Gates antigos;
-- decidir e registrar a consolidação entre `CampaignState` e `CampaignRuntime`.
+1. Executar validação visual em dispositivo: proposta → recusa/aceite → ataque → narração → save/load. O CI validou APK release, mas não substitui o teste manual em hardware.
+2. Fechar procedimentos restantes do Gate de combate com base na matriz Cairn 2e; não há ação de fuga/encerramento voluntário até haver regra normativa aprovada.
+3. Integrar inimigos/NPCs e ampliar exploração real, dungeon e mundo persistente.
+4. Completar E2E da campanha: criação → abertura → exploração → encontro → combate → Growth → save/load.
+5. Sincronizar a matriz normativa e os Gates antigos com o comportamento real, sem declarar Cairn 2e completa.
+6. Registrar decisão arquitetural sobre a sobreposição entre `CampaignState` e `CampaignRuntime`.
 
 ## Regras para agentes
 
@@ -142,11 +145,11 @@ O descanso de exploração agora usa `RulesEngine.safeRest()`. Isso evita criar 
 
 ## Última validação
 
-Workflow GitHub Actions **Android Build #68**:
-- `testDebugUnitTest`: sucesso.
-- 26 testes concluídos.
-- 0 falhas.
-- Build do projeto: sucesso.
+Workflow GitHub Actions **Android Build #37739460702**, executado em `main` após merge do PR #16 (`78a014585c30b944d602191b12dca2d207682d58`):
+- Testes unitários Android: sucesso.
+- Testes do Guardian server: sucesso.
+- Teste de integração do endpoint HTTP Guardian: sucesso.
+- Build release otimizado, verificação do APK e upload do artefato: sucesso.
 
 ## Documentos para continuidade
 

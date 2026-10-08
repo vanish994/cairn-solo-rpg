@@ -40,7 +40,7 @@ Responsabilidades:
 - capturar texto do jogador;
 - apresentar rolagem pendente;
 - apresentar resultado mecânico;
-- apresentar modo/card de combate quando conectado;
+- apresentar proposta de encontro com aceite/recusa e card de combate integrado;
 - apresentar propostas de Growth após validação;
 - chamar callbacks de ação, não mutar domínio.
 
@@ -63,7 +63,7 @@ Não deve conter:
 - intenção do Guardian/jogador;
 - dano, itens, Fadiga, privação e saves;
 - estabilização e recuperação de cicatriz;
-- início, ataque e término de combate;
+- proposta/início e ataque de combate; `EndCombat` não encerra combate ativo sem procedimento autorizado;
 - magia;
 - marketplace;
 - downtime;
@@ -95,7 +95,7 @@ Regra de manutenção: se uma nova mutação for adicionada a outro lugar, ela d
 |---|---|---|
 | `RulesEngine.kt` | atributos, saves, HP, Armor, inventário, Fadiga, privação, dano, Scars, recuperação | usado pelo resolver e por módulos específicos |
 | `CharacterGenerator.kt` | rolagens de criação, backgrounds, traits e idade | cria estado inicial válido |
-| `CombatRules.kt` | combate, ataques, dano, rodadas e encerramento | `BeginCombat`, `CombatAttack`, `EndCombat` |
+| `CombatRules.kt` | iniciativa, ataques, dano e rodadas | `BeginCombat`, `CombatAttack`; o resolver bloqueia `EndCombat` enquanto o combate estiver ativo |
 | `DungeonRules.kt` | turnos e procedimentos de dungeon | `DungeonAct` |
 | `WildernessRules.kt` | viagem, watches, clima e acampamento | `StartTravel`, `WildernessAct`, `RollWeather` |
 | `MagicRules.kt` | magia, spellbooks, custo e falha | `CastSpell` |
@@ -235,10 +235,14 @@ DamageResolved / Critical / Scar / Morale events
     ↓
 Guardian recebe resultado e narra
     ↓
-se inimigo foge/morre: EndCombat
+se a resolução autoritativa termina em vitória/morte: CombatEnded
 se personagem morre: estado terminal
 se combate continua: próxima intenção/ação de combate
 ```
+
+**Implementado no PR #16:** o Guardian retorna `BEGIN_COMBAT` como proposta; a UI exige aceite/recusa; `GameActionResolver` valida armas e controla iniciativa/ataques; o Guardian recebe somente resumo derivado dos eventos para narrar. A arma do jogador é reconstruída do inventário, o resultado não é escolhido pelo modelo e o save preserva o perfil do oponente.
+
+**Limites atuais:** o fluxo cobre um oponente por estado de combate e não oferece fuga/encerramento voluntário; `EndCombat` é rejeitado durante combate ativo. Não inventar essa regra na UI até definir um procedimento normativo. A validação visual em dispositivo real permanece pendente.
 
 Invariantes:
 
