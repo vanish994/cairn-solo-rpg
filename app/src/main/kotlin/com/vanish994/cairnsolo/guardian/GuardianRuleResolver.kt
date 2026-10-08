@@ -6,6 +6,7 @@ import com.vanish994.cairnsolo.game.GameEvent
 import com.vanish994.cairnsolo.game.GameResult
 import com.vanish994.cairnsolo.game.GameState
 import com.vanish994.cairnsolo.game.CombatOpponentState
+import com.vanish994.cairnsolo.game.isValidRewardId
 import com.vanish994.cairnsolo.rules.Attribute
 
 data class GuardianRuleResolution(
@@ -31,6 +32,16 @@ class GuardianRuleResolver(
             "BEGIN_COMBAT" -> if (request.encounter == null) {
                 return "BEGIN_COMBAT precisa trazer uma proposta completa de encontro."
             }
+            "REWARD" -> {
+                val reward = request.reward ?: return "REWARD precisa trazer uma proposta completa de recompensa."
+                if (!isValidRewardId(reward.id)) return "REWARD precisa usar um ID válido."
+                if (reward.amountGp < 0) return "REWARD não pode ter quantidade de GP negativa."
+                if (reward.itemCatalogIds.size > 5) return "REWARD pode conter no máximo cinco itens."
+                if (reward.itemCatalogIds.any { !isValidRewardId(it) }) return "REWARD contém um ID de catálogo inválido."
+                if (reward.status == RewardStatus.PAID && reward.amountGp == 0 && reward.itemCatalogIds.isEmpty()) {
+                    return "REWARD PAID precisa entregar GP ou ao menos um item."
+                }
+            }
             else -> return "Pedido de regra do Guardião não suportado: ${request.type}"
         }
         if (state.campaign.combat != null) {
@@ -38,6 +49,7 @@ class GuardianRuleResolver(
                 "DAMAGE" -> "Pedidos DAMAGE do Guardião não podem causar dano durante combate; use uma ação de ataque do motor de regras."
                 "REST" -> "Pedidos REST não podem ser resolvidos durante combate ativo."
                 "BEGIN_COMBAT" -> "Já existe um combate ativo."
+                "REWARD" -> if (request.reward?.status == RewardStatus.PAID) "Pagamentos REWARD não podem ser aplicados durante combate ativo." else null
                 else -> null
             }
         }
@@ -80,6 +92,17 @@ class GuardianRuleResolver(
                     },
                     moraleLeaderId = encounter.moraleLeaderId
                 )
+            }
+            "REWARD" -> {
+                val reward = request.reward ?: error("REWARD requires a complete reward proposal")
+                if (reward.status == RewardStatus.OFFERED) {
+                    return GuardianRuleResolution(
+                        state = state,
+                        resultText = "Recompensa apenas oferecida; nenhum efeito mecânico foi aplicado.",
+                        gameResult = GameResult(state, emptyList())
+                    )
+                }
+                GameAction.GrantReward(reward.id, reward.amountGp, reward.itemCatalogIds)
             }
             else -> error("Unsupported Guardian rule request: ${request.type}")
         }
@@ -146,6 +169,16 @@ class GuardianRuleResolver(
                     "Combate encerrado para ${event.opponentIds.joinToString(", ")}; motivo: ${event.reason}."
                 is GameEvent.RestCompleted ->
                     "Descanso: recuperou ${event.hpRecovered} HP e ${event.fatigueRecovered} Fadiga."
+                is GameEvent.GoldCredited ->
+                    "Pagamento confirmado: +${event.amountGp} GP; saldo atual: ${event.newBalanceGp} GP."
+                is GameEvent.RewardItemAdded ->
+                    "Item de catálogo entregue: ${event.catalogItemId}."
+                is GameEvent.RewardItemPending ->
+                    "Item ${event.catalogItemId} está pendente; libere ${(event.slotsRequired - event.freeSlots).coerceAtLeast(0)} slot(s)."
+                is GameEvent.RewardItemClaimed ->
+                    "Item de recompensa resgatado: ${event.itemInstanceId}."
+                is GameEvent.RewardItemRejected ->
+                    "Item de recompensa não aplicado (${event.reason}): ${event.catalogItemId}."
                 is GameEvent.FatigueAdded ->
                     "Fadiga aumentada em ${event.amount}."
                 GameEvent.CriticalStabilized ->

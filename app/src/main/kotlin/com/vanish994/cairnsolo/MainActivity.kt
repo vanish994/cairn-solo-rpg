@@ -258,12 +258,22 @@ class MainActivity : ComponentActivity() {
                                                         }
                                                         actionResolver.resolve(withChanges, GameAction.ApplyCanonProposals(response.canonProposals)).state
                                                     }.getOrElse { narrated }
-                                                    repository.save(next)
-                                                    state = next
-                                                    suggestedActions = response.suggestedActions
                                                     val requestError = response.ruleRequest?.let { guardianRuleResolver.validationError(next, it) }
-                                                    pendingRule = response.ruleRequest.takeIf { requestError == null }
-                                                    guardianError = requestError
+                                                    val rewardRequest = response.ruleRequest?.takeIf { it.type.equals("REWARD", ignoreCase = true) }
+                                                    var finalState = next
+                                                    var rewardError: String? = null
+                                                    if (requestError == null && rewardRequest != null) {
+                                                        runCatching { guardianRuleResolver.resolve(next, rewardRequest) }
+                                                            .onSuccess { finalState = it.state }
+                                                            .onFailure { rewardError = it.message ?: "Não foi possível aplicar a recompensa confirmada." }
+                                                    }
+                                                    repository.save(finalState)
+                                                    state = finalState
+                                                    suggestedActions = response.suggestedActions
+                                                    pendingRule = response.ruleRequest?.takeIf {
+                                                        requestError == null && !it.type.equals("REWARD", ignoreCase = true)
+                                                    }
+                                                    guardianError = requestError ?: rewardError
                                                     lastResolution = null
                                                     guardianFlow = when (pendingRule?.type?.uppercase()) {
                                                         null -> GuardianFlow.EXPLORATION
@@ -311,12 +321,22 @@ class MainActivity : ComponentActivity() {
                                                         }
                                                         actionResolver.resolve(withChanges, GameAction.ApplyCanonProposals(response.canonProposals)).state
                                                     }.getOrElse { narrated }
-                                                    repository.save(next)
-                                                    state = next
-                                                    suggestedActions = response.suggestedActions
                                                     val requestError = response.ruleRequest?.let { guardianRuleResolver.validationError(next, it) }
-                                                    pendingRule = response.ruleRequest.takeIf { requestError == null }
-                                                    guardianError = requestError
+                                                    val rewardRequest = response.ruleRequest?.takeIf { it.type.equals("REWARD", ignoreCase = true) }
+                                                    var finalState = next
+                                                    var rewardError: String? = null
+                                                    if (requestError == null && rewardRequest != null) {
+                                                        runCatching { guardianRuleResolver.resolve(next, rewardRequest) }
+                                                            .onSuccess { finalState = it.state }
+                                                            .onFailure { rewardError = it.message ?: "Não foi possível aplicar a recompensa confirmada." }
+                                                    }
+                                                    repository.save(finalState)
+                                                    state = finalState
+                                                    suggestedActions = response.suggestedActions
+                                                    pendingRule = response.ruleRequest?.takeIf {
+                                                        requestError == null && !it.type.equals("REWARD", ignoreCase = true)
+                                                    }
+                                                    guardianError = requestError ?: rewardError
                                                     lastResolution = null
                                                     guardianFlow = when (pendingRule?.type?.uppercase()) {
                                                         null -> GuardianFlow.EXPLORATION
