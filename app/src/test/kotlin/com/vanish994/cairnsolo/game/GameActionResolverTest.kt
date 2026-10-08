@@ -416,6 +416,23 @@ class CombatGameActionResolverTest {
     }
 
     @Test
+    fun fledOpponentBeforeEnemyPhaseDoesNotAct() {
+        val random = SequentialRandomSource(4 to 1, 4 to 2)
+        val before = combatState(listOf(
+            opponent("fled", hp = 0, status = CombatOpponentStatus.FLED),
+            opponent("active", weapon = WeaponProfile("active-claws", "d4"))
+        ))
+
+        val result = resolver(random).resolve(before, GameAction.CombatAttack(targetOpponentId = "active"))
+        val attack = result.events.filterIsInstance<GameEvent.CombatAttackResolved>().single()
+
+        assertEquals(listOf("active"), attack.enemyAttackRolls.map { it.opponentId })
+        assertEquals(listOf(2), attack.enemyAttackRolls.map { it.damageRolled })
+        assertEquals(CombatOpponentStatus.FLED, result.state.campaign.combat?.opponents?.first()?.status)
+        random.assertAllRollsUsed()
+    }
+
+    @Test
     fun playerCanChooseOpponentAndCombatDoesNotEndUntilAllInactive() {
         val random = SequentialRandomSource(4 to 4, 20 to 20, 20 to 4, 20 to 4, 6 to 2)
         val before = combatState(listOf(
