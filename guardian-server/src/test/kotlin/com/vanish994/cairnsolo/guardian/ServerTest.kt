@@ -8,14 +8,39 @@ import kotlin.test.assertTrue
 
 class ServerTest {
     @Test
-    fun encounterSchemaRejectsBlankNarrativeAndIdentifiers() {
-        val properties = combatEncounterSchema().getAsJsonObject("properties")
-        val opponent = properties.getAsJsonObject("opponents").getAsJsonObject("items").getAsJsonObject("properties")
-        assertEquals("^\\S(?:.*\\S)?$", opponent.getAsJsonObject("opponentId").get("pattern").asString)
-        assertEquals("\\S", opponent.getAsJsonObject("narrative").getAsJsonObject("properties")
-            .getAsJsonObject("name").get("pattern").asString)
-        assertEquals("\\S", opponent.getAsJsonObject("weapon").getAsJsonObject("properties")
-            .getAsJsonObject("id").get("pattern").asString)
+    fun guardianResponseSchemaUsesOnlyGeminiSupportedKeywords() {
+        val unsupported = mutableSetOf<String>()
+        val supported = setOf(
+            "type", "properties", "required", "additionalProperties", "items", "anyOf", "prefixItems",
+            "enum", "minimum", "maximum", "minItems", "maxItems", "format", "title", "description"
+        )
+
+        fun inspect(schema: com.google.gson.JsonObject, path: String) {
+            schema.keySet().filterNot { it in supported }.forEach { unsupported += "$path.$it" }
+            schema.get("properties")
+                ?.takeIf { it.isJsonObject }
+                ?.asJsonObject
+                ?.entrySet()
+                ?.forEach { property ->
+                    property.value.takeIf { it.isJsonObject }?.asJsonObject?.let { inspect(it, "$path.${property.key}") }
+                }
+            schema.get("items")
+                ?.takeIf { it.isJsonObject }
+                ?.asJsonObject
+                ?.let { inspect(it, "$path.items") }
+            listOf("anyOf", "prefixItems").forEach { keyword ->
+                schema.get(keyword)
+                    ?.takeIf { it.isJsonArray }
+                    ?.asJsonArray
+                    ?.forEachIndexed { index, child ->
+                        child.takeIf { it.isJsonObject }?.asJsonObject?.let { inspect(it, "$path.$keyword[$index]") }
+                    }
+            }
+        }
+
+        inspect(guardianResponseSchema(), "$")
+
+        assertTrue(unsupported.isEmpty(), "Unsupported Gemini schema keywords remain: $unsupported")
     }
 
     @Test
@@ -49,6 +74,32 @@ class ServerTest {
             setOf("id", "damage", "blast", "ranged"),
             opponentProperties.getAsJsonObject("weapon").getAsJsonArray("required").map { it.asString }.toSet()
         )
+    }
+
+    @Test
+    fun composedResponseSchemaRetainsMultiOpponentBeginCombatBranch() {
+        val alternatives = guardianResponseSchema()
+            .getAsJsonObject("properties")
+            .getAsJsonObject("ruleRequest")
+            .getAsJsonArray("anyOf")
+        val combat = alternatives.first { branch ->
+            branch.asJsonObject.get("properties")
+                ?.takeIf { it.isJsonObject }
+                ?.asJsonObject
+                ?.get("type")
+                ?.takeIf { it.isJsonObject }
+                ?.asJsonObject
+                ?.getAsJsonArray("enum")
+                ?.any { it.asString == "BEGIN_COMBAT" } == true
+        }.asJsonObject
+        val opponents = combat.getAsJsonObject("properties")
+            .getAsJsonObject("encounter")
+            .getAsJsonObject("properties")
+            .getAsJsonObject("opponents")
+
+        assertEquals("array", opponents.get("type").asString)
+        assertEquals(1, opponents.get("minItems").asInt)
+        assertEquals(8, opponents.get("maxItems").asInt)
     }
 
     @Test
@@ -87,8 +138,12 @@ class ServerTest {
     }
 
     @Test
-    fun invalidArmorWeaponOrNarrativeIsRejectedWithoutLosingNarration() {
+    fun invalidArmorWeaponNarrativeOrIdentifiersAreRejectedWithoutLosingNarration() {
         val invalidResponses = listOf(
+            validEncounterResponse().apply {
+                getAsJsonObject("ruleRequest").getAsJsonObject("encounter").getAsJsonArray("opponents")[0]
+                    .asJsonObject.addProperty("opponentId", "  ")
+            },
             validEncounterResponse().apply {
                 getAsJsonObject("ruleRequest").getAsJsonObject("encounter").getAsJsonArray("opponents")[0]
                     .asJsonObject.getAsJsonObject("stats").addProperty("armor", 4)
@@ -100,6 +155,10 @@ class ServerTest {
             validEncounterResponse().apply {
                 getAsJsonObject("ruleRequest").getAsJsonObject("encounter").getAsJsonArray("opponents")[0]
                     .asJsonObject.getAsJsonObject("narrative").addProperty("name", "  ")
+            },
+            validEncounterResponse().apply {
+                getAsJsonObject("ruleRequest").getAsJsonObject("encounter").getAsJsonArray("opponents")[0]
+                    .asJsonObject.getAsJsonObject("weapon").addProperty("id", "  ")
             }
         )
 
@@ -107,7 +166,7 @@ class ServerTest {
     }
 
     @Test
-    fun suggestedActionsSchemaRequiresOneToThreeBoundedStrings() {
+    fun suggestedActionsSchemaRequiresOneToThreeStringItems() {
         val schema = suggestedActionsSchema()
         val items = schema.getAsJsonObject("items")
 
@@ -115,8 +174,8 @@ class ServerTest {
         assertEquals(1, schema.get("minItems").asInt)
         assertEquals(3, schema.get("maxItems").asInt)
         assertEquals("string", items.get("type").asString)
-        assertEquals(1, items.get("minLength").asInt)
-        assertEquals(160, items.get("maxLength").asInt)
+        assertFalse(items.has("minLength"))
+        assertFalse(items.has("maxLength"))
     }
 
     @Test

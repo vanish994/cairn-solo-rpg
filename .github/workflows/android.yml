@@ -36,23 +36,8 @@ jobs:
       - name: Test Guardian server
         run: gradle :guardian-server:test
 
-      - name: Integration test Guardian HTTP endpoint
-        shell: bash
-        env:
-          GUARDIAN_BASE_URL: https://cairn-guardian.onrender.com
-        run: |
-          set -euo pipefail
-          for attempt in {1..60}; do
-            if curl --fail --silent "$GUARDIAN_BASE_URL/health" > /dev/null; then
-              break
-            fi
-            if [[ "$attempt" == "60" ]]; then
-              echo "Guardian backend did not become healthy: $GUARDIAN_BASE_URL" >&2
-              exit 1
-            fi
-            sleep 1
-          done
-          bash guardian-server/scripts/integration-test.sh "$GUARDIAN_BASE_URL"
+      - name: Integration test local Guardian and Gemini contract
+        run: bash guardian-server/scripts/local-integration-test.sh
 
       - name: Build optimized release APK
         run: gradle :app:assembleRelease
@@ -72,4 +57,4 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-# Build and validate the current main branch; manual dispatch remains available for testing.
+# PR/build CI uses a deterministic local Gemini stub; production smoke is a separate manual workflow.
