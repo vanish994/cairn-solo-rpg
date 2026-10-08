@@ -8,14 +8,26 @@ import kotlin.test.assertTrue
 
 class ServerTest {
     @Test
-    fun encounterSchemaRejectsBlankNarrativeAndIdentifiers() {
-        val properties = combatEncounterSchema().getAsJsonObject("properties")
-        val opponent = properties.getAsJsonObject("opponents").getAsJsonObject("items").getAsJsonObject("properties")
-        assertEquals("^\\S(?:.*\\S)?$", opponent.getAsJsonObject("opponentId").get("pattern").asString)
-        assertEquals("\\S", opponent.getAsJsonObject("narrative").getAsJsonObject("properties")
-            .getAsJsonObject("name").get("pattern").asString)
-        assertEquals("\\S", opponent.getAsJsonObject("weapon").getAsJsonObject("properties")
-            .getAsJsonObject("id").get("pattern").asString)
+    fun encounterSchemaAvoidsUndocumentedStringConstraints() {
+        val unsupported = mutableSetOf<String>()
+        val stringConstraints = setOf("pattern", "minLength", "maxLength")
+
+        fun inspect(schema: com.google.gson.JsonObject) {
+            unsupported += schema.keySet().intersect(stringConstraints)
+            schema.get("properties")
+                ?.takeIf { it.isJsonObject }
+                ?.asJsonObject
+                ?.entrySet()
+                ?.forEach { property -> property.value.takeIf { it.isJsonObject }?.asJsonObject?.let(::inspect) }
+            schema.get("items")
+                ?.takeIf { it.isJsonObject }
+                ?.asJsonObject
+                ?.let(::inspect)
+        }
+
+        inspect(combatEncounterSchema())
+
+        assertTrue(unsupported.isEmpty(), "Unsupported string constraints remain: $unsupported")
     }
 
     @Test
@@ -87,8 +99,12 @@ class ServerTest {
     }
 
     @Test
-    fun invalidArmorWeaponOrNarrativeIsRejectedWithoutLosingNarration() {
+    fun invalidArmorWeaponNarrativeOrIdentifiersAreRejectedWithoutLosingNarration() {
         val invalidResponses = listOf(
+            validEncounterResponse().apply {
+                getAsJsonObject("ruleRequest").getAsJsonObject("encounter").getAsJsonArray("opponents")[0]
+                    .asJsonObject.addProperty("opponentId", "  ")
+            },
             validEncounterResponse().apply {
                 getAsJsonObject("ruleRequest").getAsJsonObject("encounter").getAsJsonArray("opponents")[0]
                     .asJsonObject.getAsJsonObject("stats").addProperty("armor", 4)
@@ -100,6 +116,10 @@ class ServerTest {
             validEncounterResponse().apply {
                 getAsJsonObject("ruleRequest").getAsJsonObject("encounter").getAsJsonArray("opponents")[0]
                     .asJsonObject.getAsJsonObject("narrative").addProperty("name", "  ")
+            },
+            validEncounterResponse().apply {
+                getAsJsonObject("ruleRequest").getAsJsonObject("encounter").getAsJsonArray("opponents")[0]
+                    .asJsonObject.getAsJsonObject("weapon").addProperty("id", "  ")
             }
         )
 

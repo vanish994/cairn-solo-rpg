@@ -232,6 +232,8 @@ private fun replaceBeginCombatSchema(properties: JsonObject) {
     })
 }
 
+// Keep string bounds and patterns in isCompleteEncounterProposal(): Gemini structured output
+// supports a smaller JSON Schema subset, and validating them here can make the whole request fail.
 internal fun combatEncounterSchema(): JsonObject = JsonParser.parseString(
     """
     {
@@ -242,15 +244,15 @@ internal fun combatEncounterSchema(): JsonObject = JsonParser.parseString(
           "items":{
             "type":"object",
             "properties":{
-              "opponentId":{"type":"string","minLength":1,"maxLength":80,"pattern":"^\\S(?:.*\\S)?$"},
+              "opponentId":{"type":"string"},
               "narrative":{
                 "type":"object",
                 "properties":{
-                  "name":{"type":"string","minLength":1,"maxLength":160,"pattern":"\\S"},
-                  "appearance":{"type":"string","minLength":1,"maxLength":1000,"pattern":"\\S"},
-                  "behavior":{"type":"string","minLength":1,"maxLength":1000,"pattern":"\\S"},
-                  "intent":{"type":"string","minLength":1,"maxLength":1000,"pattern":"\\S"},
-                  "context":{"type":"string","minLength":1,"maxLength":1000,"pattern":"\\S"}
+                  "name":{"type":"string"},
+                  "appearance":{"type":"string"},
+                  "behavior":{"type":"string"},
+                  "intent":{"type":"string"},
+                  "context":{"type":"string"}
                 },
                 "required":["name","appearance","behavior","intent","context"],"additionalProperties":false
               },
@@ -266,8 +268,8 @@ internal fun combatEncounterSchema(): JsonObject = JsonParser.parseString(
               "weapon":{
                 "type":"object",
                 "properties":{
-                  "id":{"type":"string","minLength":1,"maxLength":80,"pattern":"\\S"},
-                  "damage":{"type":"string","minLength":1,"maxLength":32,"pattern":"^d(4|6|8|10|12)(\\s*\\+\\s*d(4|6|8|10|12))*$"},
+                  "id":{"type":"string"},
+                  "damage":{"type":"string"},
                   "blast":{"type":"boolean"},"ranged":{"type":"boolean"}
                 },
                 "required":["id","damage","blast","ranged"],"additionalProperties":false
@@ -276,7 +278,7 @@ internal fun combatEncounterSchema(): JsonObject = JsonParser.parseString(
             "required":["opponentId","narrative","stats","weapon"],"additionalProperties":false
           }
         },
-        "moraleLeaderId":{"type":"string","minLength":1,"maxLength":80,"pattern":"^\\S(?:.*\\S)?$"}
+        "moraleLeaderId":{"type":"string"}
       },
       "required":["opponents"],"additionalProperties":false
     }
