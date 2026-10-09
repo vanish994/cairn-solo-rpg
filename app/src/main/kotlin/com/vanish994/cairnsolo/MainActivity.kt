@@ -30,7 +30,7 @@ import com.vanish994.cairnsolo.guardian.resolveCampaignOpening
 import com.vanish994.cairnsolo.game.GameActionResolver
 import com.vanish994.cairnsolo.game.GameState
 import com.vanish994.cairnsolo.game.CombatState
-import com.vanish994.cairnsolo.game.CombatOpponent
+import com.vanish994.cairnsolo.game.CombatOpponentState
 import com.vanish994.cairnsolo.game.CombatOpponentStatus
 import com.vanish994.cairnsolo.game.GrowthChangeProposal
 import com.vanish994.cairnsolo.game.ExplorationEngine
@@ -1085,7 +1085,7 @@ private fun EncounterProposalCard(
 
 @Composable
 private fun BattleMap(
-    opponents: List<CombatOpponent>,
+    opponents: List<CombatOpponentState>,
     adventurerName: String,
     adventurerHp: Int,
     adventurerMaxHp: Int,
