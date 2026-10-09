@@ -6,6 +6,10 @@ import argparse
 import json
 
 # https://ai.google.dev/gemini-api/docs/structured-output
+MAX_SCHEMA_DEPTH = 5  # Conservative project guardrail; Google documents no numeric cutoff.
+RULE_REQUEST_TYPES = frozenset(
+    {"SAVE", "DAMAGE", "FATIGUE", "REST", "STABILIZE_CRITICAL", "RECOVER_SCAR", "BEGIN_COMBAT"}
+)
 SUPPORTED_SCHEMA_KEYWORDS = frozenset(
     {
         "type",
@@ -48,6 +52,10 @@ def unsupported_schema_keywords(schema, path="$schema"):
     elif items is not None and not isinstance(items, bool):
         issues.append(f"{path}.items: expected schema object or boolean")
 
+    additional_properties = schema.get("additionalProperties")
+    if isinstance(additional_properties, dict):
+        issues.extend(unsupported_schema_keywords(additional_properties, f"{path}.additionalProperties"))
+
     for keyword in ("anyOf", "prefixItems"):
         alternatives = schema.get(keyword)
         if alternatives is None:
@@ -59,6 +67,28 @@ def unsupported_schema_keywords(schema, path="$schema"):
             issues.extend(unsupported_schema_keywords(child, f"{path}.{keyword}[{index}]"))
 
     return issues
+
+
+def schema_depth(schema):
+    """Return maximum depth following positions that contain child schemas."""
+    if not isinstance(schema, dict):
+        return 0
+
+    children = []
+    properties = schema.get("properties")
+    if isinstance(properties, dict):
+        children.extend(properties.values())
+    items = schema.get("items")
+    if isinstance(items, dict):
+        children.append(items)
+    additional_properties = schema.get("additionalProperties")
+    if isinstance(additional_properties, dict):
+        children.append(additional_properties)
+    for keyword in ("anyOf", "prefixItems"):
+        alternatives = schema.get(keyword)
+        if isinstance(alternatives, list):
+            children.extend(alternatives)
+    return 1 + max((schema_depth(child) for child in children), default=0)
 
 
 def validate_interactions_request(request):
@@ -86,22 +116,28 @@ def validate_interactions_request(request):
     if unsupported:
         raise ValueError(f"unsupported JSON Schema keywords: {sorted(unsupported)}")
 
-    # Protect the multi-enemy combat contract as part of the actual wire request.
-    try:
-        alternatives = schema["properties"]["ruleRequest"]["anyOf"]
-        combat = next(
-            branch
-            for branch in alternatives
-            if isinstance(branch, dict)
-            and isinstance(branch.get("properties"), dict)
-            and isinstance(branch["properties"].get("type"), dict)
-            and "BEGIN_COMBAT" in branch["properties"]["type"].get("enum", [])
+    depth = schema_depth(schema)
+    if depth > MAX_SCHEMA_DEPTH:
+        raise ValueError(
+            f"response_format.schema depth {depth} exceeds project limit {MAX_SCHEMA_DEPTH}"
         )
-        opponents = combat["properties"]["encounter"]["properties"]["opponents"]
+
+    # The full encounter is semantically validated after generation; keep its wire schema shallow.
+    try:
+        rule_request = schema["properties"]["ruleRequest"]
+        properties = rule_request["properties"]
+        request_type = properties["type"]
     except (KeyError, TypeError, StopIteration) as exc:
-        raise ValueError("BEGIN_COMBAT opponents array is missing from response schema") from exc
-    if opponents.get("type") != "array" or opponents.get("minItems") != 1 or opponents.get("maxItems") != 8:
-        raise ValueError("BEGIN_COMBAT must permit 1..8 opponents")
+        raise ValueError("shallow ruleRequest type schema is missing") from exc
+
+    if rule_request.get("type") != ["object", "null"]:
+        raise ValueError("ruleRequest must be a nullable object")
+    if set(properties) != {"type"}:
+        raise ValueError("ruleRequest must not embed nested payload schemas")
+    if request_type.get("type") != "string" or set(request_type.get("enum", [])) != RULE_REQUEST_TYPES:
+        raise ValueError("ruleRequest type enum does not match supported request types")
+    if rule_request.get("required") != ["type"] or rule_request.get("additionalProperties") is not True:
+        raise ValueError("ruleRequest must require only type and allow structured payload fields")
 
 
 class Handler(BaseHTTPRequestHandler):
