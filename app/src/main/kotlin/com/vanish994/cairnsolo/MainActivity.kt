@@ -667,39 +667,88 @@ private fun ExplorationScreen(
             "T" + c.turn + " · " + sceneTypeLabel(c.sceneType) + " · " + guardianFlowLabel(guardianFlow)
         )
 
-        SectionCard(
+        // Atmospheric scene art is presentation-only: campaign state and rules remain untouched.
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(88.dp)
+                .height(108.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .border(1.dp, CairnBorder, RoundedCornerShape(10.dp))
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        "CONTEXTO",
-                        color = CairnAccent,
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        c.sceneTitle.ifBlank { "A cena se revela diante de você." },
-                        color = CairnText,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        c.sceneDescription,
-                        color = CairnMuted,
-                        style = MaterialTheme.typography.bodySmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+            Canvas(Modifier.fillMaxSize()) {
+                drawRect(Color(0xFF171821), size = size)
+                drawCircle(
+                    color = Color(0xFFC7A56B).copy(alpha = 0.24f),
+                    radius = size.minDimension * 0.13f,
+                    center = androidx.compose.ui.geometry.Offset(size.width * 0.79f, size.height * 0.27f)
+                )
+                val farRidge = androidx.compose.ui.graphics.Path().apply {
+                    moveTo(0f, size.height * 0.68f)
+                    lineTo(size.width * 0.18f, size.height * 0.43f)
+                    lineTo(size.width * 0.34f, size.height * 0.62f)
+                    lineTo(size.width * 0.55f, size.height * 0.38f)
+                    lineTo(size.width * 0.77f, size.height * 0.66f)
+                    lineTo(size.width, size.height * 0.48f)
+                    lineTo(size.width, size.height)
+                    lineTo(0f, size.height)
+                    close()
                 }
-                Spacer(Modifier.width(8.dp))
+                drawPath(farRidge, Color(0xFF292832))
+                drawRect(
+                    Color(0xFF111116),
+                    topLeft = androidx.compose.ui.geometry.Offset(size.width * 0.61f, size.height * 0.30f),
+                    size = androidx.compose.ui.geometry.Size(size.width * 0.12f, size.height * 0.53f)
+                )
+                drawRect(
+                    Color(0xFF111116),
+                    topLeft = androidx.compose.ui.geometry.Offset(size.width * 0.57f, size.height * 0.26f),
+                    size = androidx.compose.ui.geometry.Size(size.width * 0.20f, size.height * 0.07f)
+                )
+                drawRect(
+                    Color(0xFF70583C),
+                    topLeft = androidx.compose.ui.geometry.Offset(size.width * 0.65f, size.height * 0.44f),
+                    size = androidx.compose.ui.geometry.Size(size.width * 0.025f, size.height * 0.08f)
+                )
+                drawRect(
+                    Color(0xFF0B0A0D).copy(alpha = 0.8f),
+                    topLeft = androidx.compose.ui.geometry.Offset(0f, size.height * 0.82f),
+                    size = androidx.compose.ui.geometry.Size(size.width, size.height * 0.18f)
+                )
+            }
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .background(Color(0xCC0A090B))
+                    .padding(horizontal = 10.dp, vertical = 7.dp),
+                verticalArrangement = Arrangement.spacedBy(1.dp)
+            ) {
                 Text(
-                    "HP " + r.hp + "/" + r.maxHp + " · ARM " + r.armor,
+                    c.sceneTitle.ifBlank { "A cena se revela diante de você." },
+                    color = CairnText,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    c.sceneDescription.ifBlank { "O silêncio guarda algo além das ruínas." },
                     color = CairnMuted,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Surface(
+                modifier = Modifier.align(Alignment.TopEnd).padding(6.dp),
+                color = Color(0xDD0A090B),
+                shape = RoundedCornerShape(5.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, CairnBorder)
+            ) {
+                Text(
+                    "HP ${r.hp}/${r.maxHp} · ARM ${r.armor}",
+                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp),
+                    color = CairnText,
                     style = MaterialTheme.typography.labelSmall,
                     maxLines = 1
                 )
