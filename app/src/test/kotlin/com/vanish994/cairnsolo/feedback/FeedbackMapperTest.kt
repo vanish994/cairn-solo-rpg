@@ -2,6 +2,7 @@ package com.vanish994.cairnsolo.feedback
 
 import com.vanish994.cairnsolo.game.GameEvent
 import com.vanish994.cairnsolo.rules.Attribute
+import com.vanish994.cairnsolo.rules.InventoryItem
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -105,5 +106,42 @@ class FeedbackMapperTest {
         val entry = FeedbackMapper.map(GameEvent.ScarRecovered("WALLOPED"), 17)
         assertEquals(FeedbackType.SUCCESS, entry.type)
         assertEquals("Cicatriz recuperada: Walloped.", entry.message)
+    }
+
+    @Test
+    fun mapsStructuredRewardCreditDeliveryPendingAndClaimEvents() {
+        val gold = FeedbackMapper.map(GameEvent.GoldCredited("quest-pay", 12, 20), 20)
+        assertEquals(FeedbackType.SUCCESS, gold.type)
+        assertEquals("Você recebeu 12 GP. Saldo: 20 GP.", gold.message)
+
+        val delivered = FeedbackMapper.map(GameEvent.RewardItemAdded("reward:quest-pay:0:dagger", "dagger"), 20)
+        assertEquals(FeedbackType.INVENTORY, delivered.type)
+        assertEquals("Item recebido: Dagger.", delivered.message)
+
+        val pending = FeedbackMapper.map(GameEvent.RewardItemPending("quest-pay:pending:0", "chainmail", 2, 1), 20)
+        assertEquals(FeedbackType.WARNING, pending.type)
+        assertEquals("Chainmail aguarda resgate; libere 1 espaço.", pending.message)
+
+        val claimed = FeedbackMapper.map(
+            GameEvent.RewardItemClaimed("quest-pay:pending:0", "reward:quest-pay:0:chainmail"),
+            21
+        )
+        assertEquals(FeedbackType.SUCCESS, claimed.type)
+        assertEquals("Item de recompensa resgatado: Chainmail.", claimed.message)
+
+        val rejected = FeedbackMapper.map(GameEvent.RewardItemRejected("mystery-item", "UNKNOWN_CATALOG_ITEM"), 21)
+        assertEquals(FeedbackType.WARNING, rejected.type)
+        assertEquals("Recompensa recusada: Mystery item não existe no catálogo.", rejected.message)
+    }
+
+    @Test
+    fun rewardInventoryItemsUseCatalogNameAndLegacyItemsKeepTheirId() {
+        val rewarded = inventoryItemLabel(
+            InventoryItem("reward:quest-pay:0:dagger", tags = setOf("reward-catalog:dagger"))
+        )
+        val legacy = inventoryItemLabel(InventoryItem("old-torch"))
+
+        assertEquals("Dagger", rewarded)
+        assertEquals("old-torch", legacy)
     }
 }

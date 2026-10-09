@@ -10,6 +10,7 @@ import com.vanish994.cairnsolo.rules.DungeonAction
 import com.vanish994.cairnsolo.rules.Season
 import com.vanish994.cairnsolo.rules.WildernessAction
 import com.vanish994.cairnsolo.rules.InventoryItem
+import com.vanish994.cairnsolo.rules.MarketplaceCatalog
 import com.vanish994.cairnsolo.rules.RandomSource
 import com.vanish994.cairnsolo.rules.RuleEvent
 import com.vanish994.cairnsolo.rules.RolledCharacter
@@ -66,6 +67,9 @@ sealed interface GameAction {
     data object EndCombat : GameAction
     data class CastSpell(val itemId: String, val requiresWilSave: Boolean = false, val failure: com.vanish994.cairnsolo.rules.SpellFailureConsequence = com.vanish994.cairnsolo.rules.SpellFailureConsequence.NONE, val dropItemIdForFatigue: String? = null) : GameAction
     data class Purchase(val itemId: String) : GameAction
+    data class AddGold(val rewardId: String, val amountGp: Int) : GameAction
+    data class GrantReward(val rewardId: String, val amountGp: Int, val itemCatalogIds: List<String>) : GameAction
+    data class ClaimPendingRewardItem(val pendingId: String) : GameAction
     data class PerformDowntime(val action: DowntimeAction) : GameAction
     data class AddDowntimeMilestone(val milestone: com.vanish994.cairnsolo.rules.Milestone) : GameAction
     data class StartTravel(val destination: String) : GameAction
@@ -163,6 +167,11 @@ sealed interface GameEvent {
     }
     data class SpellResolved(val spellId: String, val itemId: String) : GameEvent
     data class PurchaseResolved(val itemId: String, val goldRemaining: Int) : GameEvent
+    data class GoldCredited(val rewardId: String, val amountGp: Int, val newBalanceGp: Int) : GameEvent
+    data class RewardItemAdded(val itemInstanceId: String, val catalogItemId: String) : GameEvent
+    data class RewardItemPending(val pendingId: String, val catalogItemId: String, val slotsRequired: Int, val freeSlots: Int) : GameEvent
+    data class RewardItemClaimed(val pendingId: String, val itemInstanceId: String) : GameEvent
+    data class RewardItemRejected(val catalogItemId: String, val reason: String) : GameEvent
     data class DowntimeResolved(val action: com.vanish994.cairnsolo.rules.DowntimeActionType) : GameEvent
     data class WildernessResolved(val action: WildernessAction) : GameEvent
     data class DungeonResolved(val action: com.vanish994.cairnsolo.rules.DungeonActionKind) : GameEvent
@@ -273,6 +282,9 @@ class GameActionResolver(
         GameAction.EndCombat -> endCombat(state)
         is GameAction.CastSpell -> castSpell(state, action)
         is GameAction.Purchase -> purchase(state, action)
+        is GameAction.AddGold -> addGold(state, action)
+        is GameAction.GrantReward -> grantReward(state, action)
+        is GameAction.ClaimPendingRewardItem -> claimPendingRewardItem(state, action)
         is GameAction.PerformDowntime -> performDowntime(state, action)
         is GameAction.AddDowntimeMilestone -> GameResult(state.copy(campaign = state.campaign.copy(downtime = downtime.addMilestone(state.campaign.downtime, action.milestone))), listOf(GameEvent.RuleNotice("Marco de downtime adicionado: ${action.milestone.id}")))
         is GameAction.StartTravel -> GameResult(state.copy(campaign = state.campaign.copy(wilderness = wilderness.startTravel(state.campaign.wilderness ?: error("Wilderness state not initialized"), action.destination), turn = state.campaign.turn + 1)), listOf(GameEvent.RuleNotice("Viagem iniciada para ${action.destination}")))
@@ -324,6 +336,9 @@ class GameActionResolver(
         is GameAction.AddItem,
         is GameAction.RemoveItem,
         is GameAction.Purchase,
+        is GameAction.AddGold,
+        is GameAction.GrantReward,
+        is GameAction.ClaimPendingRewardItem,
         is GameAction.PerformDowntime,
         is GameAction.AddDowntimeMilestone,
         is GameAction.StartTravel,
@@ -461,6 +476,142 @@ class GameActionResolver(
     private fun castSpell(state: GameState, action: GameAction.CastSpell): GameResult {
         val result = magic.cast(state.campaign.rules, action.itemId, action.requiresWilSave, action.failure, action.dropItemIdForFatigue)
         return GameResult(state.withRules(result.state), listOf(GameEvent.SpellResolved(result.spell.id, action.itemId)))
+    }
+
+    private fun addGold(state: GameState, action: GameAction.AddGold): GameResult {
+        require(isValidRewardId(action.rewardId)) { "Reward id is invalid." }
+        require(action.amountGp > 0) { "Gold credit must be positive." }
+        val componentId = "${action.rewardId}:gold"
+        val packageId = "${action.rewardId}:grant"
+        if (componentId in state.campaign.appliedRewardIds || packageId in state.campaign.appliedRewardIds) {
+            return GameResult(state, emptyList())
+        }
+
+        val newBalance = marketplace.creditGold(state.campaign.profile.gold, action.amountGp)
+        val recorded = state.withHistory(
+            "reward-${action.rewardId}-gold",
+            HistoryEventType.REWARD_UPDATED,
+            "Ouro creditado: +${action.amountGp} po.",
+            listOf(action.rewardId)
+        )
+        val progressed = recorded.withRules(recorded.campaign.rules)
+        val next = progressed.copy(campaign = progressed.campaign.copy(
+            profile = progressed.campaign.profile.copy(gold = newBalance),
+            appliedRewardIds = progressed.campaign.appliedRewardIds + componentId
+        ))
+        return GameResult(next, listOf(GameEvent.GoldCredited(action.rewardId, action.amountGp, newBalance)))
+    }
+
+    private fun grantReward(state: GameState, action: GameAction.GrantReward): GameResult {
+        require(isValidRewardId(action.rewardId)) { "Reward id is invalid." }
+        require(action.amountGp >= 0) { "Gold amount cannot be negative." }
+        require(action.itemCatalogIds.size <= 5) { "A reward may contain at most five items." }
+        require(action.itemCatalogIds.all(::isValidRewardId)) { "Reward item id is invalid." }
+        require(action.amountGp > 0 || action.itemCatalogIds.isNotEmpty()) { "A reward must include gold or at least one item." }
+
+        val grantId = "${action.rewardId}:grant"
+        val goldComponentId = "${action.rewardId}:gold"
+        if (grantId in state.campaign.appliedRewardIds || goldComponentId in state.campaign.appliedRewardIds) {
+            return GameResult(state, emptyList())
+        }
+
+        var gold = state.campaign.profile.gold
+        var character = state.campaign.rules
+        val appliedIds = state.campaign.appliedRewardIds.toMutableSet()
+        val pendingItems = state.campaign.pendingRewardItems.toMutableList()
+        val events = mutableListOf<GameEvent>()
+
+        if (action.amountGp > 0 && goldComponentId !in appliedIds) {
+            gold = marketplace.creditGold(gold, action.amountGp)
+            appliedIds += goldComponentId
+            events += GameEvent.GoldCredited(action.rewardId, action.amountGp, gold)
+        }
+
+        action.itemCatalogIds.forEachIndexed { ordinal, catalogItemId ->
+            val itemComponentId = "${action.rewardId}:item:$ordinal"
+            if (itemComponentId in appliedIds) return@forEachIndexed
+
+            val entry = MarketplaceCatalog.find(catalogItemId)
+            val template = entry?.item
+            when {
+                entry == null -> events += GameEvent.RewardItemRejected(catalogItemId, "UNKNOWN_CATALOG_ITEM")
+                template == null -> events += GameEvent.RewardItemRejected(catalogItemId, "NOT_AN_INVENTORY_ITEM")
+                else -> {
+                    val itemInstanceId = "reward:${action.rewardId}:$ordinal:$catalogItemId"
+                    val alreadyAdded = character.inventory.any { it.id == itemInstanceId }
+                    val alreadyPending = pendingItems.any { it.itemInstanceId == itemInstanceId }
+                    if (!alreadyAdded && !alreadyPending) {
+                        val rewardItem = template.copy(
+                            id = itemInstanceId,
+                            tags = template.tags + "reward-catalog:$catalogItemId"
+                        )
+                        if (character.freeSlots >= rewardItem.slotCost) {
+                            character = rules.addItem(character, rewardItem).newState
+                            events += GameEvent.RewardItemAdded(itemInstanceId, catalogItemId)
+                        } else {
+                            val pendingId = "${action.rewardId}:pending:$ordinal"
+                            pendingItems += PendingRewardItem(pendingId, action.rewardId, catalogItemId, itemInstanceId)
+                            events += GameEvent.RewardItemPending(pendingId, catalogItemId, rewardItem.slotCost, character.freeSlots)
+                        }
+                    } else if (alreadyPending) {
+                        val pending = pendingItems.first { it.itemInstanceId == itemInstanceId }
+                        events += GameEvent.RewardItemPending(pending.id, catalogItemId, template.slotCost, character.freeSlots)
+                    }
+                }
+            }
+            appliedIds += itemComponentId
+        }
+
+        appliedIds += grantId
+        val itemNames = action.itemCatalogIds.joinToString(", ") { it }
+        val summary = buildString {
+            append("Recompensa ").append(action.rewardId).append(" recebida")
+            if (action.amountGp > 0) append(": +").append(action.amountGp).append(" po")
+            if (itemNames.isNotEmpty()) append(if (action.amountGp > 0) "; itens: " else ": itens: ").append(itemNames)
+            append(".")
+        }
+        val recorded = state.withHistory(
+            "reward-${action.rewardId}-paid",
+            HistoryEventType.REWARD_UPDATED,
+            summary,
+            listOf(action.rewardId) + action.itemCatalogIds
+        )
+        val progressed = recorded.withRules(character)
+        val next = progressed.copy(campaign = progressed.campaign.copy(
+            profile = progressed.campaign.profile.copy(gold = gold),
+            appliedRewardIds = appliedIds,
+            pendingRewardItems = pendingItems
+        ))
+        return GameResult(next, events)
+    }
+
+    private fun claimPendingRewardItem(state: GameState, action: GameAction.ClaimPendingRewardItem): GameResult {
+        val claimMarker = "pending-claim:${action.pendingId}"
+        if (claimMarker in state.campaign.appliedRewardIds) return GameResult(state, emptyList())
+        val pending = state.campaign.pendingRewardItems.firstOrNull { it.id == action.pendingId }
+            ?: error("Unknown pending reward item: ${action.pendingId}")
+        val template = MarketplaceCatalog.find(pending.catalogItemId)?.item
+            ?: error("Pending reward does not reference an inventory item.")
+        require(state.campaign.rules.freeSlots >= template.slotCost) { "Not enough free inventory slots to claim this reward." }
+        require(state.campaign.rules.inventory.none { it.id == pending.itemInstanceId }) { "Reward item already exists in inventory." }
+
+        val rewardItem = template.copy(
+            id = pending.itemInstanceId,
+            tags = template.tags + "reward-catalog:${pending.catalogItemId}"
+        )
+        val updatedCharacter = rules.addItem(state.campaign.rules, rewardItem).newState
+        val recorded = state.withHistory(
+            "reward-${pending.rewardId}-claim-${pending.id}",
+            HistoryEventType.REWARD_UPDATED,
+            "Item de recompensa resgatado: ${pending.catalogItemId}.",
+            listOf(pending.rewardId, pending.catalogItemId, pending.itemInstanceId)
+        )
+        val progressed = recorded.withRules(updatedCharacter)
+        val next = progressed.copy(campaign = progressed.campaign.copy(
+            pendingRewardItems = progressed.campaign.pendingRewardItems.filterNot { it.id == pending.id },
+            appliedRewardIds = progressed.campaign.appliedRewardIds + claimMarker
+        ))
+        return GameResult(next, listOf(GameEvent.RewardItemClaimed(pending.id, pending.itemInstanceId)))
     }
 
     private fun purchase(state: GameState, action: GameAction.Purchase): GameResult {

@@ -8,7 +8,7 @@ import json
 # https://ai.google.dev/gemini-api/docs/structured-output
 MAX_SCHEMA_DEPTH = 5  # Conservative project guardrail; Google documents no numeric cutoff.
 RULE_REQUEST_TYPES = frozenset(
-    {"SAVE", "DAMAGE", "FATIGUE", "REST", "STABILIZE_CRITICAL", "RECOVER_SCAR", "BEGIN_COMBAT"}
+    {"SAVE", "DAMAGE", "FATIGUE", "REST", "STABILIZE_CRITICAL", "RECOVER_SCAR", "BEGIN_COMBAT", "REWARD"}
 )
 SUPPORTED_SCHEMA_KEYWORDS = frozenset(
     {
@@ -134,6 +134,7 @@ def validate_interactions_request(request):
         frozenset({"DAMAGE", "FATIGUE"}): ["type", "amount"],
         frozenset({"REST", "STABILIZE_CRITICAL", "RECOVER_SCAR"}): ["type"],
         frozenset({"BEGIN_COMBAT"}): ["type", "encounter"],
+        frozenset({"REWARD"}): ["type", "id", "status", "amountGp", "itemCatalogIds"],
     }
     seen_groups = set()
     has_nullable_branch = False
@@ -175,6 +176,23 @@ def validate_interactions_request(request):
             encounter = properties["encounter"]
             if encounter != {"type": "object", "additionalProperties": True}:
                 raise ValueError("BEGIN_COMBAT encounter must remain a shallow object")
+        elif group == frozenset({"REWARD"}):
+            reward_id = properties["id"]
+            status = properties["status"]
+            amount = properties["amountGp"]
+            item_ids = properties["itemCatalogIds"]
+            if reward_id.get("type") != "string":
+                raise ValueError("REWARD id must remain an unconstrained string in the wire schema")
+            if status.get("type") != "string" or set(status.get("enum", [])) != {"OFFERED", "PAID"}:
+                raise ValueError("REWARD status must be the OFFERED/PAID enum")
+            if amount.get("type") != "integer" or amount.get("minimum") != 0 or amount.get("maximum") != 2147483647:
+                raise ValueError("REWARD amountGp must be a non-negative 32-bit integer")
+            if (
+                item_ids.get("type") != "array"
+                or item_ids.get("maxItems") != 5
+                or item_ids.get("items") != {"type": "string"}
+            ):
+                raise ValueError("REWARD itemCatalogIds must be at most five strings")
 
     if not has_nullable_branch or seen_groups != set(expected_fields):
         raise ValueError("ruleRequest must cover null and every supported type group")

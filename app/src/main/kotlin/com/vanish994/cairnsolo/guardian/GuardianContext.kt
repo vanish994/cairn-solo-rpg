@@ -7,6 +7,7 @@ import com.vanish994.cairnsolo.game.GameState
 import com.vanish994.cairnsolo.game.WorldCanon
 import com.vanish994.cairnsolo.game.WorldState
 import com.vanish994.cairnsolo.rules.CharacterState
+import com.vanish994.cairnsolo.rules.MarketplaceCatalog
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -41,7 +42,9 @@ data class GuardianContext(
     val growth: GuardianGrowthContext,
     val recentHistory: List<GuardianHistoryContext>,
     val recentNarrative: List<String>,
-    val availableActions: List<String>
+    val availableActions: List<String>,
+    val freeSlots: Int,
+    val rewardableItems: List<RewardableItemContext>
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("campaignId", campaignId)
@@ -55,6 +58,8 @@ data class GuardianContext(
         put("recentHistory", guardianArray(recentHistory.map { it.toJson() }))
         put("recentNarrative", guardianArray(recentNarrative))
         put("availableActions", guardianArray(availableActions))
+        put("freeSlots", freeSlots)
+        put("rewardableItems", guardianArray(rewardableItems.map { it.toJson() }))
     }
 }
 
@@ -67,7 +72,7 @@ data class GuardianCharacterContext(
     val maxHp: Int,
     val armor: Int,
     val conditions: List<String>,
-    val gold: Int,
+    val goldGp: Int,
     val inventory: List<GuardianInventoryContext>,
     val combat: GuardianCombatContext?
 ) {
@@ -78,7 +83,7 @@ data class GuardianCharacterContext(
             put("hp", hp); put("maxHp", maxHp); put("armor", armor)
         })
         put("conditions", guardianArray(conditions))
-        put("gold", gold)
+        put("goldGp", goldGp)
         put("inventory", guardianArray(inventory.map { it.toJson() }))
         combat?.let { put("combat", it.toJson()) }
     }
@@ -96,6 +101,12 @@ data class GuardianInventoryContext(
         damage?.let { put("damage", it) }
         put("armor", armor)
         uses?.let { put("uses", it) }
+    }
+}
+
+data class RewardableItemContext(val catalogId: String, val name: String, val slotCost: Int) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("catalogId", catalogId); put("name", name); put("slotCost", slotCost)
     }
 }
 
@@ -256,11 +267,15 @@ object GuardianContextBuilder {
             growth = growth(campaign.growth),
             recentHistory = campaign.history.takeLast(MAX_HISTORY).map(::history),
             recentNarrative = campaign.guardianHistory.takeLast(MAX_NARRATIVE),
-            availableActions = campaign.exits.take(20)
+            availableActions = campaign.exits.take(20),
+            freeSlots = rules.freeSlots,
+            rewardableItems = MarketplaceCatalog.entries.mapNotNull { entry ->
+                entry.item?.let { RewardableItemContext(entry.id, entry.name, it.slotCost) }
+            }
         )
     }
 
-    private fun character(name: String, rules: CharacterState, gold: Int, combat: com.vanish994.cairnsolo.game.CombatState?): GuardianCharacterContext = GuardianCharacterContext(
+    private fun character(name: String, rules: CharacterState, goldGp: Int, combat: com.vanish994.cairnsolo.game.CombatState?): GuardianCharacterContext = GuardianCharacterContext(
         name, rules.str, rules.dex, rules.wil, rules.hp, rules.maxHp, rules.armor,
         buildList {
             if (rules.deprived) add("DEPRIVED")
@@ -268,7 +283,7 @@ object GuardianContextBuilder {
             if (rules.critical) add("CRITICAL")
             if (rules.dead) add("DEAD")
             rules.scar?.let { add("SCAR:${it.name}") }
-        }, gold,
+        }, goldGp,
         rules.inventory.take(10).map { GuardianInventoryContext(it.id, it.slotCost, it.damage, it.armor, it.uses) },
         combat?.let { fight ->
             GuardianCombatContext(

@@ -31,8 +31,8 @@ O motor de regras do jogo é a única autoridade para testes, HP, dano, armadura
 condições, morte, recursos e resultados aleatórios.
 
 Nunca invente ou altere valores mecânicos.
-Nunca diga que um teste foi bem-sucedido, que dano foi causado ou que um item foi obtido, a menos que o campo ruleResult forneça explicitamente esse fato.
-Quando uma ação exigir resolução mecânica, preencha ruleRequest com o formato exigido: SAVE requer attribute STR, DEX ou WIL; DAMAGE e FATIGUE requerem amount inteiro positivo; REST, STABILIZE_CRITICAL e RECOVER_SCAR usam somente type; BEGIN_COMBAT requer encounter completo. O aplicativo é quem resolve todas as regras.
+Nunca diga que um teste foi bem-sucedido ou que dano foi causado, a menos que o campo ruleResult forneça explicitamente esse fato. Só narre um item como entregue quando a transferência já ocorreu na cena e ruleRequest usa REWARD com status PAID.
+Quando uma ação exigir resolução mecânica, preencha ruleRequest com o formato exigido: SAVE requer attribute STR, DEX ou WIL; DAMAGE e FATIGUE requerem amount inteiro positivo; REST, STABILIZE_CRITICAL e RECOVER_SCAR usam somente type; REWARD descreve oferta ou pagamento; BEGIN_COMBAT requer encounter completo. O aplicativo é quem resolve todas as regras.
 Você também pode propor BEGIN_COMBAT somente quando character.combat estiver ausente. Isso é uma proposta completa de 1 a 8 oponentes, não o início do combate: o jogador precisa aceitar o encontro inteiro no aplicativo. Use encounter.opponents como lista de objetos, cada um com opponentId único, narrativa completa, stats completos e weapon completa. IDs não podem estar vazios nem ter espaços no início/fim. moraleLeaderId é opcional e, se fornecido, deve corresponder a um ID da lista. Para cada oponente, HP deve ser pelo menos 1 e não pode exceder maxHp; weapon.damage deve usar apenas d4/d6/d8/d10/d12 (por exemplo, d6 ou d6+d8); Armor deve estar entre 0 e 3. Não declare iniciativa, ataque, dano ou qualquer consequência.
 Com combate ativo, ataques são iniciados pelos controles do aplicativo. Não use DAMAGE para simular um ataque e não narre seu resultado antes de recebê-lo em ruleResult.
 Você pode propor atualizações narrativas em canonProposals, mas elas não são fatos até serem validadas pelo aplicativo. Use apenas UPSERT_NPC, DISCOVER_LOCATION, ADD_IMPORTANT_ITEM, CREATE_QUEST, ADD_DISCOVERY ou ADD_RUMOR. Nunca altere HP, atributos, inventário, facções, Growth ou outros dados mecânicos.
@@ -40,8 +40,10 @@ O estado growth.evidence contém experiências já registradas pelo domínio. N�
 Use apenas fatos presentes em worldCanon, world, growth e recentHistory. Não invente NPCs, facções, agendas, relações ou experiências passadas; qualquer novo fato deve ser apenas uma proposta de cânone validável.
 Quando uma experiência significativa estiver sustentada pela cena atual, você pode preencher growthEvidenceProposals. Isso é apenas uma proposta: o aplicativo valida ID, resumo, entidades relacionadas e os gatilhos focusedPattern, seriousRisk e uniqueInteraction antes de registrá-la. Nunca proponha uma habilidade ou aumento de atributo nesse campo.
 Você também pode preencher growthChangeProposals somente quando as evidências referenciadas já estiverem no estado growth.evidence ou forem propostas na mesma resposta. Use RAISE_MAX_ATTRIBUTE, KEEP_HIGHER_ATTRIBUTE ou GAIN_ABILITY. A proposta nunca é uma aplicação: o domínio valida as evidências, limites, IDs e duplicidade antes de alterar o personagem.
-O objeto campaign recebido é um GuardianContext controlado: campaignId, campaignSeed, character, scene, world, canon, growth, recentHistory, recentNarrative e availableActions. O combate, quando ativo, contém apenas o perfil narrativo aprovado e fatos públicos necessários. Não espere campos internos de persistência e não tente inferir dados que não estejam nessa visão.
+O objeto campaign recebido é um GuardianContext controlado: campaignId, campaignSeed, character, scene, world, canon, growth, recentHistory, recentNarrative, availableActions, freeSlots e rewardableItems. O saldo está em character.goldGp. O combate, quando ativo, contém apenas o perfil narrativo aprovado e fatos públicos necessários. Não espere campos internos de persistência e não tente inferir dados que não estejam nessa visão.
 Se encounterContext estiver presente, ele é uma lista de perfis narrativos já aprovados pelo jogador; cada item associa um opponentId à sua narrative. Use esses IDs para preservar a continuidade dos oponentes, inclusive após o combate. Essa lista NÃO autoriza inferir nem declarar resultados mecânicos: somente ruleResult autoriza narrar consequências mecânicas.
+
+RECOMPENSAS: use ruleRequest REWARD com id, status, amountGp e itemCatalogIds. Use OFFERED para promessa, oferta ou negociação ainda não paga; isso nunca credita recursos. Use PAID somente quando a cena narrar que a transferência já foi concluída. amountGp é sempre GP; não converta cobre nem invente câmbio. Escolha IDs somente entre campaign.rewardableItems e nunca invente stats, armadura, dano ou slots. character.goldGp e freeSlots são apenas contexto informativo.
 
 INÍCIO DE CAMPANHA:
 Quando playerIntent indicar que uma nova campanha está começando, nunca use um prólogo fixo, a frase de exemplo da aplicação ou uma estrutura copiada de outra campanha. Gere uma abertura inédita usando character, scene, world e campaignSeed como sementes narrativas. Apresente imediatamente uma situação concreta que desperte curiosidade e ofereça algo para observar, investigar ou decidir. Não diga que a história está começando e não mencione a seed. Não conceda resultados mecânicos nessa abertura.
@@ -62,7 +64,7 @@ internal fun guardianSystemPrompt(): String = "$SYSTEM_PROMPT\n\n" +
         "campo canon (cânone confirmado), e não invente " +
         "fatos, locais, NPCs, missões ou saídas. São apenas recomendações: não executam ações " +
         "nem alteram o estado do jogo, e o jogador continua livre para escrever outra intenção." +
-    "\n\nFORMATO DE ruleRequest: SAVE exige attribute exatamente STR, DEX ou WIL; DAMAGE e FATIGUE exigem amount como inteiro maior ou igual a 1; REST, STABILIZE_CRITICAL e RECOVER_SCAR exigem somente type; BEGIN_COMBAT exige encounter completo. Nunca omita campos obrigatórios nem invente resultados mecânicos." +
+    "\n\nFORMATO DE ruleRequest: SAVE exige attribute exatamente STR, DEX ou WIL; DAMAGE e FATIGUE exigem amount como inteiro maior ou igual a 1; REST, STABILIZE_CRITICAL e RECOVER_SCAR exigem somente type; REWARD exige id, status OFFERED/PAID, amountGp e itemCatalogIds; BEGIN_COMBAT exige encounter completo. Nunca omita campos obrigatórios nem invente resultados mecânicos." +
     "\n\nFORMATO DA PROPOSTA BEGIN_COMBAT: use ruleRequest com type BEGIN_COMBAT e encounter.opponents " +
         "como uma lista de 1 a 8 adversários completos; cada adversário exige opponentId único, narrative " +
         "com name, appearance, behavior, intent e context, stats com str, dex, wil, hp, maxHp e armor " +
@@ -88,7 +90,7 @@ fun main() {
             val body = exchange.requestBody.readAllBytes().toString(StandardCharsets.UTF_8)
             val request = JsonParser.parseString(body).asJsonObject
             validateRequest(request)
-            val gemini = normalizeCombatProposal(callGemini(apiKey, request))
+            val gemini = normalizeRewardProposal(normalizeCombatProposal(callGemini(apiKey, request)))
             respond(exchange, 200, gemini.toString())
         } catch (e: Exception) {
             respond(exchange, 500, gson.toJson(mapOf("error" to (e.message ?: "guardian_error"))))
@@ -119,8 +121,9 @@ Se esta for a solicitação de abertura de campanha, trate campaignSeed como uma
 Se playerIntent começar com CONTINUAR_NARRATIVA, isso é um comando interno da interface, não uma fala ou decisão do jogador. Não o mencione na narração, não o inclua como diálogo e avance a situação atual organicamente no mesmo local.
 Se ruleResult estiver presente, ele foi produzido pelo Rules Engine e é a única fonte autorizada para narrar os efeitos mecânicos daquela ação. Não acrescente números, resultados, condições ou consequências mecânicas não contidos nesse campo.
 
-Continue a cena de forma coerente. Se a intenção exigir uma resolução mecânica, preencha ruleRequest como objeto com os campos obrigatórios do tipo: SAVE exige attribute exatamente STR, DEX ou WIL; DAMAGE e FATIGUE exigem amount inteiro maior ou igual a 1; REST, STABILIZE_CRITICAL e RECOVER_SCAR exigem somente type; BEGIN_COMBAT exige encounter com 1–8 oponentes em `opponents`, somente sem combate ativo.
+Continue a cena de forma coerente. Se a intenção exigir uma resolução mecânica, preencha ruleRequest com os campos obrigatórios do tipo: SAVE exige attribute exatamente STR, DEX ou WIL; DAMAGE e FATIGUE exigem amount inteiro maior ou igual a 1; REST, STABILIZE_CRITICAL e RECOVER_SCAR exigem somente type; REWARD usa id/status/amountGp/itemCatalogIds; BEGIN_COMBAT exige encounter com 1–8 oponentes em `opponents`, somente sem combate ativo.
 BEGIN_COMBAT apenas propõe o encontro inteiro para confirmação do jogador. Não informe resultados; o aplicativo resolve.
+Para REWARD, use OFFERED para promessa não entregue e PAID apenas quando a transferência já estiver concluída na cena; use GP sem converter cobre e selecione IDs somente de campaign.rewardableItems.
 Se não houver resolução mecânica, use null.
 Se houver um ruleResult na solicitação, trate-o como resultado autoritativo do motor e narre somente suas consequências mecânicas autorizadas.
 Inclua canonProposals como uma lista, mesmo quando vazia. Cada proposta deve ter type, id, status e source.
@@ -208,6 +211,7 @@ internal fun guardianResponseSchema(): JsonObject = JsonObject().apply {
               ,"growthChangeProposals": {"type":"array","maxItems":3,"items":{"type":"object","properties":{"id":{"type":"string"},"evidenceIds":{"type":"array","minItems":1,"items":{"type":"string"}},"changeType":{"type":"string","enum":["RAISE_MAX_ATTRIBUTE","KEEP_HIGHER_ATTRIBUTE","GAIN_ABILITY"]},"attribute":{"type":"string","enum":["STR","DEX","WIL"]},"amount":{"type":"integer","minimum":1,"maximum":3},"candidate":{"type":"integer","minimum":3,"maximum":18},"abilityId":{"type":"string"},"abilityName":{"type":"string"},"abilityDescription":{"type":"string"},"abilityCost":{"type":"string"},"rationale":{"type":"string"}},"required":["id","evidenceIds","changeType","rationale"],"additionalProperties":false}}
             }
         """).asJsonObject
+        addRewardRequestSchema(properties)
         properties.add("suggestedActions", suggestedActionsSchema())
         add("properties", properties)
         add("required", JsonParser.parseString(
@@ -215,6 +219,33 @@ internal fun guardianResponseSchema(): JsonObject = JsonObject().apply {
         ).asJsonArray)
         addProperty("additionalProperties", false)
     }
+
+internal fun rewardRequestSchema(): JsonObject = JsonParser.parseString(
+    """
+    {
+      "type":"object",
+      "properties":{
+        "type":{"type":"string","enum":["REWARD"]},
+        "id":{"type":"string"},
+        "status":{"type":"string","enum":["OFFERED","PAID"]},
+        "amountGp":{"type":"integer","minimum":0,"maximum":2147483647},
+        "itemCatalogIds":{"type":"array","maxItems":5,"items":{"type":"string"}}
+      },
+      "required":["type","id","status","amountGp","itemCatalogIds"],
+      "additionalProperties":false
+    }
+    """.trimIndent()
+).asJsonObject
+
+internal fun addRewardRequestSchema(properties: JsonObject) {
+    val alternatives = properties.getAsJsonObject("ruleRequest").getAsJsonArray("anyOf")
+    check(alternatives.none { candidate ->
+        candidate.takeIf { it.isJsonObject }?.asJsonObject
+            ?.getAsJsonObject("properties")?.getAsJsonObject("type")
+            ?.getAsJsonArray("enum")?.any { it.asString == "REWARD" } == true
+    }) { "REWARD schema branch already exists." }
+    alternatives.add(rewardRequestSchema())
+}
 
 // Keep string bounds and patterns in isCompleteEncounterProposal(): Gemini structured output
 // supports a smaller JSON Schema subset, and validating them here can make the whole request fail.
@@ -295,6 +326,41 @@ internal fun normalizeCombatProposal(response: JsonObject): JsonObject {
     return response
 }
 
+internal fun normalizeRewardProposal(response: JsonObject): JsonObject {
+    val ruleRequest = response.get("ruleRequest")
+        ?.takeIf { it.isJsonObject }
+        ?.asJsonObject ?: return response
+    val type = jsonString(ruleRequest.get("type"))
+    if (!type.equals("REWARD", ignoreCase = true)) return response
+
+    ruleRequest.addProperty("type", "REWARD")
+    if (!isCompleteRewardProposal(ruleRequest)) {
+        ruleRequest.entrySet().map { it.key }.filter { it != "type" }.forEach { key -> ruleRequest.remove(key) }
+    }
+    return response
+}
+
+private fun isCompleteRewardProposal(request: JsonObject): Boolean {
+    val expectedFields = setOf("type", "id", "status", "amountGp", "itemCatalogIds")
+    if (request.entrySet().map { it.key }.toSet() != expectedFields) return false
+    if (!jsonString(request.get("type")).equals("REWARD", ignoreCase = true)) return false
+    val id = jsonString(request.get("id")) ?: return false
+    if (!REWARD_ID.matches(id)) return false
+    val status = jsonString(request.get("status")) ?: return false
+    if (status !in setOf("OFFERED", "PAID")) return false
+    val amountGp = jsonInteger(request.get("amountGp")) ?: return false
+    if (amountGp < 0) return false
+    val items = request.get("itemCatalogIds")?.takeIf { it.isJsonArray }?.asJsonArray ?: return false
+    if (items.size() > 5) return false
+    val itemIds = mutableListOf<String>()
+    for (item in items) {
+        val itemId = jsonString(item) ?: return false
+        itemIds += itemId
+    }
+    if (itemIds.any { !REWARD_ID.matches(it) }) return false
+    return status != "PAID" || amountGp > 0 || itemIds.isNotEmpty()
+}
+
 private fun isCompleteEncounterProposal(encounter: JsonObject?): Boolean {
     if (encounter == null) return false
     val opponents = encounter.get("opponents")?.takeIf { it.isJsonArray }?.asJsonArray ?: return false
@@ -351,6 +417,7 @@ private fun jsonBoolean(value: com.google.gson.JsonElement?): Boolean? =
     value?.takeIf { it.isJsonPrimitive && it.asJsonPrimitive.isBoolean }?.asBoolean
 
 private val SUPPORTED_COMBAT_DAMAGE = Regex("""^d(4|6|8|10|12)(\s*\+\s*d(4|6|8|10|12))*$""")
+private val REWARD_ID = Regex("""^[a-z0-9-]{3,80}$""")
 
 private fun respond(exchange: HttpExchange, status: Int, body: String) {
     val bytes = body.toByteArray(StandardCharsets.UTF_8)

@@ -10,6 +10,8 @@
 
 **Spec:** `docs/superpowers/specs/2026-10-08-playtest-feedback.md` — seção “Recompensas estruturadas”; escolha do usuário em 2026-10-08: “Creditar automaticamente quando o pagamento for estruturado e confirmado na cena”; [Cairn 2e — Marketplace](https://cairnrpg.com/second-edition/players-guide/marketplace/); `docs/CAIRN-2E-RULE-MATRIX.md`.
 
+**Progress (2026-10-08):** As Tasks 1 e 2 foram implementadas em commits pequenos; os testes unitários e do servidor passaram no CI do commit `30d86e9`. A integração HTTP com `https://cairn-guardian.onrender.com` falhou porque o endpoint respondeu 500 após Gemini HTTP 400 (`invalid_request`), então APK release, CI verde, QA manual e merge continuam pendentes. A UI da Task 3 foi publicada no commit `d5b52b0` e aguarda o workflow desse HEAD.
+
 ## Global Constraints
 
 - O Marketplace oficial diz que todos os preços são em **gold pieces (GP)**; manter GP como unidade mecânica e não inventar câmbio de cobre para ouro.
@@ -19,7 +21,7 @@
 - Itens só podem usar IDs existentes em `MarketplaceCatalog` com `item != null`; o Guardian não define slots, Armor, dano ou outros atributos mecânicos.
 - Toda mutação passa por `GameActionResolver`; crédito de moeda é validado por `MarketplaceRules.creditGold`, itens/capacidade por `RulesEngine.addItem`; ID de recompensa/componentes impede duplicação em retry.
 - Se faltarem slots, manter o item em `pendingRewardItems` e pedir espaço para resgate; nunca remover um item automaticamente.
-- Ao preencher exatamente os 10 slots, não reduzir HP; atingir a capacidade não equivale a dano em Cairn 2e.
+- Por decisão do usuário em 2026-10-08, seguir a regra oficial Cairn 2e: preencher o 10º slot reduz HP a 0; a recompensa cabe e é concedida. Se o item não couber, manter pendente.
 - Primeiro revisar e mesclar o PR de documentação destes planos; depois criar o branch de feature a partir da `main` atualizada para que spec e plano acompanhem o trabalho.
 - Entregar via branch/PR; exigir Android Build verde antes de merge em `main`.
 
@@ -27,7 +29,7 @@
 
 1. **Estado/idempotência:** `OFFERED` não altera estado; `PAID` aplica uma vez e payload alterado com o mesmo ID não concede novamente.
 2. **Item não permitido:** catálogo desconhecido ou sem `InventoryItem` não aceita stats do Guardian; GP válido ainda pode ser aplicado e o item gera aviso.
-3. **Capacidade:** item sem espaço fica pendente sem descarte; preencher exatamente o 10º slot não reduz HP.
+3. **Capacidade:** item sem espaço fica pendente sem descarte; preencher exatamente o 10º slot aplica a regra Cairn 2e e reduz HP a 0.
 4. **Payload monetário inválido:** rejeitar valor negativo, overflow do saldo, ID inválido e denominação não-GP sem converter silenciosamente.
 5. **Apresentação:** saldo não aparece no inventário; itens pendentes são visíveis e resgatáveis depois de abrir espaço.
 
@@ -50,7 +52,7 @@
 - `GrantReward` aplica ouro e todos os itens em uma única transição de turno. Guardar `"$rewardId:grant"` como chave do pacote e `"$rewardId:gold"`/`"$rewardId:item:$ordinal"` como chaves de componentes; replay ou payload diferente com o mesmo ID não concede novamente. Itens são materializados por `MarketplaceCatalog.find(catalogItemId)?.item`, nunca por stats enviados pelo Guardian.
 - Cada instância usa `itemInstanceId = "reward:$rewardId:$ordinal:$catalogItemId"`, copia stats do catálogo e guarda a tag `reward-catalog:$catalogItemId`; claim reutiliza a mesma instância.
 
-- [ ] Escrever `MarketplaceTest.creditGoldAddsGpAndRejectsOverflow`; escrever `GameActionResolverTest.creditGoldUpdatesBalanceAndRecordsEvent`, `creditGoldIsIdempotent`, `invalidGrantRewardRejected`, `grantRewardAppliesGoldAndItemsInOneTurn`, `grantRewardIsIdempotent`, `grantRewardWithChangedPayloadIsNoOp`, `fullInventoryStoresRewardAsPending`, `claimPendingRewardItemAfterSpaceFreed`, `unsupportedItemIdDoesNotAddItem` e `nonItemCatalogEntryCannotBeGranted`; escrever `RulesEngineTest.fillingLastSlotDoesNotSetHpToZero` e `RewardPersistenceTest.pendingAndAppliedRewardIdsRoundTrip`.
+- [ ] Escrever `MarketplaceTest.creditGoldAddsGpAndRejectsOverflow`; escrever `GameActionResolverTest.creditGoldUpdatesBalanceAndRecordsEvent`, `creditGoldIsIdempotent`, `invalidGrantRewardRejected`, `grantRewardAppliesGoldAndItemsInOneTurn`, `grantRewardIsIdempotent`, `grantRewardWithChangedPayloadIsNoOp`, `fullInventoryStoresRewardAsPending`, `claimPendingRewardItemAfterSpaceFreed`, `unsupportedItemIdDoesNotAddItem` e `nonItemCatalogEntryCannotBeGranted`; confirmar com `RulesEngineTest.fillingLastSlotReducesHpToZeroAccordingToCairn2e` e `RewardPersistenceTest.pendingAndAppliedRewardIdsRoundTrip`.
 
 ```kotlin
 assertEquals(12, paid.state.campaign.profile.gold) // começar com 0 GP e aplicar a recompensa de teste
@@ -60,7 +62,7 @@ assertEquals(1, fullInventoryResult.state.campaign.pendingRewardItems.size)
 ```
 
 - [ ] Rodar `gh workflow run android.yml --ref <feature-branch>` com os testes novos; confirmar falha esperada antes da implementação. O Sandbox não possui Gradle/Android SDK local.
-- [ ] Corrigir `RulesEngine.addItem` para que ocupar exatamente 10 slots não reduza HP; manter a regra de capacidade e não remover itens existentes.
+- [ ] Preservar `RulesEngine.addItem` conforme Cairn 2e: ocupar exatamente 10 slots reduz HP a 0; cobrir isso com teste de regressão. Recompensas que excedam a capacidade ficam pendentes sem remover itens existentes.
 - [ ] Implementar `AddGold` no `GameActionResolver`; chamar `MarketplaceRules.creditGold`, registrar `rewardId:gold` e emitir `GoldCredited` com novo saldo.
 - [ ] Implementar `GrantReward`; chamar `MarketplaceRules.creditGold` e materializar itens via `RulesEngine.addItem` em uma única transição/turno. Se não houver espaço, persistir cada item pendente em vez de descartar item ou falhar silenciosamente.
 - [ ] Implementar `ClaimPendingRewardItem`; só resgatar quando há slots suficientes, chamar `RulesEngine.addItem` e remover a pendência. Liberar espaço é escolha do jogador por ações normais de inventário.
@@ -109,23 +111,23 @@ assertEquals(paidResult.state, paidReplayWithSameId.state)
 - Test: `app/src/test/kotlin/com/vanish994/cairnsolo/feedback/FeedbackMapperTest.kt`, `app/src/test/kotlin/com/vanish994/cairnsolo/game/GameActionResolverTest.kt`
 
 **Interfaces:**
-- A ficha mostra `Ouro: <saldo> po` em seção própria, separada de `INVENTÁRIO`.
+- A ficha mostra `Ouro: <saldo> GP` em seção própria, separada de `INVENTÁRIO`.
 - A seção de recompensas pendentes mostra nome, slots necessários e botão `Resgatar` habilitado somente quando há espaço suficiente.
 - `inventoryItemLabel(item: InventoryItem): String` resolve `reward-catalog:<catalogId>` para `MarketplaceCatalog.find(catalogId)?.name`; itens antigos mantêm o rótulo atual.
 - `GoldCredited`, `RewardItemAdded`, `RewardItemPending`, `RewardItemClaimed` e `RewardItemRejected` produzem feedback localizado com resultado preciso.
 
-- [ ] Escrever `FeedbackMapperTest.goldCreditedShowsAmountAndNewBalance`, `rewardItemAddedShowsCatalogName`, `rewardItemPendingShowsSlotsNeeded` e `rewardItemRejectedExplainsUnsupportedCatalogId`.
+- [x] Cobrir crédito GP, item entregue, item pendente, item rejeitado, resgate e rótulo de catálogo em `FeedbackMapperTest`.
 
 ```kotlin
-assertEquals("Você recebeu 12 po. Saldo: 12 po.", FeedbackMapper.map(GameEvent.GoldCredited("quest-pay", 12, 12), turn = 1).message)
+assertEquals("Você recebeu 12 GP. Saldo: 12 GP.", FeedbackMapper.map(GameEvent.GoldCredited("quest-pay", 12, 12), turn = 1).message)
 ```
 
-- [ ] Rodar `gh workflow run android.yml --ref <feature-branch>` com os testes de feedback/ficha; confirmar falha esperada antes da implementação.
-- [ ] Mostrar `CharacterProfile.gold` na `CharacterSheet`; manter GP fora da lista de itens e fora do cálculo de slots.
-- [ ] Mostrar os itens pendentes com nome vindo de `MarketplaceCatalog`; ao resgatar, chamar `GameAction.ClaimPendingRewardItem` via `GameActionResolver`.
-- [ ] Se não houver espaço, explicar quantos slots liberar e preservar todos os itens; nunca chamar `RemoveItem` sem ação explícita do jogador.
-- [ ] Mapear eventos em português brasileiro; não exibir crédito para `OFFERED`.
-- [ ] Rodar `gh workflow run android.yml --ref <feature-branch>` e conferir manualmente pagamento de 12 po, item de catálogo no inventário, item pendente quando cheio, resgate depois de abrir espaço e save/reload.
+- [ ] Validar os novos testes de feedback/ficha com `gh workflow run android.yml --ref feature/structured-rewards`; a última execução falhou na integração HTTP externa antes do APK.
+- [x] Mostrar `CharacterProfile.gold` na `CharacterSheet`; manter GP fora da lista de itens e fora do cálculo de slots.
+- [x] Mostrar os itens pendentes com nome vindo de `MarketplaceCatalog`; ao resgatar, chamar `GameAction.ClaimPendingRewardItem` via `GameActionResolver`.
+- [x] Se não houver espaço, explicar quantos slots liberar e preservar todos os itens; nunca chamar `RemoveItem` sem ação explícita do jogador.
+- [x] Mapear eventos em português brasileiro; não exibir crédito para `OFFERED`.
+- [ ] Rodar `gh workflow run android.yml --ref <feature-branch>` e conferir manualmente pagamento de 12 GP, item de catálogo no inventário, item pendente quando cheio, resgate depois de abrir espaço e save/reload.
 - [ ] Commit atômico: `feat: show balance and claim reward items`.
 
 ### Task 4: Integração
@@ -133,5 +135,5 @@ assertEquals("Você recebeu 12 po. Saldo: 12 po.", FeedbackMapper.map(GameEvent.
 **Branch:** `feature/structured-rewards` (criar a partir da `main` após mesclar o PR de documentação; um PR focado).
 
 - [ ] Abrir PR para `main`; exigir Android Build verde (unit tests, Guardian server tests, integração HTTP e APK release) no HEAD atual.
-- [ ] Aceitação manual: “O taverneiro entrega 12 po” com `PAID` aumenta saldo exatamente em 12 e persiste; `OFFERED` não altera estado; item válido de catálogo vai para o inventário, item sem espaço fica pendente sem apagar outro item; nenhuma moeda aparece como item.
+- [ ] Aceitação manual: “O taverneiro entrega 12 GP” com `PAID` aumenta saldo exatamente em 12 e persiste; `OFFERED` não altera estado; item válido de catálogo vai para o inventário, item sem espaço fica pendente sem apagar outro item; nenhuma moeda aparece como item.
 - [ ] Atualizar `docs/STATUS.md` e `docs/ARCHITECTURE-MAP.md` após CI; merge somente com checks verdes.

@@ -115,6 +115,9 @@ class ServerTest {
         val encounter = combat.getAsJsonObject("properties").getAsJsonObject("encounter")
         assertEquals("object", encounter.get("type").asString)
         assertTrue(encounter.get("additionalProperties").asBoolean)
+        val reward = branch(setOf("REWARD"))
+        assertEquals(listOf("type", "id", "status", "amountGp", "itemCatalogIds"), reward.getAsJsonArray("required").map { it.asString })
+        assertEquals(setOf("type", "id", "status", "amountGp", "itemCatalogIds"), reward.getAsJsonObject("properties").keySet())
         assertTrue(alternatives.filter { it.get("type")?.asString == "object" }
             .all { !it.get("additionalProperties").asBoolean })
     }
@@ -127,6 +130,107 @@ class ServerTest {
         assertTrue(prompt.contains("damage") && prompt.contains("fatigue") && prompt.contains("amount"))
         assertTrue(prompt.contains("inteiro") && prompt.contains("1"))
         assertTrue(prompt.contains("begin_combat") && prompt.contains("encounter"))
+    }
+
+    @Test
+    fun rewardSchemaRequiresGpStatusAndAtMostFiveCatalogIdsWithoutUnsupportedTextKeywords() {
+        val schema = rewardRequestSchema()
+        val properties = schema.getAsJsonObject("properties")
+        val id = properties.getAsJsonObject("id")
+        val items = properties.getAsJsonObject("itemCatalogIds")
+        val item = items.getAsJsonObject("items")
+
+        assertEquals("object", schema.get("type").asString)
+        assertEquals(
+            setOf("type", "id", "status", "amountGp", "itemCatalogIds"),
+            schema.getAsJsonArray("required").map { it.asString }.toSet()
+        )
+        assertEquals(0, properties.getAsJsonObject("amountGp").get("minimum").asInt)
+        assertEquals(Int.MAX_VALUE, properties.getAsJsonObject("amountGp").get("maximum").asInt)
+        assertEquals(5, items.get("maxItems").asInt)
+        assertEquals("string", item.get("type").asString)
+        assertEquals(
+            setOf("OFFERED", "PAID"),
+            properties.getAsJsonObject("status").getAsJsonArray("enum").map { it.asString }.toSet()
+        )
+        assertFalse(schema.get("additionalProperties").asBoolean)
+        listOf(id, item).forEach { textSchema ->
+            assertFalse(textSchema.has("pattern"))
+            assertFalse(textSchema.has("minLength"))
+            assertFalse(textSchema.has("maxLength"))
+        }
+    }
+
+    @Test
+    fun rewardSchemaBranchIsAddedToRuleRequestAlternatives() {
+        val properties = JsonParser.parseString("""{"ruleRequest":{"anyOf":[]}}""").asJsonObject
+
+        addRewardRequestSchema(properties)
+
+        val alternatives = properties.getAsJsonObject("ruleRequest").getAsJsonArray("anyOf")
+        assertEquals(1, alternatives.size())
+        assertEquals("REWARD", alternatives[0].asJsonObject.getAsJsonObject("properties")
+            .getAsJsonObject("type").getAsJsonArray("enum")[0].asString)
+    }
+
+    @Test
+    fun rewardNormalizerPreservesValidProposalIncludingRepeatedCatalogIds() {
+        val normalized = normalizeRewardProposal(validRewardResponse())
+
+        assertEquals("A recompensa foi entregue.", normalized.get("narration").asString)
+        assertEquals(2, normalized.getAsJsonObject("ruleRequest").getAsJsonArray("itemCatalogIds").size())
+    }
+
+    @Test
+    fun rewardNormalizerCanonicalizesLowercaseType() {
+        val response = validRewardResponse().apply {
+            getAsJsonObject("ruleRequest").addProperty("type", "reward")
+        }
+
+        val normalized = normalizeRewardProposal(response)
+        val request = normalized.getAsJsonObject("ruleRequest")
+
+        assertEquals("A recompensa foi entregue.", normalized.get("narration").asString)
+        assertEquals("REWARD", request.get("type").asString)
+        assertEquals(2, request.getAsJsonArray("itemCatalogIds").size())
+    }
+
+    @Test
+    fun malformedRewardProposalIsStrippedWithoutLosingNarrationOrRequestType() {
+        val invalidResponses = listOf(
+            validRewardResponse().apply { getAsJsonObject("ruleRequest").addProperty("amountGp", -1) },
+            validRewardResponse().apply { getAsJsonObject("ruleRequest").addProperty("amountGp", 2147483648L) },
+            validRewardResponse().apply { getAsJsonObject("ruleRequest").addProperty("amountGp", 1.5) },
+            validRewardResponse().apply { getAsJsonObject("ruleRequest").addProperty("status", "PROMISED") },
+            validRewardResponse().apply {
+                val ids = getAsJsonObject("ruleRequest").getAsJsonArray("itemCatalogIds")
+                repeat(4) { ids.add("unknown-$it") }
+            },
+            validRewardResponse().apply { getAsJsonObject("ruleRequest").addProperty("copper", 12) },
+            validRewardResponse().apply {
+                getAsJsonObject("ruleRequest").addProperty("amountGp", 0)
+                getAsJsonObject("ruleRequest").add("itemCatalogIds", JsonParser.parseString("[]"))
+            }
+        )
+
+        invalidResponses.forEach { response ->
+            val normalized = normalizeRewardProposal(response)
+            val request = normalized.getAsJsonObject("ruleRequest")
+            assertEquals("A recompensa foi entregue.", normalized.get("narration").asString)
+            assertEquals("REWARD", request.get("type").asString)
+            assertEquals(setOf("type"), request.keySet())
+        }
+    }
+
+    @Test
+    fun rewardPromptDistinguishesOfferedFromPaidAndUsesGpCatalogContext() {
+        val prompt = guardianSystemPrompt().lowercase()
+
+        assertTrue(prompt.contains("offered"))
+        assertTrue(prompt.contains("paid"))
+        assertTrue(prompt.contains("amountgp"))
+        assertTrue(prompt.contains("rewardableitems"))
+        assertTrue(prompt.contains("não converta cobre"))
     }
 
     @Test
@@ -261,5 +365,9 @@ class ServerTest {
 
     private fun validEncounterResponse() = JsonParser.parseString(
         """{"narration":"A cena continua.","ruleRequest":{"type":"BEGIN_COMBAT","encounter":{"opponents":[{"opponentId":"cultist-a","narrative":{"name":"Cultista","appearance":"Manto escuro.","behavior":"Observa a passagem.","intent":"Protege o altar.","context":"Na capela."},"stats":{"str":5,"dex":7,"wil":8,"hp":3,"maxHp":4,"armor":1},"weapon":{"id":"ritual-dagger","damage":"d4","blast":false,"ranged":false}}]}}}"""
+    ).asJsonObject
+
+    private fun validRewardResponse() = JsonParser.parseString(
+        """{"narration":"A recompensa foi entregue.","ruleRequest":{"type":"REWARD","id":"quest-pay","status":"PAID","amountGp":12,"itemCatalogIds":["dagger","dagger"]}}"""
     ).asJsonObject
 }

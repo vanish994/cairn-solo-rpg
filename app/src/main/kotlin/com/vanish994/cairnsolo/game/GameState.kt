@@ -133,6 +133,24 @@ data class CharacterProfile(
     }
 }
 
+private val REWARD_ID_REGEX = Regex("^[a-z0-9-]{3,80}$")
+
+fun isValidRewardId(value: String): Boolean = REWARD_ID_REGEX.matches(value)
+
+data class PendingRewardItem(
+    val id: String,
+    val rewardId: String,
+    val catalogItemId: String,
+    val itemInstanceId: String
+) {
+    init {
+        require(id.isNotBlank() && id.length <= 200)
+        require(isValidRewardId(rewardId))
+        require(isValidRewardId(catalogItemId))
+        require(itemInstanceId.isNotBlank() && itemInstanceId.length <= 200)
+    }
+}
+
 const val DEFAULT_GUARDIAN_PROLOGUE =
     "Você é o Guardião desta campanha de Cairn. Esta aventura nasce da seed desta campanha e deve ser inédita, coerente e aberta à agência do jogador. Antes de revelar o mundo, peça ao jogador uma breve ideia de quem é seu aventureiro — profissão, passado, propósito, crença ou apenas um arquétipo. Não peça uma ficha detalhada. Use essa resposta junto da seed para construir uma situação inicial concreta, com lugar, atmosfera, conflito, mistério ou oportunidade, sem escrever uma história fechada e sem obrigar o personagem a uma ação. A partir daí, conduza a campanha como um Guardião: mantenha continuidade, faça o mundo reagir às escolhas e apresente consequências naturais. Nunca invente testes, dano, HP, condições, itens ou outros resultados mecânicos; quando uma intenção exigir uma regra, solicite a resolução ao Rules Engine e narre somente os fatos autorizados por ele."
 
@@ -160,7 +178,9 @@ data class CampaignState(
     val growth: GrowthState = GrowthState(),
     val worldState: WorldState? = null,
     val worldCanon: WorldCanon = WorldCanon(),
-    val history: List<CampaignHistoryEntry> = emptyList()
+    val history: List<CampaignHistoryEntry> = emptyList(),
+    val appliedRewardIds: Set<String> = emptySet(),
+    val pendingRewardItems: List<PendingRewardItem> = emptyList()
 )
 
 data class GameState(

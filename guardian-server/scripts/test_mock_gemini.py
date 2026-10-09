@@ -45,6 +45,18 @@ def shallow_response_schema():
                         "required": ["type", "encounter"],
                         "additionalProperties": False,
                     },
+                    {
+                        "type": "object",
+                        "properties": {
+                            "type": {"type": "string", "enum": ["REWARD"]},
+                            "id": {"type": "string"},
+                            "status": {"type": "string", "enum": ["OFFERED", "PAID"]},
+                            "amountGp": {"type": "integer", "minimum": 0, "maximum": 2147483647},
+                            "itemCatalogIds": {"type": "array", "maxItems": 5, "items": {"type": "string"}},
+                        },
+                        "required": ["type", "id", "status", "amountGp", "itemCatalogIds"],
+                        "additionalProperties": False,
+                    },
                 ]
             },
         },
@@ -119,7 +131,7 @@ class MockGeminiSchemaTest(unittest.TestCase):
 
     def test_rejects_deep_combat_schema_before_upstream_request(self):
         schema = shallow_response_schema()
-        schema["properties"]["ruleRequest"]["anyOf"][-1]["properties"]["encounter"] = {
+        schema["properties"]["ruleRequest"]["anyOf"][-2]["properties"]["encounter"] = {
             "type": "object",
             "properties": {
                 "opponents": {
@@ -144,7 +156,7 @@ class MockGeminiSchemaTest(unittest.TestCase):
 
     def test_rejects_nested_rule_payload_schema_even_within_depth_budget(self):
         schema = shallow_response_schema()
-        schema["properties"]["ruleRequest"]["anyOf"][-1]["properties"]["encounter"] = {
+        schema["properties"]["ruleRequest"]["anyOf"][-2]["properties"]["encounter"] = {
             "type": "object",
             "properties": {"opponents": {"type": "array"}},
         }
@@ -154,7 +166,7 @@ class MockGeminiSchemaTest(unittest.TestCase):
 
     def test_rejects_rule_request_schema_without_begin_combat_type(self):
         schema = shallow_response_schema()
-        schema["properties"]["ruleRequest"]["anyOf"][-1]["properties"]["type"]["enum"].remove("BEGIN_COMBAT")
+        schema["properties"]["ruleRequest"]["anyOf"][-2]["properties"]["type"]["enum"].remove("BEGIN_COMBAT")
 
         with self.assertRaisesRegex(ValueError, "type groups"):
             validate_interactions_request(interactions_request(schema))
@@ -169,6 +181,13 @@ class MockGeminiSchemaTest(unittest.TestCase):
     def test_rejects_save_attribute_that_is_not_required(self):
         schema = shallow_response_schema()
         schema["properties"]["ruleRequest"]["anyOf"][1]["required"] = ["type"]
+
+        with self.assertRaisesRegex(ValueError, "must be required"):
+            validate_interactions_request(interactions_request(schema))
+
+    def test_rejects_reward_schema_missing_status(self):
+        schema = shallow_response_schema()
+        schema["properties"]["ruleRequest"]["anyOf"][-1]["required"].remove("status")
 
         with self.assertRaisesRegex(ValueError, "must be required"):
             validate_interactions_request(interactions_request(schema))

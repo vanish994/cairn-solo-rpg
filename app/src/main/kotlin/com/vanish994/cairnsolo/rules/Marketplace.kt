@@ -40,6 +40,12 @@ object MarketplaceCatalog {
 }
 
 class MarketplaceRules {
+    fun creditGold(currentGoldGp: Int, amountGp: Int): Int {
+        require(currentGoldGp >= 0) { "Current gold cannot be negative." }
+        require(amountGp > 0) { "Gold credit must be positive." }
+        return Math.addExact(currentGoldGp, amountGp)
+    }
+
     fun purchase(state: CharacterState, gold: Int, itemId: String): PurchaseResult {
         require(gold >= 0)
         val entry = MarketplaceCatalog.find(itemId) ?: error("Unknown Marketplace entry: $itemId")
