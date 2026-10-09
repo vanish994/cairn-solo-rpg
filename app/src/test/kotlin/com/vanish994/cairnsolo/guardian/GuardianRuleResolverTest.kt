@@ -10,6 +10,7 @@ import com.vanish994.cairnsolo.game.GameAction
 import com.vanish994.cairnsolo.game.ExplorationEngine
 import com.vanish994.cairnsolo.game.GameActionResolver
 import com.vanish994.cairnsolo.game.GameEvent
+import com.vanish994.cairnsolo.game.GameStatePersistenceCodec
 import com.vanish994.cairnsolo.game.newCharacter
 import com.vanish994.cairnsolo.rules.CharacterState
 import com.vanish994.cairnsolo.rules.FixedRandomSource
@@ -350,5 +351,3 @@ class GuardianRuleResolverTest {
         weapon = weapon
     )
 }
-        val intent = GuardianActionIntent(GuardianActionType.ATTACK, "mercenario-01", "adaga", "Mizera")
-import com.vanish994.cairnsolo.game.GameStatePersistenceCodec
