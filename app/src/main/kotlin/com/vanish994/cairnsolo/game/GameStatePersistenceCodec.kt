@@ -108,6 +108,54 @@ object GameStatePersistenceCodec {
             c.worldCanon.discoveries.forEachIndexed { i, x -> put("canonDiscovery_${i}", listOf(x.id, x.text, x.status.name, x.source.name, x.turn).joinToString(SEPARATOR)) }
             put("historyCount", c.history.size.toString())
             c.history.forEachIndexed { i, x -> put("history_${i}", listOf(x.id, x.turn, x.type.name, x.summary, x.source.name, x.relatedEntityIds.joinToString(",")).joinToString(SEPARATOR)) }
+            c.pendingCombatApproval?.let { pending ->
+                put("pendingCombatActionId", pending.actionId)
+                put("pendingCombatTargetId", pending.targetOpponentId)
+                put("pendingCombatTargetName", pending.targetName)
+                put("pendingCombatWeaponId", pending.weaponId ?: "")
+                put("pendingCombatMoraleLeaderId", pending.moraleLeaderId ?: "")
+                put("pendingCombatOpponentCount", pending.opponents.size.toString())
+                pending.opponents.forEachIndexed { index, opponent ->
+                    val prefix = "pendingCombatOpponent_${index}_"
+                    put("${prefix}id", opponent.id); put("${prefix}status", opponent.status.name)
+                    put("${prefix}str", opponent.stats.str.toString()); put("${prefix}dex", opponent.stats.dex.toString()); put("${prefix}wil", opponent.stats.wil.toString())
+                    put("${prefix}hp", opponent.stats.hp.toString()); put("${prefix}maxHp", opponent.stats.maxHp.toString()); put("${prefix}armor", opponent.stats.armor.toString())
+                    put("${prefix}maxStr", opponent.stats.maxStr.toString()); put("${prefix}maxDex", opponent.stats.maxDex.toString()); put("${prefix}maxWil", opponent.stats.maxWil.toString())
+                    put("${prefix}weaponId", opponent.weapon.id); put("${prefix}weaponDamage", opponent.weapon.damage ?: "")
+                    put("${prefix}weaponBlast", opponent.weapon.blast.toString()); put("${prefix}weaponRanged", opponent.weapon.ranged.toString())
+                    put("${prefix}narrativeName", opponent.narrative.name); put("${prefix}narrativeAppearance", opponent.narrative.appearance)
+                    put("${prefix}narrativeBehavior", opponent.narrative.behavior); put("${prefix}narrativeIntent", opponent.narrative.intent)
+                    put("${prefix}narrativeContext", opponent.narrative.context)
+                }
+            }
+            put("resolvedCombatActionCount", c.resolvedCombatActionIds.size.toString())
+            c.resolvedCombatActionIds.toList().takeLast(100).forEachIndexed { index, id -> put("resolvedCombatAction_$index", id) }
+            put("knownNpcCount", c.knownNpcs.size.toString())
+            c.knownNpcs.forEachIndexed { index, npc ->
+                val prefix = "knownNpc_${index}_"
+                put("${prefix}id", npc.id); put("${prefix}name", npc.name)
+                put("${prefix}role", npc.role ?: ""); put("${prefix}description", npc.description ?: "")
+                put("${prefix}locationId", npc.locationId ?: "")
+                npc.combatProfile?.let { opponent ->
+                    val profile = "${prefix}profile_"
+                    put("${prefix}hasCombatProfile", "true")
+                    put("${profile}id", opponent.id); put("${profile}status", opponent.status.name)
+                    put("${profile}str", opponent.stats.str.toString()); put("${profile}dex", opponent.stats.dex.toString()); put("${profile}wil", opponent.stats.wil.toString())
+                    put("${profile}hp", opponent.stats.hp.toString()); put("${profile}maxHp", opponent.stats.maxHp.toString()); put("${profile}armor", opponent.stats.armor.toString())
+                    put("${profile}maxStr", opponent.stats.maxStr.toString()); put("${profile}maxDex", opponent.stats.maxDex.toString()); put("${profile}maxWil", opponent.stats.maxWil.toString())
+                    put("${profile}fatigue", opponent.stats.fatigue.toString()); put("${profile}deprived", opponent.stats.deprived.toString()); put("${profile}deprivedDays", opponent.stats.deprivedDays.toString())
+                    put("${profile}critical", opponent.stats.critical.toString()); put("${profile}dead", opponent.stats.dead.toString()); put("${profile}scar", opponent.stats.scar?.name ?: "")
+                    put("${profile}lastingScar", opponent.stats.lastingScar ?: ""); put("${profile}brokenLimb", opponent.stats.brokenLimb ?: "")
+                    put("${profile}scarRecovery", opponent.stats.scarRecovery?.name ?: ""); put("${profile}scarAttribute", opponent.stats.scarAttribute?.name ?: "")
+                    put("${profile}sundered", opponent.stats.sundered.toString()); put("${profile}deafened", opponent.stats.deafened.toString()); put("${profile}diseased", opponent.stats.diseased.toString())
+                    put("${profile}hamstrung", opponent.stats.hamstrung.toString()); put("${profile}doomed", opponent.stats.doomed.toString())
+                    put("${profile}weaponId", opponent.weapon.id); put("${profile}weaponDamage", opponent.weapon.damage ?: "")
+                    put("${profile}weaponBlast", opponent.weapon.blast.toString()); put("${profile}weaponRanged", opponent.weapon.ranged.toString())
+                    put("${profile}narrativeName", opponent.narrative.name); put("${profile}narrativeAppearance", opponent.narrative.appearance)
+                    put("${profile}narrativeBehavior", opponent.narrative.behavior); put("${profile}narrativeIntent", opponent.narrative.intent)
+                    put("${profile}narrativeContext", opponent.narrative.context)
+                }
+            }
             put("updatedAt", state.updatedAtEpochMs.toString())
             put("str", r.str.toString()); put("dex", r.dex.toString()); put("wil", r.wil.toString())
             put("maxStr", r.maxStr.toString()); put("maxDex", r.maxDex.toString()); put("maxWil", r.maxWil.toString())
@@ -189,7 +237,7 @@ object GameStatePersistenceCodec {
         val quests = (0 until int("canonQuestCount", 0)).mapNotNull { i -> fields("canonQuest_${i}").takeIf { it.size >= 5 }?.let { x -> runCatching { CanonQuest(x[0], x[1], x[2], x[3], x[4].toLong()) }.getOrNull() } }
         val discoveries = (0 until int("canonDiscoveryCount", 0)).mapNotNull { i -> fields("canonDiscovery_${i}").takeIf { it.size >= 5 }?.let { x -> runCatching { CanonDiscovery(x[0], x[1], CanonStatus.valueOf(x[2]), CanonSource.valueOf(x[3]), x[4].toLong()) }.getOrNull() } }
         val history = (0 until int("historyCount", 0)).mapNotNull { i -> fields("history_${i}").takeIf { it.size >= 6 }?.let { x -> runCatching { CampaignHistoryEntry(x[0], x[1].toLong(), HistoryEventType.valueOf(x[2]), x[3], HistorySource.valueOf(x[4]), x[5].split(",").filter { it.isNotBlank() }) }.getOrNull() } }
-        val combat = runCatching { decodeCombat(values) }.getOrNull()
+        val decodedCombat = runCatching { decodeCombat(values) }.getOrNull()
         val dungeon = values["dungeonLocation"]?.takeIf { it.isNotBlank() }?.let { DungeonState(it, int("dungeonTurn", 0), int("dungeonCycles", 0), runCatching { DungeonLight.valueOf(string("dungeonLight", DungeonLight.DARK.name)) }.getOrDefault(DungeonLight.DARK), int("dungeonTorches", 3), int("dungeonOil", 0), bool("dungeonSafe", false), bool("dungeonDanger", false), bool("dungeonPanicked", false)) }
         val wilderness = values["wildCurrent"]?.takeIf { it.isNotBlank() }?.let { com.vanish994.cairnsolo.rules.WildernessState(it, nullableString("wildDestination"), int("wildWatches", 0), runCatching { Watch.valueOf(string("wildWatch", Watch.MORNING.name)) }.getOrDefault(Watch.MORNING), runCatching { PathType.valueOf(string("wildPath", PathType.ROAD.name)) }.getOrDefault(PathType.ROAD), runCatching { TravelDistance.valueOf(string("wildDistance", TravelDistance.SHORT.name)) }.getOrDefault(TravelDistance.SHORT), runCatching { Terrain.valueOf(string("wildTerrain", Terrain.EASY.name)) }.getOrDefault(Terrain.EASY), runCatching { Weather.valueOf(string("wildWeather", Weather.NICE.name)) }.getOrDefault(Weather.NICE), bool("wildNight", false), bool("wildLost", false), int("wildRations", 0), bool("wildDeprived", false), bool("wildExtreme", false)) }
         val milestones = (0 until int("milestoneCount", 0)).mapNotNull { i -> string("milestone_$i").split(SEPARATOR).takeIf { it.size >= 6 }?.let { x -> runCatching { Milestone(x[0], x[1], x[2].toInt(), x[3].toInt(), decodeCost(x[4], x[5])) }.getOrNull() } }
@@ -213,6 +261,31 @@ object GameStatePersistenceCodec {
         }
         val declinedGrowth = (0 until int("growthDeclinedProposalCount", 0)).map { i -> string("growthDeclinedProposal_$i") }.filter { it.isNotBlank() }
         val worldState = WorldStatePersistenceCodec.decode(values)
+        val pendingCombatApproval = decodePendingCombatApproval(values)
+        val resolvedCombatActionIds = (0 until int("resolvedCombatActionCount", 0).coerceIn(0, 100))
+            .map { string("resolvedCombatAction_$it") }
+            .filter { it.isNotBlank() && it.length <= 120 }
+            .toSet()
+        val knownNpcs = (0 until int("knownNpcCount", 0).coerceIn(0, 500)).mapNotNull { index ->
+            val prefix = "knownNpc_${index}_"
+            val id = values["${prefix}id"]?.takeIf(::isValidCombatOpponentId) ?: return@mapNotNull null
+            val name = values["${prefix}name"]?.takeIf { it.isNotBlank() && it.length <= 160 } ?: return@mapNotNull null
+            val combatProfile = if (values["${prefix}hasCombatProfile"] == "true") {
+                runCatching { decodeCombatOpponent(values, "${prefix}profile", id) }.getOrNull()
+            } else null
+            runCatching {
+                CampaignNpcState(
+                    id, name,
+                    values["${prefix}role"]?.takeIf { it.isNotBlank() },
+                    values["${prefix}description"]?.takeIf { it.isNotBlank() },
+                    values["${prefix}locationId"]?.takeIf { it.isNotBlank() },
+                    combatProfile
+                )
+            }.getOrNull()
+        }.distinctBy { it.id }
+        val combat = decodedCombat?.copy(opponents = decodedCombat.opponents.map { opponent ->
+            knownNpcs.firstOrNull { it.id == opponent.id }?.combatProfile ?: opponent
+        })
         return GameState(
             campaign = CampaignState(
                 campaignId = string("campaignId"), campaignSeed = string("campaignSeed", string("campaignId")), character = CharacterIdentity(string("characterId"), string("characterName", "Aventureiro")),
@@ -231,7 +304,10 @@ object GameStatePersistenceCodec {
                 worldCanon = WorldCanon(locations, npcs, items, quests, discoveries),
                 history = history,
                 appliedRewardIds = appliedRewardIds,
-                pendingRewardItems = pendingRewardItems
+                pendingRewardItems = pendingRewardItems,
+                pendingCombatApproval = pendingCombatApproval,
+                resolvedCombatActionIds = resolvedCombatActionIds,
+                knownNpcs = knownNpcs
             ), updatedAtEpochMs = long("updatedAt", 0L)
         )
     }
@@ -282,6 +358,28 @@ object GameStatePersistenceCodec {
         }.getOrNull()
     }
 
+    private fun decodePendingCombatApproval(values: Map<String, String>): PendingCombatApproval? {
+        val actionId = values["pendingCombatActionId"]?.takeIf { it.isNotBlank() } ?: return null
+        val targetId = values["pendingCombatTargetId"]?.takeIf { it.isNotBlank() } ?: return null
+        val targetName = values["pendingCombatTargetName"]?.takeIf { it.isNotBlank() } ?: return null
+        val count = values["pendingCombatOpponentCount"]?.toIntOrNull()?.takeIf { it in 1..8 } ?: return null
+        val ids = (0 until count).map { values["pendingCombatOpponent_${it}_id"] ?: return null }
+        if (ids.distinct().size != ids.size) return null
+        val opponents = (0 until count).map { index ->
+            runCatching { decodeCombatOpponent(values, "pendingCombatOpponent_${index}", ids[index]) }.getOrNull() ?: return null
+        }
+        return runCatching {
+            PendingCombatApproval(
+                actionId = actionId,
+                targetOpponentId = targetId,
+                targetName = targetName,
+                weaponId = values["pendingCombatWeaponId"]?.takeIf { it.isNotBlank() },
+                opponents = opponents,
+                moraleLeaderId = values["pendingCombatMoraleLeaderId"]?.takeIf { it.isNotBlank() }
+            )
+        }.getOrNull()
+    }
+
     private fun decodeCombatOpponent(values: Map<String, String>, prefix: String?, id: String): CombatOpponentState {
         fun value(field: String): String? {
             if (prefix != null) return values["${prefix}_$field"]
@@ -321,7 +419,19 @@ object GameStatePersistenceCodec {
             armor = int("armor", 0).coerceIn(0, 3),
             maxStr = int("maxStr", str).coerceAtLeast(str),
             maxDex = int("maxDex", dex).coerceAtLeast(dex),
-            maxWil = int("maxWil", wil).coerceAtLeast(wil)
+            maxWil = int("maxWil", wil).coerceAtLeast(wil),
+            fatigue = int("fatigue", 0).coerceAtLeast(0),
+            deprived = boolean("deprived", false),
+            deprivedDays = int("deprivedDays", 0).coerceAtLeast(0),
+            critical = boolean("critical", false),
+            dead = boolean("dead", false),
+            scar = value("scar")?.takeIf { it.isNotBlank() }?.let { runCatching { Scar.valueOf(it) }.getOrNull() },
+            lastingScar = value("lastingScar")?.takeIf { it.isNotBlank() },
+            brokenLimb = value("brokenLimb")?.takeIf { it.isNotBlank() },
+            scarRecovery = value("scarRecovery")?.takeIf { it.isNotBlank() }?.let { runCatching { com.vanish994.cairnsolo.rules.ScarRecovery.valueOf(it) }.getOrNull() },
+            scarAttribute = value("scarAttribute")?.takeIf { it.isNotBlank() }?.let { runCatching { com.vanish994.cairnsolo.rules.Attribute.valueOf(it) }.getOrNull() },
+            sundered = boolean("sundered", false), deafened = boolean("deafened", false),
+            diseased = boolean("diseased", false), hamstrung = boolean("hamstrung", false), doomed = boolean("doomed", false)
         )
         val narrative = CombatOpponentNarrative(
             name = value("narrativeName")?.takeIf { it.isNotBlank() && it.length <= 160 } ?: id,

@@ -16,12 +16,13 @@ class GuardianClientTest {
     @Test
     fun parsesStructuredAttackIntentWithoutTreatingItAsAMechanicalResult() {
         val response = HttpGuardianClient(baseUrl = "").parseResponse(
-            """{"narration":"A tensão aumenta.","sceneTitle":"Praça","sceneDescription":"Pedras úmidas.","actionIntent":{"type":"ATTACK","targetId":"mercenario-01","weaponId":"adaga"},"ruleRequest":null,"suggestedActions":[],"canonProposals":[],"growthEvidenceProposals":[],"growthChangeProposals":[]}"""
+            """{"narration":"A tensão aumenta.","sceneTitle":"Cena","sceneDescription":"O chão está úmido.","actionIntent":{"type":"ATTACK","targetId":"mercenario-01","targetName":"Mizera","weaponId":"adaga"},"ruleRequest":null,"suggestedActions":[],"canonProposals":[],"growthEvidenceProposals":[],"growthChangeProposals":[]}"""
         )
 
         val intent = assertNotNull(response.actionIntent)
         assertEquals(GuardianActionType.ATTACK, intent.type)
         assertEquals("mercenario-01", intent.targetId)
+        assertEquals("Mizera", intent.targetName)
         assertEquals("adaga", intent.weaponId)
         assertNull(response.ruleRequest)
     }
@@ -29,7 +30,7 @@ class GuardianClientTest {
     @Test
     fun malformedStructuredAttackIntentIsIgnoredRatherThanExecuting() {
         val response = HttpGuardianClient(baseUrl = "").parseResponse(
-            """{"narration":"A cena continua.","sceneTitle":"Praça","sceneDescription":"Pedras úmidas.","actionIntent":{"type":"ATTACK","targetId":"mercenario-01","weaponId":42},"ruleRequest":null,"suggestedActions":[]}"""
+            """{"narration":"A cena continua.","sceneTitle":"Cena","sceneDescription":"O chão está úmido.","actionIntent":{"type":"ATTACK","targetId":"mercenario-01","targetName":"Mizera","weaponId":42},"ruleRequest":null,"suggestedActions":[]}"""
         )
 
         assertNull(response.actionIntent)

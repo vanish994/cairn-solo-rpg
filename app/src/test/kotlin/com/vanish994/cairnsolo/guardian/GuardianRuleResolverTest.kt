@@ -213,7 +213,7 @@ class GuardianRuleResolverTest {
             cultist("mercenario-01", "Mizera", CharacterState(5, 7, 4, 10, 10, 0), WeaponProfile("faca", "d4"))
         ))
         val request = GuardianRuleRequest("BEGIN_COMBAT", encounter = proposal)
-        val intent = GuardianActionIntent(GuardianActionType.ATTACK, "mercenario-01", "adaga")
+        val intent = GuardianActionIntent(GuardianActionType.ATTACK, "mercenario-01", "adaga", "Mizera")
 
         assertNull(rules.validateAttackIntent(state, intent, request))
         val result = rules.resolveAttackIntent(state, intent, request)
@@ -227,19 +227,67 @@ class GuardianRuleResolverTest {
     }
 
     @Test
-    fun attackIntentCannotCreateOrTargetAnUnrecordedNpc() {
+    fun attackAgainstNewNarrativeNpcPreparesProfileOnDemandWithoutGlobalRegistry() {
         val random = FixedRandomSource(10)
         val rules = GuardianRuleResolver(GameActionResolver(ExplorationEngine(random), RulesEngine(random)))
         val base = newCharacter("Mara", 10, 11, 12)
-        val known = base.copy(campaign = base.campaign.copy(
-            worldCanon = base.campaign.worldCanon.copy(npcs = listOf(CanonNpc("known-npc", "Mizera")))
-        ))
-        val intent = GuardianActionIntent(GuardianActionType.ATTACK, "unknown-npc", null)
-        val unknown = GuardianRuleRequest("BEGIN_COMBAT", encounter = GuardianEncounterProposal(listOf(
-            cultist("unknown-npc", "Novo inimigo", CharacterState(5, 7, 4, 4, 4, 0), WeaponProfile("faca", "d4"))
+        val stateWithoutNpcRegistry = base
+        val proposed = GuardianRuleRequest("BEGIN_COMBAT", encounter = GuardianEncounterProposal(listOf(
+            cultist("traveler-7", "Viajante", CharacterState(5, 7, 4, 4, 4, 0), WeaponProfile("faca", "d4"))
         )))
+        val intent = GuardianActionIntent(GuardianActionType.ATTACK, "traveler-7", null, "Viajante")
 
-        assertTrue(rules.validateAttackIntent(known, intent, unknown)?.contains("NPC conhecido") == true)
+        assertNull(rules.validateAttackIntent(stateWithoutNpcRegistry, intent, proposed))
+        val pending = rules.pendingCombatApproval(stateWithoutNpcRegistry, intent, proposed, "action-unique-1")
+        assertNotNull(pending)
+        assertEquals("traveler-7", pending.targetOpponentId)
+        assertEquals("Viajante", pending.targetName)
+        assertEquals(4, pending.opponents.single().stats.hp)
+        assertTrue(rules.validateAttackIntent(stateWithoutNpcRegistry, intent, null)?.contains("preparar o perfil") == true)
+    }
+
+    @Test
+    fun targetNameMustMatchDynamicallyProposedProfile() {
+        val random = FixedRandomSource(10)
+        val rules = GuardianRuleResolver(GameActionResolver(ExplorationEngine(random), RulesEngine(random)))
+        val state = newCharacter("Mara", 10, 11, 12)
+        val request = GuardianRuleRequest("BEGIN_COMBAT", encounter = GuardianEncounterProposal(listOf(
+            cultist("guard-1", "Guarda", CharacterState(5, 7, 4, 4, 4, 0), WeaponProfile("spear", "d6"))
+        )))
+        val intent = GuardianActionIntent(GuardianActionType.ATTACK, "guard-1", null, "Mercador")
+
+        assertTrue(rules.validateAttackIntent(state, intent, request)?.contains("não corresponde") == true)
+    }
+
+    @Test
+    fun approvedDynamicNpcAttackPersistsProfileAndResolvedActionId() {
+        val random = FixedRandomSource(d20Value = 10, d6Value = 4, d4Value = 2)
+        val rules = GuardianRuleResolver(GameActionResolver(ExplorationEngine(random), RulesEngine(random)))
+        val original = newCharacter("Mara", 10, 11, 12)
+        val base = original.copy(campaign = original.campaign.copy(
+            rules = original.campaign.rules.copy(inventory = listOf(InventoryItem("adaga", damage = "d6")))
+        ))
+        val proposal = GuardianRuleRequest("BEGIN_COMBAT", encounter = GuardianEncounterProposal(listOf(
+            cultist("sentry-7", "Sentinela", CharacterState(5, 7, 4, 8, 8, 0), WeaponProfile("lanca-curta", "d4"))
+        )))
+        val intent = GuardianActionIntent(GuardianActionType.ATTACK, "sentry-7", "adaga", "Sentinela")
+        val pending = assertNotNull(rules.pendingCombatApproval(base, intent, proposal, "action-campaign-1"))
+        val waiting = base.copy(campaign = base.campaign.copy(pendingCombatApproval = pending))
+
+        val resolved = rules.resolvePendingAttack(waiting)
+        val rolls = resolved.gameResult.events.filterIsInstance<GameEvent.DiceRollResolved>()
+        assertEquals(listOf("player", "sentry-7"), rolls.map { it.actorId })
+        assertNull(resolved.state.campaign.pendingCombatApproval)
+        assertTrue("action-campaign-1" in resolved.state.campaign.resolvedCombatActionIds)
+        val savedNpc = assertNotNull(resolved.state.campaign.knownNpcs.singleOrNull { it.id == "sentry-7" })
+        assertEquals("Sentinela", savedNpc.name)
+        assertEquals("lanca-curta", savedNpc.combatProfile?.weapon?.id)
+        assertEquals(resolved.state.campaign.combat?.opponents?.singleOrNull()?.stats, savedNpc.combatProfile?.stats)
+
+        val restored = assertNotNull(GameStatePersistenceCodec.decode(GameStatePersistenceCodec.encode(resolved.state)))
+        assertEquals(resolved.state.campaign.knownNpcs, restored.campaign.knownNpcs)
+        assertEquals(resolved.state.campaign.resolvedCombatActionIds, restored.campaign.resolvedCombatActionIds)
+        assertEquals(restored.campaign.knownNpcs.single().combatProfile?.stats, restored.campaign.combat?.opponents?.singleOrNull()?.stats)
     }
 
     @Test
@@ -302,3 +350,5 @@ class GuardianRuleResolverTest {
         weapon = weapon
     )
 }
+        val intent = GuardianActionIntent(GuardianActionType.ATTACK, "mercenario-01", "adaga", "Mizera")
+import com.vanish994.cairnsolo.game.GameStatePersistenceCodec

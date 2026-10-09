@@ -4,6 +4,7 @@ class CanonResolver {
     fun apply(state: GameState, proposals: List<CanonProposal>): GameState {
         if (proposals.isEmpty()) return state
         var canon = state.campaign.worldCanon
+        var knownNpcs = state.campaign.knownNpcs
         val accepted = mutableListOf<CampaignHistoryEntry>()
         proposals.take(5).forEach { proposal ->
             require(proposal.id.matches(Regex("[a-z0-9-]{3,80}"))) { "ID de cânone inválido: ${proposal.id}" }
@@ -13,6 +14,18 @@ class CanonResolver {
                     val existing = canon.npcs.firstOrNull { it.id == proposal.id }
                     val next = CanonNpc(proposal.id, proposal.name, proposal.role, proposal.description, proposal.status, existing?.firstSeenTurn ?: state.campaign.turn)
                     canon = canon.copy(npcs = (canon.npcs.filterNot { it.id == proposal.id } + next).takeLast(200))
+                    if (proposal.status != CanonStatus.RUMOR) {
+                        val registered = knownNpcs.firstOrNull { it.id == proposal.id }
+                        val name = registered?.name ?: proposal.name
+                        knownNpcs = (knownNpcs.filterNot { it.id == proposal.id } + CampaignNpcState(
+                            id = proposal.id,
+                            name = name,
+                            role = proposal.role ?: registered?.role,
+                            description = proposal.description ?: registered?.description,
+                            locationId = registered?.locationId ?: state.campaign.sceneId,
+                            combatProfile = registered?.combatProfile
+                        )).takeLast(500)
+                    }
                 }
                 is CanonProposal.DiscoverLocation -> {
                     require(proposal.name.isNotBlank() && proposal.description.length <= 1000)
@@ -56,6 +69,7 @@ class CanonResolver {
         return state.copy(
             campaign = state.campaign.copy(
                 worldCanon = canon,
+                knownNpcs = knownNpcs,
                 history = (state.campaign.history + accepted).takeLast(500)
             ),
             updatedAtEpochMs = System.currentTimeMillis()

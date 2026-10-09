@@ -61,9 +61,13 @@ sealed interface GameAction {
         val opponentWeapon: WeaponProfile get() = opponents.first().weapon
         val opponentNarrative: CombatOpponentNarrative get() = opponents.first().narrative
     }
-    data class CombatAttack(val targetOpponentId: String, val weapon: WeaponProfile? = null) : GameAction {
+    data class CombatAttack(
+        val targetOpponentId: String,
+        val weapon: WeaponProfile? = null,
+        val actionId: String? = null
+    ) : GameAction {
         /** Temporary adapter for the existing single-opponent UI. */
-        constructor(weapon: WeaponProfile? = null) : this("", weapon)
+        constructor(weapon: WeaponProfile? = null) : this("", weapon, null)
     }
     data object EndCombat : GameAction
     data class CastSpell(val itemId: String, val requiresWilSave: Boolean = false, val failure: com.vanish994.cairnsolo.rules.SpellFailureConsequence = com.vanish994.cairnsolo.rules.SpellFailureConsequence.NONE, val dropItemIdForFatigue: String? = null) : GameAction
@@ -678,6 +682,26 @@ class GameActionResolver(
         return GameResult(state.withRules(result.newState), listOf(GameEvent.RestCompleted(hpRecovered, fatigueRecovered)))
     }
 
+    private fun rememberCombatOpponents(
+        campaign: CampaignState,
+        opponents: List<CombatOpponentState>
+    ): List<CampaignNpcState> {
+        var known = campaign.knownNpcs
+        opponents.forEach { opponent ->
+            val existing = known.firstOrNull { it.id == opponent.id }
+            val entry = CampaignNpcState(
+                id = opponent.id,
+                name = existing?.name ?: opponent.narrative.name,
+                role = existing?.role,
+                description = existing?.description ?: opponent.narrative.context,
+                locationId = existing?.locationId ?: campaign.sceneId,
+                combatProfile = opponent
+            )
+            known = (known.filterNot { it.id == opponent.id } + entry).takeLast(500)
+        }
+        return known
+    }
+
     private fun beginCombat(state: GameState, action: GameAction.BeginCombat): GameResult {
         require(state.campaign.combat == null) { "Combat already active" }
         val initialCombat = CombatState(
@@ -687,7 +711,11 @@ class GameActionResolver(
         val opponentIds = initialCombat.opponents.map { it.id }
         val save = rules.save(state.campaign.rules, Attribute.DEX)
         if (save.success) {
-            val next = state.copy(campaign = state.campaign.copy(combat = initialCombat, turn = state.campaign.turn + 1))
+            val next = state.copy(campaign = state.campaign.copy(
+                combat = initialCombat,
+                knownNpcs = rememberCombatOpponents(state.campaign, initialCombat.opponents),
+                turn = state.campaign.turn + 1
+            ))
             val events = listOf(
                 GameEvent.CombatStarted(opponentIds, 1, true),
                 GameEvent.SaveResolved(Attribute.DEX, save.roll, true)
@@ -707,6 +735,7 @@ class GameActionResolver(
         val next = state.copy(campaign = state.campaign.copy(
             rules = enemyAttack.target,
             combat = if (dead) null else initialCombat.copy(round = 2, playerCanAct = true),
+            knownNpcs = rememberCombatOpponents(state.campaign, initialCombat.opponents),
             turn = state.campaign.turn + 1
         ))
         val events = mutableListOf<GameEvent>(
@@ -739,6 +768,10 @@ class GameActionResolver(
     }
 
     private fun combatAttack(state: GameState, action: GameAction.CombatAttack): GameResult {
+        action.actionId?.let { actionId ->
+            require(actionId.isNotBlank() && actionId.length <= 120)
+            if (actionId in state.campaign.resolvedCombatActionIds) return GameResult(state, emptyList())
+        }
         val current = state.campaign.combat ?: error("No active combat")
         require(current.playerCanAct) { "Player cannot act this round" }
         val target = if (action.targetOpponentId.isEmpty()) {
@@ -819,7 +852,11 @@ class GameActionResolver(
         val activeOpponents = opponents.filter { it.status == CombatOpponentStatus.ACTIVE }
         if (activeOpponents.isEmpty()) {
             val endReason = combatEndReason(opponents)
-            val next = state.copy(campaign = state.campaign.copy(combat = null, turn = state.campaign.turn + 1))
+            val next = state.copy(campaign = state.campaign.copy(
+                combat = null,
+                knownNpcs = rememberCombatOpponents(state.campaign, opponents),
+                turn = state.campaign.turn + 1
+            ))
             val events = playerRollEvents + moraleOutcomes.map { outcome ->
                 GameEvent.SaveResolved(Attribute.WIL, outcome.roll, !outcome.fled)
             } + listOf(
@@ -842,7 +879,7 @@ class GameActionResolver(
                 "Combate encerrado contra ${opponents.joinToString { it.id }}.",
                 opponents.map { it.id }
             )
-            return GameResult(ended, events)
+            return GameResult(recordCombatAction(ended, action.actionId), events)
         }
 
         val enemyAttack = combat.attackGroup(
@@ -871,6 +908,7 @@ class GameActionResolver(
             campaign = state.campaign.copy(
                 rules = enemyAttack.target,
                 combat = nextCombat,
+                knownNpcs = rememberCombatOpponents(state.campaign, opponents),
                 turn = state.campaign.turn + 1
             ),
             updatedAtEpochMs = System.currentTimeMillis()
@@ -899,7 +937,13 @@ class GameActionResolver(
             if (playerDead) "Combate encerrado contra ${opponents.joinToString { it.id }}." else "Rodada ${current.round} resolvida contra ${target.id}.",
             opponents.map { it.id }
         )
-        return GameResult(nextWithHistory, events)
+        return GameResult(recordCombatAction(nextWithHistory, action.actionId), events)
+    }
+
+    private fun recordCombatAction(state: GameState, actionId: String?): GameState {
+        if (actionId == null) return state
+        val ids = (state.campaign.resolvedCombatActionIds.toList() + actionId).distinct().takeLast(100).toSet()
+        return state.copy(campaign = state.campaign.copy(resolvedCombatActionIds = ids))
     }
 
     private fun resolveOpponentMorale(

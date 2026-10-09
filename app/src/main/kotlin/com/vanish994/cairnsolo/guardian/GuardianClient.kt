@@ -40,11 +40,13 @@ enum class GuardianActionType { ATTACK }
 data class GuardianActionIntent(
     val type: GuardianActionType,
     val targetId: String,
-    val weaponId: String?
+    val weaponId: String?,
+    val targetName: String = targetId
 ) {
     init {
         require(targetId.isNotBlank() && targetId == targetId.trim() && targetId.length <= 80)
         require(weaponId == null || (weaponId.isNotBlank() && weaponId == weaponId.trim() && weaponId.length <= 80))
+        require(targetName.isNotBlank() && targetName == targetName.trim() && targetName.length <= 160)
     }
 }
 
@@ -293,18 +295,19 @@ class HttpGuardianClient(
     private fun parseActionIntent(json: JSONObject?, exactJson: JsonObject?): GuardianActionIntent? {
         if (json == null || exactJson == null) return null
         return runCatching {
-            require(exactJson.keySet() == setOf("type", "targetId", "weaponId")) {
+            require(exactJson.keySet() == setOf("type", "targetId", "targetName", "weaponId")) {
                 "actionIntent contains missing or unsupported fields"
             }
             val type = GuardianActionType.valueOf(exactJson.getExactString("type"))
             val targetId = exactJson.getExactString("targetId")
+            val targetName = exactJson.getExactString("targetName")
             val weaponIdElement = exactJson.get("weaponId")
             val weaponId = when {
                 weaponIdElement == null || weaponIdElement.isJsonNull -> null
                 weaponIdElement.isJsonPrimitive && weaponIdElement.asJsonPrimitive.isString -> weaponIdElement.asString
                 else -> throw IllegalArgumentException("weaponId must be a string or null")
             }
-            GuardianActionIntent(type, targetId, weaponId)
+            GuardianActionIntent(type, targetId, weaponId, targetName)
         }.getOrNull()
     }
 

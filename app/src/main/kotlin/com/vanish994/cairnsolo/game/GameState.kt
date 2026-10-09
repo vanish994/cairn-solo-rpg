@@ -112,6 +112,45 @@ data class CombatState(
     )
 }
 
+/** Intenção do jogador e perfil proposto, persistidos juntos enquanto aguardam aprovação. */
+data class PendingCombatApproval(
+    val actionId: String,
+    val targetOpponentId: String,
+    val targetName: String,
+    val weaponId: String?,
+    val opponents: List<CombatOpponentState>,
+    val moraleLeaderId: String? = null
+) {
+    init {
+        require(actionId.isNotBlank() && actionId.length <= 120)
+        require(targetOpponentId.isNotBlank() && targetOpponentId == targetOpponentId.trim())
+        require(targetName.isNotBlank() && targetName.length <= 160)
+        require(opponents.size in 1..8 && opponents.map { it.id }.distinct().size == opponents.size)
+        require(opponents.any { it.id == targetOpponentId && it.status == CombatOpponentStatus.ACTIVE })
+        require(moraleLeaderId == null || opponents.any { it.id == moraleLeaderId })
+        require(weaponId == null || (weaponId.isNotBlank() && weaponId == weaponId.trim()))
+    }
+}
+
+/** NPCs relevantes são criados sob demanda; perfil nulo significa que ainda não foram preparados para combate. */
+data class CampaignNpcState(
+    val id: String,
+    val name: String,
+    val role: String? = null,
+    val description: String? = null,
+    val locationId: String? = null,
+    val combatProfile: CombatOpponentState? = null
+) {
+    init {
+        require(id.isNotBlank() && id == id.trim() && id.length <= 80)
+        require(name.isNotBlank() && name.length <= 160)
+        require(role == null || role.length <= 160)
+        require(description == null || description.length <= 1000)
+        require(locationId == null || (locationId.isNotBlank() && locationId.length <= 80))
+        require(combatProfile == null || combatProfile.id == id)
+    }
+}
+
 data class CharacterProfile(
     val age: Int? = null,
     val background: Background? = null,
@@ -152,7 +191,7 @@ data class PendingRewardItem(
 }
 
 const val DEFAULT_GUARDIAN_PROLOGUE =
-    "Você é o Guardião desta campanha de Cairn. Esta aventura nasce da seed desta campanha e deve ser inédita, coerente e aberta à agência do jogador. Antes de revelar o mundo, peça ao jogador uma breve ideia de quem é seu aventureiro — profissão, passado, propósito, crença ou apenas um arquétipo. Não peça uma ficha detalhada. Use essa resposta junto da seed para construir uma situação inicial concreta, com lugar, atmosfera, conflito, mistério ou oportunidade, sem escrever uma história fechada e sem obrigar o personagem a uma ação. A partir daí, conduza a campanha como um Guardião: mantenha continuidade, faça o mundo reagir às escolhas e apresente consequências naturais. Nunca invente testes, dano, HP, condições, itens ou outros resultados mecânicos; quando uma intenção exigir uma regra, solicite a resolução ao Rules Engine e narre somente os fatos autorizados por ele."
+    "Esta campanha ainda não recebeu sua primeira narração. Use a identidade do aventureiro, a seed e o contexto do mundo desta campanha para apresentar uma situação inédita, concreta e aberta às escolhas do jogador. Não peça novamente informações já fornecidas. A IA conduz a narrativa; o Rules Engine controla toda consequência mecânica."
 
 data class CampaignState(
     val campaignId: String = UUID.randomUUID().toString(),
@@ -180,7 +219,10 @@ data class CampaignState(
     val worldCanon: WorldCanon = WorldCanon(),
     val history: List<CampaignHistoryEntry> = emptyList(),
     val appliedRewardIds: Set<String> = emptySet(),
-    val pendingRewardItems: List<PendingRewardItem> = emptyList()
+    val pendingRewardItems: List<PendingRewardItem> = emptyList(),
+    val pendingCombatApproval: PendingCombatApproval? = null,
+    val resolvedCombatActionIds: Set<String> = emptySet(),
+    val knownNpcs: List<CampaignNpcState> = emptyList()
 )
 
 data class GameState(

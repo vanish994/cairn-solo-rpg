@@ -27,29 +27,47 @@ class GuardianRuleResolver(
         intent: GuardianActionIntent,
         request: GuardianRuleRequest?
     ): String? {
-        val knownNpcIds = state.campaign.worldCanon.npcs
-            .filter { it.status != CanonStatus.RUMOR }
-            .map { it.id }
-            .toSet()
         val activeCombat = state.campaign.combat
         if (activeCombat != null) {
             if (request != null) return "Um ataque em combate não pode vir acompanhado de outro pedido de regra."
+            val target = activeCombat.opponents.firstOrNull { it.id == intent.targetId && it.status == com.vanish994.cairnsolo.game.CombatOpponentStatus.ACTIVE }
+            if (target == null) {
+                return "O alvo indicado não é um oponente ativo deste combate. Encerre o encontro ou use a ação narrativa adequada; nenhuma rolagem foi feita."
+            }
             if (!activeCombat.playerCanAct) return "O personagem ainda não pode agir nesta rodada."
-            if (activeCombat.opponents.none { it.id == intent.targetId && it.status == com.vanish994.cairnsolo.game.CombatOpponentStatus.ACTIVE }) {
-                return "O alvo indicado não é um oponente ativo deste combate; nenhum ataque foi resolvido."
+            if (!target.narrative.name.equals(intent.targetName, ignoreCase = true)) {
+                return "O nome do alvo não corresponde ao oponente selecionado; nenhum ataque foi resolvido."
             }
         } else {
-            if (intent.targetId !in knownNpcIds) return "O alvo não corresponde a um NPC conhecido; esclareça quem você pretende atacar."
-            if (request == null || !request.type.equals("BEGIN_COMBAT", ignoreCase = true)) {
-                return "O Guardião precisa propor o perfil do NPC para sua confirmação antes do primeiro ataque."
-            }
-            validationError(state, request)?.let { return it }
-            val proposal = request.encounter ?: return "A proposta de combate está incompleta."
-            if (proposal.opponents.none { it.opponentId == intent.targetId }) {
-                return "A proposta de combate não contém o alvo indicado; nenhum combate foi iniciado."
-            }
-            if (proposal.opponents.any { it.opponentId !in knownNpcIds }) {
-                return "A proposta inclui um oponente que ainda não existe no cânone conhecido; nenhum combate foi iniciado."
+            val existingProfile = state.campaign.knownNpcs.firstOrNull { it.id == intent.targetId }?.combatProfile
+            if (existingProfile != null) {
+                if (existingProfile.status == com.vanish994.cairnsolo.game.CombatOpponentStatus.DEFEATED || existingProfile.stats.dead) {
+                    return "Esse NPC já foi derrotado e não pode iniciar outro combate."
+                }
+                if (!existingProfile.narrative.name.equals(intent.targetName, ignoreCase = true)) {
+                    return "O nome do alvo não corresponde ao NPC persistido; nenhum ataque foi resolvido."
+                }
+            } else {
+                if (request == null || !request.type.equals("BEGIN_COMBAT", ignoreCase = true)) {
+                    return "É preciso preparar o perfil mecânico desse NPC para a confirmação do primeiro combate."
+                }
+                validationError(state, request)?.let { return it }
+                val proposal = request.encounter ?: return "A proposta de combate está incompleta."
+                val knownProfiles = state.campaign.knownNpcs.associateBy { it.id }
+                for (proposedOpponent in proposal.opponents) {
+                    val savedProfile = knownProfiles[proposedOpponent.opponentId]?.combatProfile ?: continue
+                    if (savedProfile.status == com.vanish994.cairnsolo.game.CombatOpponentStatus.DEFEATED || savedProfile.stats.dead) {
+                        return "A proposta inclui ${savedProfile.narrative.name}, cujo perfil persistido indica que já foi derrotado. Nenhum combate foi iniciado."
+                    }
+                    if (!savedProfile.narrative.name.equals(proposedOpponent.narrative.name, ignoreCase = true)) {
+                        return "A proposta altera a identidade de um NPC com perfil persistido. Nenhum combate foi iniciado."
+                    }
+                }
+                val target = proposal.opponents.firstOrNull { it.opponentId == intent.targetId }
+                    ?: return "A proposta de combate não contém o alvo indicado; nenhum combate foi iniciado."
+                if (!target.narrative.name.equals(intent.targetName, ignoreCase = true)) {
+                    return "O perfil proposto não corresponde ao alvo narrativo; nenhum combate foi iniciado."
+                }
             }
         }
         intent.weaponId?.let { id ->
@@ -74,9 +92,18 @@ class GuardianRuleResolver(
         if (state.campaign.combat != null) {
             return resolve(state, GameAction.CombatAttack(intent.targetId, weapon))
         }
-
-        val encounterRequest = requireNotNull(request)
-        val started = resolve(state, encounterRequest)
+        val persistedProfile = state.campaign.knownNpcs.firstOrNull { it.id == intent.targetId }?.combatProfile
+        val proposedOpponents = request?.encounter?.opponents.orEmpty().map { proposal ->
+            state.campaign.knownNpcs.firstOrNull { it.id == proposal.opponentId }?.combatProfile
+                ?.takeUnless { it.status == com.vanish994.cairnsolo.game.CombatOpponentStatus.DEFEATED || it.stats.dead }
+                ?.copy(status = com.vanish994.cairnsolo.game.CombatOpponentStatus.ACTIVE)
+                ?: CombatOpponentState(proposal.opponentId, proposal.narrative, proposal.stats, proposal.weapon)
+        }
+        val opponents = if (persistedProfile != null) listOf(persistedProfile.copy(
+            status = com.vanish994.cairnsolo.game.CombatOpponentStatus.ACTIVE
+        )) else proposedOpponents
+        val moraleLeaderId = if (persistedProfile != null) null else request?.encounter?.moraleLeaderId
+        val started = resolve(state, GameAction.BeginCombat(opponents, moraleLeaderId))
         val activeCombat = started.state.campaign.combat
         if (activeCombat == null || !activeCombat.playerCanAct ||
             activeCombat.opponents.none { it.id == intent.targetId && it.status == com.vanish994.cairnsolo.game.CombatOpponentStatus.ACTIVE }
@@ -90,6 +117,56 @@ class GuardianRuleResolver(
             gameResult = combined,
             encounterContexts = attack.encounterContexts.ifEmpty { started.encounterContexts }
         )
+    }
+
+    fun pendingCombatApproval(
+        state: GameState,
+        intent: GuardianActionIntent,
+        request: GuardianRuleRequest?,
+        actionId: String
+    ): com.vanish994.cairnsolo.game.PendingCombatApproval? {
+        if (state.campaign.combat != null) return null
+        val error = validateAttackIntent(state, intent, request)
+        if (error != null) return null
+        if (state.campaign.knownNpcs.any { it.id == intent.targetId && it.combatProfile != null }) return null
+        val encounter = request?.encounter ?: return null
+        val opponents = encounter.opponents.map { proposal ->
+            state.campaign.knownNpcs.firstOrNull { it.id == proposal.opponentId }?.combatProfile
+                ?.takeUnless { it.status == com.vanish994.cairnsolo.game.CombatOpponentStatus.DEFEATED || it.stats.dead }
+                ?.copy(status = com.vanish994.cairnsolo.game.CombatOpponentStatus.ACTIVE)
+                ?: CombatOpponentState(proposal.opponentId, proposal.narrative, proposal.stats, proposal.weapon)
+        }
+        return runCatching {
+            com.vanish994.cairnsolo.game.PendingCombatApproval(
+                actionId, intent.targetId, intent.targetName, intent.weaponId, opponents, encounter.moraleLeaderId
+            )
+        }.getOrNull()
+    }
+
+    fun requestForPendingApproval(pending: com.vanish994.cairnsolo.game.PendingCombatApproval): GuardianRuleRequest =
+        GuardianRuleRequest(
+            type = "BEGIN_COMBAT",
+            encounter = GuardianEncounterProposal(
+                opponents = pending.opponents.map { opponent ->
+                    GuardianOpponentProposal(opponent.id, opponent.narrative, opponent.stats, opponent.weapon)
+                },
+                moraleLeaderId = pending.moraleLeaderId
+            )
+        )
+
+    fun resolvePendingAttack(state: GameState): GuardianRuleResolution {
+        val pending = requireNotNull(state.campaign.pendingCombatApproval) { "Não há ataque pendente para resolver." }
+        if (pending.actionId in state.campaign.resolvedCombatActionIds) {
+            return GuardianRuleResolution(state, "Esta ação já foi resolvida; nenhuma nova rolagem foi feita.", GameResult(state, emptyList()))
+        }
+        val request = requestForPendingApproval(pending)
+        val intent = GuardianActionIntent(GuardianActionType.ATTACK, pending.targetOpponentId, pending.weaponId, pending.targetName)
+        val result = resolveAttackIntent(state, intent, request)
+        val committedState = result.state.copy(campaign = result.state.campaign.copy(
+            pendingCombatApproval = null,
+            resolvedCombatActionIds = (result.state.campaign.resolvedCombatActionIds + pending.actionId).takeLast(100).toSet()
+        ))
+        return result.copy(state = committedState, gameResult = result.gameResult.copy(state = committedState))
     }
 
     private fun attackWeapon(state: GameState, weaponId: String?): WeaponProfile? {

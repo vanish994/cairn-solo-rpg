@@ -159,6 +159,33 @@ class CombatPersistenceTest {
     }
 
     @Test
+    fun pendingDynamicNpcApprovalAndResolvedIdsRoundTripPerCampaign() {
+        val base = newCharacter("Mara", 10, 11, 12)
+        val opponent = CombatOpponentState(
+            id = "traveler-7",
+            narrative = CombatOpponentNarrative("Viajante", "Capa rasgada", "Observa a estrada", "Foge se ferido", "Na ponte"),
+            stats = CharacterState(5, 7, 4, 3, 4, 1),
+            weapon = WeaponProfile("faca", "d4")
+        )
+        val npc = CampaignNpcState("traveler-7", "Viajante", "viajante", "Encontrado na estrada", "starting-settlement", opponent)
+        val pending = PendingCombatApproval("action-campaign-a", "traveler-7", "Viajante", null, listOf(opponent))
+        val campaignA = base.copy(campaign = base.campaign.copy(
+            knownNpcs = listOf(npc), pendingCombatApproval = pending, resolvedCombatActionIds = setOf("already-resolved")
+        ))
+        val restoredA = assertNotNull(GameStatePersistenceCodec.decode(GameStatePersistenceCodec.encode(campaignA)))
+
+        assertEquals(listOf(npc), restoredA.campaign.knownNpcs)
+        assertEquals(pending, restoredA.campaign.pendingCombatApproval)
+        assertEquals(setOf("already-resolved"), restoredA.campaign.resolvedCombatActionIds)
+
+        val campaignB = newCharacter("Mara", 10, 11, 12)
+        assertTrue(campaignA.campaign.campaignId != campaignB.campaign.campaignId)
+        assertTrue(campaignB.campaign.knownNpcs.isEmpty())
+        assertNull(campaignB.campaign.pendingCombatApproval)
+        assertTrue(campaignB.campaign.resolvedCombatActionIds.isEmpty())
+    }
+
+    @Test
     fun legacySaveWithoutOpponentNarrativeUsesSafeDefault() {
         val base = newCharacter("Mara", 10, 11, 12)
         val original = base.copy(campaign = base.campaign.copy(combat = combatState()))

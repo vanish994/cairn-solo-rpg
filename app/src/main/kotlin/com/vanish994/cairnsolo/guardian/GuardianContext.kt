@@ -38,6 +38,7 @@ data class GuardianContext(
     val character: GuardianCharacterContext,
     val scene: GuardianSceneContext,
     val world: GuardianWorldContext?,
+    val knownNpcs: List<GuardianKnownNpcContext>,
     val canon: GuardianCanonContext,
     val growth: GuardianGrowthContext,
     val recentHistory: List<GuardianHistoryContext>,
@@ -53,6 +54,7 @@ data class GuardianContext(
         put("character", character.toJson())
         put("scene", scene.toJson())
         world?.let { put("world", it.toJson()) }
+        put("knownNpcs", guardianArray(knownNpcs.map { it.toJson() }))
         put("canon", canon.toJson())
         put("growth", growth.toJson())
         put("recentHistory", guardianArray(recentHistory.map { it.toJson() }))
@@ -65,6 +67,10 @@ data class GuardianContext(
 
 data class GuardianCharacterContext(
     val name: String,
+    val age: Int?,
+    val background: String?,
+    val backgroundFeatures: List<String>,
+    val traits: Map<String, String>,
     val str: Int,
     val dex: Int,
     val wil: Int,
@@ -78,6 +84,10 @@ data class GuardianCharacterContext(
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("name", name)
+        age?.let { put("age", it) }
+        background?.let { put("background", it) }
+        put("backgroundFeatures", guardianArray(backgroundFeatures))
+        put("traits", guardianMapJson(traits))
         put("stats", JSONObject().apply {
             put("str", str); put("dex", dex); put("wil", wil)
             put("hp", hp); put("maxHp", maxHp); put("armor", armor)
@@ -132,7 +142,11 @@ data class GuardianCombatOpponentContext(
     val hp: Int,
     val maxHp: Int,
     val armor: Int,
-    val weapon: GuardianCombatWeaponContext
+    val weapon: GuardianCombatWeaponContext,
+    val str: Int = 0,
+    val dex: Int = 0,
+    val wil: Int = 0,
+    val conditions: List<String> = emptyList()
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("id", id)
@@ -145,6 +159,8 @@ data class GuardianCombatOpponentContext(
             put("context", narrative.context)
         })
         put("hp", hp); put("maxHp", maxHp); put("armor", armor)
+        put("stats", JSONObject().apply { put("str", str); put("dex", dex); put("wil", wil) })
+        put("conditions", guardianArray(conditions))
         put("weapon", weapon.toJson())
     }
 }
@@ -179,13 +195,44 @@ data class GuardianSceneContext(
 
 data class GuardianWorldContext(
     val currentLocationId: String,
+    val campaignName: String,
+    val concept: String,
+    val region: Map<String, Any?>,
+    val currentLocation: Map<String, Any?>,
+    val settlements: List<Map<String, Any?>>,
+    val landmarks: List<Map<String, Any?>>,
     val factions: List<GuardianFactionContext>,
-    val npcs: List<GuardianNpcContext>
+    val npcs: List<GuardianNpcContext>,
+    val threats: List<Map<String, Any?>>,
+    val rumors: List<Map<String, Any?>>
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("currentLocationId", currentLocationId)
+        put("campaignName", campaignName); put("concept", concept)
+        put("region", guardianMapJson(region)); put("currentLocation", guardianMapJson(currentLocation))
+        put("settlements", guardianArray(settlements.map(::guardianMapJson)))
+        put("landmarks", guardianArray(landmarks.map(::guardianMapJson)))
         put("factions", guardianArray(factions.map { it.toJson() }))
         put("npcs", guardianArray(npcs.map { it.toJson() }))
+        put("threats", guardianArray(threats.map(::guardianMapJson)))
+        put("rumors", guardianArray(rumors.map(::guardianMapJson)))
+    }
+}
+
+data class GuardianKnownNpcContext(
+    val id: String,
+    val name: String,
+    val role: String?,
+    val description: String?,
+    val locationId: String?,
+    val combatProfile: GuardianCombatOpponentContext?
+) {
+    fun toJson(): JSONObject = JSONObject().apply {
+        put("id", id); put("name", name)
+        role?.let { put("role", it) }
+        description?.let { put("description", it) }
+        locationId?.let { put("locationId", it) }
+        combatProfile?.let { put("combatProfile", it.toJson()) }
     }
 }
 
@@ -260,9 +307,22 @@ object GuardianContextBuilder {
             campaignId = campaign.campaignId,
             campaignSeed = campaign.campaignSeed,
             turn = campaign.turn,
-            character = character(campaign.character.name, rules, campaign.profile.gold, campaign.combat),
+            character = character(campaign, campaign.combat),
             scene = GuardianSceneContext(campaign.sceneId, campaign.sceneType.name, campaign.sceneTitle, campaign.sceneDescription, campaign.exits.take(20), campaign.guardianMessage),
             world = campaign.worldState?.let(::world),
+            knownNpcs = campaign.knownNpcs.takeLast(MAX_CANON_ENTRIES).map { npc ->
+                GuardianKnownNpcContext(
+                    npc.id, npc.name, npc.role, npc.description, npc.locationId,
+                    npc.combatProfile?.let { opponent ->
+                        GuardianCombatOpponentContext(
+                            opponent.id, opponent.status, opponent.narrative, opponent.stats.hp,
+                            opponent.stats.maxHp, opponent.stats.armor,
+                            GuardianCombatWeaponContext(opponent.weapon.id, opponent.weapon.damage, opponent.weapon.blast, opponent.weapon.ranged),
+                            opponent.stats.str, opponent.stats.dex, opponent.stats.wil, characterConditions(opponent.stats)
+                        )
+                    }
+                )
+            },
             canon = canon(campaign.worldCanon),
             growth = growth(campaign.growth),
             recentHistory = campaign.history.takeLast(MAX_HISTORY).map(::history),
@@ -275,15 +335,23 @@ object GuardianContextBuilder {
         )
     }
 
-    private fun character(name: String, rules: CharacterState, goldGp: Int, combat: com.vanish994.cairnsolo.game.CombatState?): GuardianCharacterContext = GuardianCharacterContext(
-        name, rules.str, rules.dex, rules.wil, rules.hp, rules.maxHp, rules.armor,
+    private fun character(campaign: com.vanish994.cairnsolo.game.CampaignState, combat: com.vanish994.cairnsolo.game.CombatState?): GuardianCharacterContext {
+        val rules = campaign.rules
+        val profile = campaign.profile
+        val traits = profile.traits?.let { t -> mapOf(
+            "physique" to t.physique, "skin" to t.skin, "hair" to t.hair, "face" to t.face,
+            "speech" to t.speech, "clothing" to t.clothing, "virtue" to t.virtue, "vice" to t.vice
+        ) }.orEmpty()
+        return GuardianCharacterContext(
+        campaign.character.name, profile.age, profile.background?.name, profile.backgroundFeatures, traits,
+        rules.str, rules.dex, rules.wil, rules.hp, rules.maxHp, rules.armor,
         buildList {
             if (rules.deprived) add("DEPRIVED")
             if (rules.fatigue > 0) add("FATIGUE:${rules.fatigue}")
             if (rules.critical) add("CRITICAL")
             if (rules.dead) add("DEAD")
             rules.scar?.let { add("SCAR:${it.name}") }
-        }, goldGp,
+        }, profile.gold,
         rules.inventory.take(10).map { GuardianInventoryContext(it.id, it.slotCost, it.damage, it.armor, it.uses) },
         combat?.let { fight ->
             GuardianCombatContext(
@@ -300,7 +368,9 @@ object GuardianContextBuilder {
                             damage = opponent.weapon.damage,
                             blast = opponent.weapon.blast,
                             ranged = opponent.weapon.ranged
-                        )
+                        ),
+                        str = opponent.stats.str, dex = opponent.stats.dex, wil = opponent.stats.wil,
+                        conditions = characterConditions(opponent.stats)
                     )
                 },
                 round = fight.round,
@@ -308,12 +378,35 @@ object GuardianContextBuilder {
             )
         }
     )
+    }
 
     private fun world(world: WorldState): GuardianWorldContext = GuardianWorldContext(
-        world.currentLocationId,
-        world.factions.take(MAX_CANON_ENTRIES).map { GuardianFactionContext(it.id, it.name, it.agenda, it.goalProgress, it.goals, it.obstacle, it.traits) },
-        world.npcs.take(MAX_CANON_ENTRIES).map { GuardianNpcContext(it.id, it.name, it.role, it.locationId, it.factionId) }
+        currentLocationId = world.currentLocationId,
+        campaignName = world.campaignName,
+        concept = world.concept,
+        region = mapOf("id" to world.region.id, "name" to world.region.name, "terrain" to world.region.terrain.name, "description" to world.region.description),
+        currentLocation = world.settlements.firstOrNull { it.id == world.currentLocationId }?.let { mapOf("id" to it.id, "name" to it.name, "type" to it.type.name, "description" to it.description) }.orEmpty(),
+        settlements = world.settlements.take(20).map { mapOf("id" to it.id, "name" to it.name, "type" to it.type.name, "description" to it.description) },
+        landmarks = world.landmarks.take(20).map { mapOf("id" to it.id, "name" to it.name, "terrain" to it.terrain, "description" to it.description) },
+        factions = world.factions.take(MAX_CANON_ENTRIES).map { GuardianFactionContext(it.id, it.name, it.agenda, it.goalProgress, it.goals, it.obstacle, it.traits) },
+        npcs = world.npcs.take(MAX_CANON_ENTRIES).map { GuardianNpcContext(it.id, it.name, it.role, it.locationId, it.factionId) },
+        threats = world.threats.take(20).map { mapOf("id" to it.id, "name" to it.name, "description" to it.description, "factionId" to it.factionId) },
+        rumors = world.rumors.take(20).map { mapOf("id" to it.id, "text" to it.text, "reliability" to it.reliability, "discovered" to it.discovered) }
     )
+
+    private fun characterConditions(character: CharacterState): List<String> = buildList {
+        if (character.critical) add("CRITICAL")
+        if (character.dead) add("DEAD")
+        if (character.fatigue > 0) add("FATIGUE:${character.fatigue}")
+        if (character.deprived) add("DEPRIVED")
+        character.scar?.let { add("SCAR:${it.name}") }
+        character.brokenLimb?.let { add("BROKEN_LIMB:$it") }
+        if (character.sundered) add("SUNDERED")
+        if (character.deafened) add("DEAFENED")
+        if (character.diseased) add("DISEASED")
+        if (character.hamstrung) add("HAMSTRUNG")
+        if (character.doomed) add("DOOMED")
+    }
 
     private fun canon(canon: WorldCanon): GuardianCanonContext = GuardianCanonContext(
         canon.locations.takeLast(MAX_CANON_ENTRIES).map { mapOf("id" to it.id, "name" to it.name, "description" to it.description, "status" to it.status.name, "firstSeenTurn" to it.firstSeenTurn) },

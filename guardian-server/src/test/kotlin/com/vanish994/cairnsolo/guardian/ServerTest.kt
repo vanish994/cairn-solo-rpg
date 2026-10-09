@@ -83,6 +83,11 @@ class ServerTest {
         assertTrue("actionIntent" in responseRequired)
         val actionIntent = responseSchema.getAsJsonObject("properties").getAsJsonObject("actionIntent")
         assertTrue(actionIntent.getAsJsonArray("anyOf").any { it.asJsonObject.get("type")?.asString == "null" })
+        val attackIntentSchema = actionIntent.getAsJsonArray("anyOf").single {
+            it.asJsonObject.get("type")?.asString == "object"
+        }.asJsonObject
+        assertEquals(setOf("type", "targetId", "targetName", "weaponId"), attackIntentSchema.getAsJsonObject("properties").keySet())
+        assertEquals(setOf("type", "targetId", "targetName", "weaponId"), attackIntentSchema.getAsJsonArray("required").map { it.asString }.toSet())
 
         val ruleRequest = guardianResponseSchema()
             .getAsJsonObject("properties")
@@ -136,8 +141,10 @@ class ServerTest {
         assertTrue(prompt.contains("damage") && prompt.contains("fatigue") && prompt.contains("amount"))
         assertTrue(prompt.contains("inteiro") && prompt.contains("1"))
         assertTrue(prompt.contains("begin_combat") && prompt.contains("encounter"))
-        assertTrue(prompt.contains("actionintent") && prompt.contains("targetid") && prompt.contains("weaponid"))
-        assertTrue(prompt.contains("não invente ids") || prompt.contains("nunca invente ids"))
+        assertTrue(prompt.contains("actionintent") && prompt.contains("targetid") && prompt.contains("targetname") && prompt.contains("weaponid"))
+        assertTrue(prompt.contains("ids estáveis") && prompt.contains("campanha"))
+        assertTrue(prompt.contains("não acrescente rolagem de acerto com d20"))
+        assertTrue(prompt.contains("ausência de cadastro mecânico não invalida a ação"))
     }
 
     @Test
@@ -146,33 +153,34 @@ class ServerTest {
 
         assertTrue(prompt.contains("iniciar_campanha"))
         assertTrue(prompt.contains("não mencione") || prompt.contains("não o mencione"))
-        assertTrue(prompt.contains("não use um prólogo fixo"))
-        assertTrue(prompt.contains("não pause a abertura"))
+        assertTrue(prompt.contains("não use prólogo"))
+        assertTrue(prompt.contains("não solicite novamente dados já coletados"))
         assertTrue(prompt.contains("mundo") && prompt.contains("campaignseed"))
         assertTrue(prompt.contains("sugestões") || prompt.contains("suggestedactions"))
     }
 
     @Test
-    fun systemPromptIncludesTheCompleteProjectPromptResource() {
+    fun systemPromptUsesTheConsolidatedProjectPromptResource() {
         val prompt = guardianSystemPrompt()
 
-        assertTrue(prompt.startsWith("CAIRN SOLO RPG — SYSTEM PROMPT DO GUARDIÃO"))
-        assertTrue(prompt.contains("1. IDENTIDADE E MISSÃO"))
-        assertTrue(prompt.contains("13. PRINCÍPIO FINAL"))
-        assertTrue(prompt.contains("Nunca confunda essas responsabilidades."))
+        assertTrue(prompt.startsWith("CAIRN SOLO RPG — GUARDIÃO NARRATIVO"))
+        assertTrue(prompt.contains("CAMPANHAS E MUNDO DINÂMICO"))
+        assertTrue(prompt.contains("ABERTURA DE CAMPANHA"))
+        assertTrue(prompt.lowercase().contains("rules engine é a única autoridade"))
+        assertFalse(prompt.contains("Cinzália"))
     }
 
     @Test
     fun campaignOpeningNormalizationRemovesMechanicalRequestButKeepsNarrationAndActions() {
         val response = JsonParser.parseString(
-            """{"narration":"A névoa cobre o vau.","suggestedActions":["Examinar as marcas"],"actionIntent":{"type":"ATTACK","targetId":"npc-1","weaponId":null},"ruleRequest":{"type":"REWARD","id":"opening-pay","status":"PAID","amountGp":12,"itemCatalogIds":[]}}"""
+            """{"narration":"A névoa cobre a passagem.","suggestedActions":["Examinar as marcas"],"actionIntent":{"type":"ATTACK","targetId":"npc-1","targetName":"Viajante","weaponId":null},"ruleRequest":{"type":"REWARD","id":"opening-pay","status":"PAID","amountGp":12,"itemCatalogIds":[]}}"""
         ).asJsonObject
 
         val normalized = normalizeCampaignOpening(response, "INICIAR_CAMPANHA")
 
         assertTrue(normalized.get("ruleRequest").isJsonNull)
         assertTrue(normalized.get("actionIntent").isJsonNull)
-        assertEquals("A névoa cobre o vau.", normalized.get("narration").asString)
+        assertEquals("A névoa cobre a passagem.", normalized.get("narration").asString)
         assertEquals("Examinar as marcas", normalized.getAsJsonArray("suggestedActions")[0].asString)
         assertEquals(0, normalized.getAsJsonArray("growthEvidenceProposals").size())
         assertEquals(0, normalized.getAsJsonArray("growthChangeProposals").size())
@@ -287,7 +295,7 @@ class ServerTest {
         assertTrue(prompt.contains("paid"))
         assertTrue(prompt.contains("amountgp"))
         assertTrue(prompt.contains("rewardableitems"))
-        assertTrue(prompt.contains("não converta cobre"))
+        assertTrue(prompt.contains("não invente conversão de cobre"))
     }
 
     @Test
@@ -370,45 +378,41 @@ class ServerTest {
     fun promptGroundsActionsInSceneCanonAndAvailableActions() {
         val prompt = guardianSystemPrompt().lowercase()
         val suggestionInstruction = prompt
-            .substringAfter("ações sugeridas (suggestedactions):", missingDelimiterValue = "")
+            .substringAfter("sugestões e resposta", missingDelimiterValue = "")
             .substringBefore("\n\n")
 
         assertTrue(suggestionInstruction.isNotBlank())
-        assertTrue(suggestionInstruction.contains("objetivo imediato"))
+        assertTrue(suggestionInstruction.contains("recomendações opcionais"))
         assertTrue(suggestionInstruction.contains("availableactions"))
-        assertTrue(suggestionInstruction.contains("cena"))
-        assertTrue(suggestionInstruction.contains("cânone") && Regex("\\bcanon\\b").containsMatchIn(suggestionInstruction))
-        assertTrue(suggestionInstruction.contains("apoiad") || suggestionInstruction.contains("derivad") || suggestionInstruction.contains("basead"))
-        assertTrue(suggestionInstruction.contains("não invent"))
+        assertTrue(suggestionInstruction.contains("scene"))
+        assertTrue(suggestionInstruction.contains("contexto da campanha"))
+        assertTrue(suggestionInstruction.contains("não limitam ações livres"))
     }
 
     @Test
     fun promptDefinesEncounterContextAsApprovedOpponentListWithoutMechanicalAuthority() {
         val prompt = guardianSystemPrompt().lowercase()
-        val encounterInstruction = prompt
-            .substringAfter("se encountercontext estiver presente", missingDelimiterValue = "")
-            .substringBefore("\n\n")
-
-        assertTrue(encounterInstruction.isNotBlank())
-        assertTrue(encounterInstruction.contains("lista") || encounterInstruction.contains("array"))
-        assertTrue(encounterInstruction.contains("opponentid"))
-        assertTrue(encounterInstruction.contains("narrative"))
-        assertTrue(encounterInstruction.contains("aprovad"))
-        assertTrue(prompt.contains("ruleresult") && prompt.contains("única autoridade"))
-        assertTrue(encounterInstruction.contains("não autoriza") && encounterInstruction.contains("resultados mecânicos"))
+        assertTrue(prompt.contains("knownnpcs"))
+        assertTrue(prompt.contains("combatprofile"))
+        assertTrue(prompt.contains("perfil narrativo aprovado") || prompt.contains("perfil mecânico") )
+        assertTrue(prompt.contains("rules engine é a única autoridade"))
+        assertTrue(prompt.contains("nunca invente rolagem"))
     }
 
     @Test
     fun promptDefinesCompleteCombatProposalFieldsForShallowWireSchema() {
         val prompt = guardianSystemPrompt().lowercase()
         val requiredGuidance = listOf(
-            "begin_combat", "1 a 8", "opponentid", "narrative", "appearance", "behavior", "intent", "context",
-            "stats", "str", "dex", "wil", "hp", "maxhp", "armor", "weapon", "damage", "blast", "ranged",
-            "moraleleaderid", "maxhp >= hp", "0 a 3", "d4", "d12"
+            "begin_combat", "perfis novos", "oponentes participantes", "str", "dex", "wil", "hp", "maxhp",
+            "armor", "weapon", "d4", "d12", "aplicativo mostra o perfil para aprovação"
         )
 
         requiredGuidance.forEach { term ->
-            assertTrue(prompt.contains(term), "Prompt is missing combat proposal guidance: $term")
+            val present = when (term) {
+                "oponentes participantes" -> prompt.contains("oponente participante")
+                else -> prompt.contains(term)
+            }
+            assertTrue(present, "Prompt is missing combat proposal guidance: $term")
         }
     }
 
