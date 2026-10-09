@@ -534,4 +534,18 @@ class ServerTest {
     private fun validRewardResponse() = JsonParser.parseString(
         """{"narration":"A recompensa foi entregue.","ruleRequest":{"type":"REWARD","id":"quest-pay","status":"PAID","amountGp":12,"itemCatalogIds":["dagger","dagger"]}}"""
     ).asJsonObject
+
+    @Test
+    fun promptEncouragesProactiveNarrativeAndAutonomousNpcsWithoutChangingRulesAuthority() {
+        val prompt = guardianSystemPrompt().lowercase()
+
+        assertTrue(prompt.contains("iniciativa narrativa"))
+        assertTrue(prompt.contains("não espere apenas comandos"))
+        assertTrue(prompt.contains("agentes com desejos"))
+        assertTrue(prompt.contains("não force uma reviravolta a cada turno"))
+        assertTrue(prompt.contains("o rules engine é a única autoridade"))
+        assertTrue(prompt.contains("as sugestões são opções úteis"))
+        assertTrue(prompt.contains("2–4 frases curtas"))
+    }
+
 }
