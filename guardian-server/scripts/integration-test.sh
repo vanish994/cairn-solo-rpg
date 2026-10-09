@@ -53,7 +53,7 @@ assert isinstance(body["growthEvidenceProposals"], list)
 assert isinstance(body["interactionId"], str) and body["interactionId"].strip()
 rule = body["ruleRequest"]
 if rule is not None:
-    assert rule["type"] in {"SAVE", "DAMAGE", "FATIGUE", "REST", "STABILIZE_CRITICAL", "RECOVER_SCAR", "BEGIN_COMBAT", "REWARD"}
+    assert rule["type"] in {"SAVE", "DAMAGE", "FATIGUE", "REST", "STABILIZE_CRITICAL", "RECOVER_SCAR", "REWARD"}
     if rule["type"] == "SAVE":
         assert rule.get("attribute") in {"STR", "DEX", "WIL"}, f"invalid SAVE request: {json.dumps(body, ensure_ascii=False)}"
     if rule["type"] in {"DAMAGE", "FATIGUE"}:
