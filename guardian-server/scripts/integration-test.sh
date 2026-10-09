@@ -84,3 +84,31 @@ for proposal in body["growthChangeProposals"]:
     assert isinstance(proposal["rationale"], str) and proposal["rationale"].strip()
 print("guardian: JSON contract ok")
 PY
+
+
+echo "guardian: exploration JSON contract ok"
+
+opening_payload='{"playerIntent":"INICIAR_CAMPANHA","campaign":{"campaignId":"integration-opening-test","campaignSeed":"integration-seed-2026","turn":0,"sceneId":"starting-settlement","sceneType":"EXPLORATION","sceneTitle":"Arroio Negro","sceneDescription":"Um povoado junto a um vau escuro.","exits":[],"guardianHistory":[],"worldCanon":{"locations":[],"npcs":[],"importantItems":[],"quests":[],"discoveries":[]},"recentHistory":[],"stats":{"str":10,"dex":12,"wil":9,"hp":6,"maxHp":6,"armor":0,"deprived":false,"critical":false,"dead":false},"inventory":[]}}'
+opening_status="$(curl --silent --show-error --output "$response_file" --write-out '%{http_code}' \
+  --connect-timeout 10 --max-time 60 \
+  -H 'Content-Type: application/json' \
+  -X POST "$BASE_URL/guardian" \
+  --data "$opening_payload")"
+if [[ "$opening_status" != "200" ]]; then
+  echo "campaign opening: unexpected HTTP status $opening_status" >&2
+  cat "$response_file" >&2
+  exit 1
+fi
+
+python3 - "$response_file" <<'PY'
+import json, sys
+from pathlib import Path
+body = json.loads(Path(sys.argv[1]).read_text())
+assert body["narration"].strip(), body
+assert "INICIAR_CAMPANHA" not in body["narration"], body
+assert body["ruleRequest"] is None, f"startup mechanic/reward leaked: {body['ruleRequest']}"
+assert body["growthEvidenceProposals"] == [], body
+assert body["growthChangeProposals"] == [], body
+assert 1 <= len(body["suggestedActions"]) <= 3, body
+print("campaign opening: no mechanics; suggested actions preserved")
+PY

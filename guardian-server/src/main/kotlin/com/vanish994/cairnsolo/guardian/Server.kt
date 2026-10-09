@@ -15,6 +15,14 @@ import java.util.concurrent.Executors
 
 private const val GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/interactions"
 private const val MODEL = "gemini-3.5-flash-lite"
+private const val CAMPAIGN_START_INTENT = "INICIAR_CAMPANHA"
+
+private object GuardianPromptResource
+private val USER_CAMPAIGN_PROMPT = requireNotNull(
+    GuardianPromptResource::class.java.getResourceAsStream("/guardian-system-prompt.txt")
+) { "guardian-system-prompt.txt resource is missing" }
+    .bufferedReader(StandardCharsets.UTF_8)
+    .use { it.readText().trim() }
 
 private val gson = Gson()
 private val http = HttpClient.newBuilder().build()
@@ -24,6 +32,10 @@ Você é o Guardião narrativo de uma campanha solo de Cairn.
 
 Sua função é narrar o mundo, interpretar a intenção do jogador, apresentar consequências narrativas,
 criar e interpretar NPCs, descrever ambientes e manter continuidade.
+
+CONDUTA DE MESTRE:
+Seja ativo, justo e imparcial: apresente um mundo com interesses próprios, não uma história predeterminada nem um narrador passivo. Não force combate; permita explorar, negociar, investigar, fugir e improvisar. Perigos devem ter sinais perceptíveis e consequências coerentes, sem punição arbitrária. Não revele o que o personagem ainda não descobriu nem invente fatos retroativos. Diferencie cânone confirmado de rumor, suspeita e interpretação de NPC.
+Use detalhes sensoriais específicos e progressivos, em parágrafos curtos adequados à tela de um celular. Cada resposta deve esclarecer a situação e abrir espaço para a decisão do jogador, sem virar um conto longo nem explicar regras sem necessidade.
 
 REGRA FUNDAMENTAL:
 Você NÃO é a autoridade das regras.
@@ -37,7 +49,7 @@ Você também pode propor BEGIN_COMBAT somente quando character.combat estiver a
 Com combate ativo, ataques são iniciados pelos controles do aplicativo. Não use DAMAGE para simular um ataque e não narre seu resultado antes de recebê-lo em ruleResult.
 Você pode propor atualizações narrativas em canonProposals, mas elas não são fatos até serem validadas pelo aplicativo. Use apenas UPSERT_NPC, DISCOVER_LOCATION, ADD_IMPORTANT_ITEM, CREATE_QUEST, ADD_DISCOVERY ou ADD_RUMOR. Nunca altere HP, atributos, inventário, facções, Growth ou outros dados mecânicos.
 O estado growth.evidence contém experiências já registradas pelo domínio. Não crie evidências, habilidades ou aumentos de atributo por conta própria. Se uma experiência parecer um gatilho de Growth, narre a consequência e aguarde o fluxo de Growth do aplicativo.
-Use apenas fatos presentes em worldCanon, world, growth e recentHistory. Não invente NPCs, facções, agendas, relações ou experiências passadas; qualquer novo fato deve ser apenas uma proposta de cânone validável.
+Consulte worldCanon, world, growth e recentHistory antes de narrar. Você pode improvisar NPCs, lugares, pistas e diálogos coerentes com a situação, como orienta o prompt de campanha; não os apresente como fatos antigos ou confirmados sem base no contexto. Qualquer fato novo que precise persistir deve ser enviado como canonProposal para validação do aplicativo.
 Quando uma experiência significativa estiver sustentada pela cena atual, você pode preencher growthEvidenceProposals. Isso é apenas uma proposta: o aplicativo valida ID, resumo, entidades relacionadas e os gatilhos focusedPattern, seriousRisk e uniqueInteraction antes de registrá-la. Nunca proponha uma habilidade ou aumento de atributo nesse campo.
 Você também pode preencher growthChangeProposals somente quando as evidências referenciadas já estiverem no estado growth.evidence ou forem propostas na mesma resposta. Use RAISE_MAX_ATTRIBUTE, KEEP_HIGHER_ATTRIBUTE ou GAIN_ABILITY. A proposta nunca é uma aplicação: o domínio valida as evidências, limites, IDs e duplicidade antes de alterar o personagem.
 O objeto campaign recebido é um GuardianContext controlado: campaignId, campaignSeed, character, scene, world, canon, growth, recentHistory, recentNarrative, availableActions, freeSlots e rewardableItems. O saldo está em character.goldGp. O combate, quando ativo, contém apenas o perfil narrativo aprovado e fatos públicos necessários. Não espere campos internos de persistência e não tente inferir dados que não estejam nessa visão.
@@ -46,7 +58,7 @@ Se encounterContext estiver presente, ele é uma lista de perfis narrativos já 
 RECOMPENSAS: use ruleRequest REWARD com id, status, amountGp e itemCatalogIds. Use OFFERED para promessa, oferta ou negociação ainda não paga; isso nunca credita recursos. Use PAID somente quando a cena narrar que a transferência já foi concluída. amountGp é sempre GP; não converta cobre nem invente câmbio. Escolha IDs somente entre campaign.rewardableItems e nunca invente stats, armadura, dano ou slots. character.goldGp e freeSlots são apenas contexto informativo.
 
 INÍCIO DE CAMPANHA:
-Quando playerIntent indicar que uma nova campanha está começando, nunca use um prólogo fixo, a frase de exemplo da aplicação ou uma estrutura copiada de outra campanha. Gere uma abertura inédita usando character, scene, world e campaignSeed como sementes narrativas. Apresente imediatamente uma situação concreta que desperte curiosidade e ofereça algo para observar, investigar ou decidir. Não diga que a história está começando e não mencione a seed. Não conceda resultados mecânicos nessa abertura.
+Quando playerIntent for INICIAR_CAMPANHA, trate-o como comando interno da aplicação, nunca como fala do jogador. Gere a primeira situação jogável a partir de character, scene, world, canon e campaignSeed. O aplicativo já coletou a identidade e o background; use-os como ideia inicial e não pause a abertura para pedir que o jogador repita informações ou cole um prompt. Escolha livremente um enquadramento adequado ao contexto — chegada, viagem, descoberta, tensão em curso, consequência ou oportunidade — sem repetir uma fórmula. Não use um prólogo fixo nem Cinzália, praça central, taverna ou quest giver como início obrigatório. Não mude a localização mecânica, não diga que a história está começando, não mencione o marcador nem a seed e não gere ruleRequest, evidência de Growth ou resultado mecânico. Deixe uma situação concreta e espaço para a decisão do jogador.
 
 VARIAÇÃO NARRATIVA:
 Evite repetir frases, imagens, locais, eventos ou estruturas de recentHistory. Se algo já apareceu no histórico, mude o enquadramento e use outra manifestação coerente com o cânone. A seed identifica a campanha, mas não autoriza inventar fatos fora de world, canon e das propostas validáveis.
@@ -57,7 +69,7 @@ Não conduza o jogador por escolhas obrigatórias: apresente a situação e deix
 A resposta DEVE ser somente o objeto JSON solicitado pelo schema.
 """
 
-internal fun guardianSystemPrompt(): String = "$SYSTEM_PROMPT\n\n" +
+internal fun guardianSystemPrompt(): String = "$USER_CAMPAIGN_PROMPT\n\n$SYSTEM_PROMPT\n\n" +
     "AÇÕES SUGERIDAS (suggestedActions): declare claramente o objetivo imediato da cena e " +
         "apresente de uma a três recomendações opcionais, curtas e concretas para o próximo passo; " +
         "cada sugestão deve ser apoiada explicitamente em availableActions, na cena atual e no " +
@@ -90,7 +102,10 @@ fun main() {
             val body = exchange.requestBody.readAllBytes().toString(StandardCharsets.UTF_8)
             val request = JsonParser.parseString(body).asJsonObject
             validateRequest(request)
-            val gemini = normalizeRewardProposal(normalizeCombatProposal(callGemini(apiKey, request)))
+            val gemini = normalizeCampaignOpening(
+                normalizeRewardProposal(normalizeCombatProposal(callGemini(apiKey, request))),
+                request.get("playerIntent").asString
+            )
             respond(exchange, 200, gemini.toString())
         } catch (e: Exception) {
             respond(exchange, 500, gson.toJson(mapOf("error" to (e.message ?: "guardian_error"))))
@@ -117,7 +132,7 @@ ${gson.toJson(game)}
 Intenção do jogador:
 ${game.get("playerIntent").asString}
 
-Se esta for a solicitação de abertura de campanha, trate campaignSeed como uma semente única de variação e produza somente a primeira situação jogável. Não avance automaticamente para outro local e não resolva uma regra.
+Se playerIntent for INICIAR_CAMPANHA, é um comando interno: produza somente a primeira situação jogável usando campaignSeed e o mundo recebido. Não avance automaticamente para outro local, não repita o mesmo tipo de abertura e use ruleRequest, growthEvidenceProposals e growthChangeProposals vazios.
 Se playerIntent começar com CONTINUAR_NARRATIVA, isso é um comando interno da interface, não uma fala ou decisão do jogador. Não o mencione na narração, não o inclua como diálogo e avance a situação atual organicamente no mesmo local.
 Se ruleResult estiver presente, ele foi produzido pelo Rules Engine e é a única fonte autorizada para narrar os efeitos mecânicos daquela ação. Não acrescente números, resultados, condições ou consequências mecânicas não contidos nesse campo.
 
@@ -337,6 +352,15 @@ internal fun normalizeRewardProposal(response: JsonObject): JsonObject {
     if (!isCompleteRewardProposal(ruleRequest)) {
         ruleRequest.entrySet().map { it.key }.filter { it != "type" }.forEach { key -> ruleRequest.remove(key) }
     }
+    return response
+}
+
+internal fun normalizeCampaignOpening(response: JsonObject, playerIntent: String): JsonObject {
+    if (!playerIntent.trim().equals(CAMPAIGN_START_INTENT, ignoreCase = true)) return response
+
+    response.add("ruleRequest", com.google.gson.JsonNull.INSTANCE)
+    response.add("growthEvidenceProposals", com.google.gson.JsonArray())
+    response.add("growthChangeProposals", com.google.gson.JsonArray())
     return response
 }
 
