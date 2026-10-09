@@ -11,6 +11,8 @@ import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.nio.charset.StandardCharsets
+import java.text.Normalizer
+import java.util.Locale
 import java.util.concurrent.Executors
 
 private const val GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/interactions"
@@ -50,9 +52,10 @@ fun main() {
             val body = exchange.requestBody.readAllBytes().toString(StandardCharsets.UTF_8)
             val request = JsonParser.parseString(body).asJsonObject
             validateRequest(request)
+            val playerIntent = request.get("playerIntent").asString
             val gemini = normalizeCampaignOpening(
-                normalizeRewardProposal(normalizeCombatProposal(callGemini(apiKey, request))),
-                request.get("playerIntent").asString
+                normalizeRewardProposal(normalizeCombatProposal(callGemini(apiKey, request), playerIntent)),
+                playerIntent
             )
             respond(exchange, 200, gemini.toString())
         } catch (e: Exception) {
@@ -316,7 +319,7 @@ internal fun suggestedActionsSchema(): JsonObject = JsonObject().apply {
     })
 }
 
-internal fun normalizeCombatProposal(response: JsonObject): JsonObject {
+internal fun normalizeCombatProposal(response: JsonObject, playerIntent: String? = null): JsonObject {
     val ruleRequest = response.get("ruleRequest")
         ?.takeIf { it.isJsonObject }
         ?.asJsonObject ?: return response
@@ -326,18 +329,26 @@ internal fun normalizeCombatProposal(response: JsonObject): JsonObject {
     val actionIntent = response.get("actionIntent")
         ?.takeIf { it.isJsonObject }
         ?.asJsonObject
-    val actionType = jsonString(actionIntent?.get("type"))
-    val targetId = jsonString(actionIntent?.get("targetId"))
+    val suppliedActionType = jsonString(actionIntent?.get("type"))
+    val suppliedTargetId = jsonString(actionIntent?.get("targetId"))
+    val wireEncounter = ruleRequest.get("encounter")
+        ?.takeIf { it.isJsonObject }
+        ?.asJsonObject
+    val encounter = expandSerializedEncounter(wireEncounter)
+    val inferredActionIntent = if (
+        (response.get("actionIntent") == null || response.get("actionIntent").isJsonNull) &&
+        suppliedActionType == null && suppliedTargetId == null
+    ) inferExplicitUnarmedAttack(playerIntent, encounter) else null
+    if (inferredActionIntent != null) response.add("actionIntent", inferredActionIntent)
+
+    val actionType = suppliedActionType ?: jsonString(inferredActionIntent?.get("type"))
+    val targetId = suppliedTargetId ?: jsonString(inferredActionIntent?.get("targetId"))
     if (!actionType.equals("ATTACK", ignoreCase = true) || targetId.isNullOrBlank()) {
         // A combat proposal without the player's explicit attack intent must never start combat.
         ruleRequest.remove("encounter")
         return response
     }
 
-    val wireEncounter = ruleRequest.get("encounter")
-        ?.takeIf { it.isJsonObject }
-        ?.asJsonObject
-    val encounter = expandSerializedEncounter(wireEncounter)
     val completeEncounter = isCompleteEncounterProposal(encounter)
     val targetIsIncluded = completeEncounter && encounter?.getAsJsonArray("opponents")
         ?.any { opponent -> jsonString(opponent.asJsonObject.get("opponentId")) == targetId } == true
@@ -349,6 +360,36 @@ internal fun normalizeCombatProposal(response: JsonObject): JsonObject {
     }
     return response
 }
+
+private fun inferExplicitUnarmedAttack(playerIntent: String?, encounter: JsonObject?): JsonObject? {
+    val intent = playerIntent?.trim()?.takeIf {
+        EXPLICIT_UNARMED_ATTACK.containsMatchIn(normalizeForNameMatch(it))
+    } ?: return null
+    val opponents = encounter?.get("opponents")?.takeIf { it.isJsonArray }?.asJsonArray ?: return null
+    val normalizedIntent = normalizeForNameMatch(intent)
+    val matchingOpponents = opponents.mapNotNull { element ->
+        if (!element.isJsonObject) return@mapNotNull null
+        val opponent = element.asJsonObject
+        val narrative = opponent.get("narrative")?.takeIf { it.isJsonObject }?.asJsonObject ?: return@mapNotNull null
+        val name = jsonString(narrative.get("name")) ?: return@mapNotNull null
+        val id = jsonString(opponent.get("opponentId")) ?: return@mapNotNull null
+        val normalizedName = normalizeForNameMatch(name)
+        val namePattern = Regex("(?<![\\p{L}\\p{N}])${Regex.escape(normalizedName)}(?![\\p{L}\\p{N}])")
+        if (namePattern.containsMatchIn(normalizedIntent)) id to name else null
+    }
+    if (matchingOpponents.size != 1) return null
+    val (id, name) = matchingOpponents.single()
+    return JsonObject().apply {
+        addProperty("type", "ATTACK")
+        addProperty("targetId", id)
+        addProperty("targetName", name)
+        add("weaponId", com.google.gson.JsonNull.INSTANCE)
+    }
+}
+
+private fun normalizeForNameMatch(value: String): String = Normalizer
+    .normalize(value.lowercase(Locale.ROOT), Normalizer.Form.NFD)
+    .replace(Regex("\\p{M}+"), "")
 
 private fun expandSerializedEncounter(wire: JsonObject?): JsonObject? {
     if (wire == null) return null
@@ -466,6 +507,10 @@ private fun jsonBoolean(value: com.google.gson.JsonElement?): Boolean? =
 
 private val SUPPORTED_COMBAT_DAMAGE = Regex("""^d(4|6|8|10|12)(\s*\+\s*d(4|6|8|10|12))*$""")
 private val REWARD_ID = Regex("""^[a-z0-9-]{3,80}$""")
+private val EXPLICIT_UNARMED_ATTACK = Regex(
+    """^(?:eu\s+)?(?:ataco|golpeio|bato)\b(?:(?!\b(?:nao|nunca)\b).)*\b(?:soco|murro|punho|maos\s+nuas|desarmad[oa]s?)\b""",
+    RegexOption.IGNORE_CASE
+)
 
 private fun respond(exchange: HttpExchange, status: Int, body: String) {
     val bytes = body.toByteArray(StandardCharsets.UTF_8)

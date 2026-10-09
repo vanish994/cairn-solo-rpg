@@ -348,6 +348,37 @@ class ServerTest {
     }
 
     @Test
+    fun explicitUnarmedAttackCanBeLinkedOnlyToTheUniqueNamedEncounterNpc() {
+        val response = validEncounterResponse().apply {
+            add("actionIntent", com.google.gson.JsonNull.INSTANCE)
+        }
+
+        val normalized = normalizeCombatProposal(response, "Ataco Cultista com um soco.")
+        val action = normalized.getAsJsonObject("actionIntent")
+
+        assertEquals("ATTACK", action.get("type").asString)
+        assertEquals("cultist-a", action.get("targetId").asString)
+        assertEquals("Cultista", action.get("targetName").asString)
+        assertTrue(action.get("weaponId").isJsonNull)
+        assertTrue(normalized.getAsJsonObject("ruleRequest").has("encounter"))
+    }
+
+    @Test
+    fun fallbackDoesNotInferWeaponsOrHypotheticalAttacks() {
+        val weaponNamedResponse = validEncounterResponse().apply {
+            add("actionIntent", com.google.gson.JsonNull.INSTANCE)
+        }
+        val hypotheticalResponse = validEncounterResponse().apply {
+            add("actionIntent", com.google.gson.JsonNull.INSTANCE)
+        }
+
+        assertFalse(normalizeCombatProposal(weaponNamedResponse, "Ataco Cultista com a espada.")
+            .getAsJsonObject("ruleRequest").has("encounter"))
+        assertFalse(normalizeCombatProposal(hypotheticalResponse, "Talvez eu ataque Cultista com um soco.")
+            .getAsJsonObject("ruleRequest").has("encounter"))
+    }
+
+    @Test
     fun serializedEncounterIsExpandedAndValidatedBeforeReturningToTheApp() {
         val response = validEncounterResponse()
         val encounter = response.getAsJsonObject("ruleRequest").getAsJsonObject("encounter")
