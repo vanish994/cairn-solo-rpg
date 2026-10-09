@@ -164,7 +164,7 @@ class GuardianRuleResolver(
         val result = resolveAttackIntent(state, intent, request)
         val committedState = result.state.copy(campaign = result.state.campaign.copy(
             pendingCombatApproval = null,
-            resolvedCombatActionIds = (result.state.campaign.resolvedCombatActionIds + pending.actionId).takeLast(100).toSet()
+            resolvedCombatActionIds = (result.state.campaign.resolvedCombatActionIds + pending.actionId).toList().takeLast(100).toSet()
         ))
         return result.copy(state = committedState, gameResult = result.gameResult.copy(state = committedState))
     }
