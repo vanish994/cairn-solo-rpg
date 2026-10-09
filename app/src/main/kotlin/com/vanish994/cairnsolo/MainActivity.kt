@@ -811,6 +811,9 @@ private fun ExplorationScreen(
             }.ifEmpty { listOf(WeaponProfile("unarmed", "d4")) }
             CombatCard(
                 combat = combat,
+                adventurerName = c.character.name,
+                adventurerHp = r.hp,
+                adventurerMaxHp = r.maxHp,
                 weapons = availableWeapons,
                 enabled = !guardianLoading && pendingRule == null && lastResolution == null,
                 onAttack = onCombatAttack
@@ -1077,9 +1080,87 @@ private fun EncounterProposalCard(
     }
 }
 
+
+@Composable
+private fun BattleMap(
+    opponents: List<CombatOpponent>,
+    adventurerName: String,
+    adventurerHp: Int,
+    adventurerMaxHp: Int,
+    selectedOpponentId: String?,
+    onSelectOpponent: (String) -> Unit
+) {
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
+            .background(Color(0xFF171A18)).border(1.dp, CairnBorder, RoundedCornerShape(10.dp)).padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text("CAMPO DE CONFRONTO", color = CairnAccent, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+        BoxWithConstraints(Modifier.fillMaxWidth().heightIn(min = 142.dp, max = 190.dp)) {
+            val mapWidth = maxWidth
+            Canvas(Modifier.fillMaxSize()) {
+                drawRect(Color(0xFF202923), size = size)
+                val tile = size.width / 12f
+                for (i in 0..12) {
+                    drawLine(Color(0xFF28342A), androidx.compose.ui.geometry.Offset(i * tile, 0f), androidx.compose.ui.geometry.Offset(i * tile, size.height), 1f)
+                }
+                for (i in 0..6) {
+                    drawLine(Color(0xFF28342A), androidx.compose.ui.geometry.Offset(0f, i * tile), androidx.compose.ui.geometry.Offset(size.width, i * tile), 1f)
+                }
+                drawCircle(Color(0xFF35402D), size.width * .12f, androidx.compose.ui.geometry.Offset(size.width * .25f, size.height * .30f))
+                drawCircle(Color(0xFF303A2B), size.width * .09f, androidx.compose.ui.geometry.Offset(size.width * .76f, size.height * .70f))
+                drawRect(Color(0xFF3C3529), topLeft = androidx.compose.ui.geometry.Offset(0f, size.height * .46f), size = androidx.compose.ui.geometry.Size(size.width, size.height * .12f))
+                drawRect(Color(0xFF51412C), topLeft = androidx.compose.ui.geometry.Offset(0f, size.height * .49f), size = androidx.compose.ui.geometry.Size(size.width, size.height * .025f))
+            }
+            Column(
+                Modifier.align(Alignment.CenterStart).padding(start = 8.dp).widthIn(max = mapWidth * .37f),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(3.dp)
+            ) {
+                Box(Modifier.size(34.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xFF3A3027)).border(1.dp, CairnAccent, RoundedCornerShape(6.dp)), contentAlignment = Alignment.Center) {
+                    Text("◆", color = CairnAccent, style = MaterialTheme.typography.titleMedium)
+                }
+                Text(adventurerName, color = CairnText, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("HP $adventurerHp/$adventurerMaxHp", color = if (adventurerHp <= 2) CairnDanger else CairnMuted, style = MaterialTheme.typography.labelSmall)
+            }
+            Row(
+                Modifier.align(Alignment.CenterEnd).fillMaxHeight().fillMaxWidth(.60f).padding(end = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                opponents.take(4).forEach { opponent ->
+                    val active = opponent.status == CombatOpponentStatus.ACTIVE
+                    val selected = opponent.id == selectedOpponentId
+                    Column(
+                        Modifier.weight(1f).clip(RoundedCornerShape(6.dp))
+                            .background(if (selected) Color(0xFF55452D) else Color(0xCC171A18))
+                            .border(if (selected) 2.dp else 1.dp, if (selected) CairnAccent else CairnBorder, RoundedCornerShape(6.dp))
+                            .clickable(enabled = active) { onSelectOpponent(opponent.id) }
+                            .padding(4.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
+                        Text(if (!active) "×" else "▲", color = if (active) Color(0xFFD3A16B) else CairnMuted, style = MaterialTheme.typography.titleMedium)
+                        Text(opponent.narrative.name, color = if (active) CairnText else CairnMuted, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text("HP ${opponent.stats.hp}/${opponent.stats.maxHp}", color = CairnMuted, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                        Text(combatOpponentStatusLabel(opponent.status), color = if (active) CairnAccent else CairnMuted, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                    }
+                }
+            }
+            if (opponents.size > 4) {
+                Text("+${opponents.size - 4} fora do mapa", color = CairnMuted, style = MaterialTheme.typography.labelSmall, modifier = Modifier.align(Alignment.BottomEnd).padding(4.dp))
+            }
+        }
+        Text("Toque em um oponente ativo para selecioná-lo. Posições apenas ilustrativas; não representam alcance ou distância.", color = CairnMuted, style = MaterialTheme.typography.bodySmall)
+    }
+}
+
 @Composable
 private fun CombatCard(
     combat: CombatState,
+    adventurerName: String,
+    adventurerHp: Int,
+    adventurerMaxHp: Int,
     weapons: List<WeaponProfile>,
     enabled: Boolean,
     onAttack: (String, WeaponProfile?) -> Unit
@@ -1098,6 +1179,14 @@ private fun CombatCard(
             "${activeOpponents.size} adversário(s) ativo(s) · ${combat.opponents.size} no encontro",
             color = CairnMuted,
             style = MaterialTheme.typography.bodySmall
+        )
+        BattleMap(
+            opponents = combat.opponents,
+            adventurerName = adventurerName,
+            adventurerHp = adventurerHp,
+            adventurerMaxHp = adventurerMaxHp,
+            selectedOpponentId = selectedOpponent?.id,
+            onSelectOpponent = { id -> if (enabled && activeOpponents.any { it.id == id }) selectedOpponentId = id }
         )
         Column(
             modifier = Modifier
