@@ -61,6 +61,6 @@
 **Files:**
 - Revisar: `.github/workflows/android.yml` e `.github/workflows/guardian-production-smoke.yml`; manter os papéis já separados.
 
-- [ ] Verificar `git diff --check`, scripts e workflows; garantir que o workflow automático não referencia o endpoint Render.
+- [x] Verificar `git diff --check`, scripts e workflows; garantir que o workflow automático não referencia o endpoint Render.
 - [ ] Publicar branch curta baseada em `main` e abrir PR; aguardar o Android Build com testes server, stub HTTP local e APK.
-- [ ] Não mesclar nem executar outro POST de produção como parte deste plano. Depois do CI verde, solicitar autorização específica para merge/deploy e novo smoke manual, pois o smoke atual já confirmou o erro em produção.
+- [x] Não mesclar nem executar outro POST de produção como parte deste plano. Depois do CI verde, solicitar autorização específica para merge/deploy e novo smoke manual, pois o smoke atual já confirmou o erro em produção.
