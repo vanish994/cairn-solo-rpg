@@ -120,10 +120,14 @@ O descanso de exploração agora usa `RulesEngine.safeRest()`. Isso evita criar 
 - [x] PR #16: Guardian propõe encontro, jogador aceita/recusa, resolver conduz combate e Guardian narra fatos mecânicos autorizados.
 - [x] Combate ativo bloqueia ações incompatíveis; armas do jogador são reconstruídas do inventário e saves com dado de arma inválido usam `d4` seguro.
 - [x] Propostas incompletas de combate preservam a narração e exibem validação; o backend rejeita strings em branco e HP acima de `maxHp`.
+- [x] Ataque declarado em texto livre é classificado pelo Guardian como `actionIntent` tipado; o app valida NPC, alvo e arma antes de chamar o Rules Engine.
+- [x] Fora de combate, o jogador aceita a ficha/proposta completa do NPC antes do início; ao aceitar, iniciativa e ataque declarado são resolvidos uma única vez pelo domínio.
+- [x] Em combate ativo, ataque em texto livre usa o alvo/arma existentes; resultados por dado, saves de combate e moral são eventos reais exibidos com animação.
+- [x] Mapa genérico do encontro pode ser expandido/recolhido no card de combate; marcadores são ilustrativos e não alteram alcance nem regras.
 
 ## Próximo incremento
 
-1. Executar validação visual em dispositivo: proposta → recusa/aceite → ataque → narração → save/load. O CI validou APK release, mas não substitui o teste manual em hardware.
+1. Executar validação visual em dispositivo: texto livre → proposta → recusa/aceite → ataque → animação/mapa → narração → save/load. O CI valida build e testes, mas não substitui o teste manual em hardware.
 2. Fechar procedimentos restantes do Gate de combate com base na matriz Cairn 2e; não há ação de fuga/encerramento voluntário até haver regra normativa aprovada.
 3. Integrar inimigos/NPCs e ampliar exploração real, dungeon e mundo persistente.
 4. Completar E2E da campanha: criação → abertura → exploração → encontro → combate → Growth → save/load.
@@ -145,7 +149,7 @@ O descanso de exploração agora usa `RulesEngine.safeRest()`. Isso evita criar 
 
 ## Última validação
 
-Workflow GitHub Actions **Android Build #37739460702**, executado em `main` após merge do PR #16 (`78a014585c30b944d602191b12dca2d207682d58`):
+Workflow GitHub Actions **Android Build #37945755400**, executado em `main` no commit `3da5c6035a599586e12892f52bca6d586c739fe1`:
 - Testes unitários Android: sucesso.
 - Testes do Guardian server: sucesso.
 - Teste de integração do endpoint HTTP Guardian: sucesso.
