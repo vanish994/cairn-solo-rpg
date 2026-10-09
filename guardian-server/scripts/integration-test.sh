@@ -41,6 +41,7 @@ fi
 python3 - "$response_file" <<'PY'
 import json, sys
 from pathlib import Path
+import re
 body = json.loads(Path(sys.argv[1]).read_text())
 required = {"narration", "sceneTitle", "sceneDescription", "suggestedActions", "ruleRequest", "canonProposals", "growthEvidenceProposals", "growthChangeProposals", "interactionId"}
 missing = required - body.keys()
@@ -52,9 +53,20 @@ assert isinstance(body["growthEvidenceProposals"], list)
 assert isinstance(body["interactionId"], str) and body["interactionId"].strip()
 rule = body["ruleRequest"]
 if rule is not None:
-    assert rule["type"] in {"SAVE", "DAMAGE", "FATIGUE", "REST", "STABILIZE_CRITICAL", "RECOVER_SCAR"}
+    assert rule["type"] in {"SAVE", "DAMAGE", "FATIGUE", "REST", "STABILIZE_CRITICAL", "RECOVER_SCAR", "BEGIN_COMBAT", "REWARD"}
     if rule["type"] == "SAVE":
-        assert rule.get("attribute") in {"STR", "DEX", "WIL"}
+        assert rule.get("attribute") in {"STR", "DEX", "WIL"}, f"invalid SAVE request: {json.dumps(body, ensure_ascii=False)}"
+    if rule["type"] in {"DAMAGE", "FATIGUE"}:
+        assert type(rule.get("amount")) is int and rule["amount"] >= 1, f"invalid {rule['type']} request: {json.dumps(body, ensure_ascii=False)}"
+    if rule["type"] == "REWARD":
+        assert set(rule) == {"type", "id", "status", "amountGp", "itemCatalogIds"}, f"invalid REWARD fields: {json.dumps(body, ensure_ascii=False)}"
+        assert isinstance(rule["id"], str) and re.fullmatch(r"[a-z0-9-]{3,80}", rule["id"]), f"invalid REWARD id: {json.dumps(body, ensure_ascii=False)}"
+        assert rule["status"] in {"OFFERED", "PAID"}, f"invalid REWARD status: {json.dumps(body, ensure_ascii=False)}"
+        assert type(rule["amountGp"]) is int and 0 <= rule["amountGp"] <= 2147483647, f"invalid REWARD amountGp: {json.dumps(body, ensure_ascii=False)}"
+        assert isinstance(rule["itemCatalogIds"], list) and len(rule["itemCatalogIds"]) <= 5, f"invalid REWARD item list: {json.dumps(body, ensure_ascii=False)}"
+        assert all(isinstance(item_id, str) and re.fullmatch(r"[a-z0-9-]{3,80}", item_id) for item_id in rule["itemCatalogIds"]), f"invalid REWARD item ID: {json.dumps(body, ensure_ascii=False)}"
+        if rule["status"] == "PAID":
+            assert rule["amountGp"] > 0 or rule["itemCatalogIds"], f"empty PAID reward: {json.dumps(body, ensure_ascii=False)}"
 for proposal in body["canonProposals"]:
     assert proposal["type"] in {"UPSERT_NPC", "DISCOVER_LOCATION", "ADD_IMPORTANT_ITEM", "CREATE_QUEST", "UPDATE_QUEST", "ADD_DISCOVERY", "ADD_RUMOR"}
     assert isinstance(proposal["id"], str) and proposal["id"]

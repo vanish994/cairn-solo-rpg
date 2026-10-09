@@ -54,4 +54,17 @@ class RewardRetryTest {
         assertEquals(claimed.state, retry.state)
         assertTrue(retry.events.isEmpty())
     }
+
+    @Test
+    fun rewardThatFillsTenthSlotAppliesCairn2eZeroHpRule() {
+        val initial = state(inventory = List(9) { InventoryItem("existing-$it") })
+
+        val result = resolver().resolve(initial, GameAction.GrantReward("quest-last-slot", 0, listOf("dagger")))
+        val character = result.state.campaign.rules
+
+        assertEquals(10, character.usedSlots)
+        assertEquals(0, character.hp)
+        assertTrue(character.inventory.any { it.id == "reward:quest-last-slot:0:dagger" })
+        assertTrue(result.state.campaign.pendingRewardItems.isEmpty())
+    }
 }

@@ -32,7 +32,7 @@ condições, morte, recursos e resultados aleatórios.
 
 Nunca invente ou altere valores mecânicos.
 Nunca diga que um teste foi bem-sucedido ou que dano foi causado, a menos que o campo ruleResult forneça explicitamente esse fato. Só narre um item como entregue quando a transferência já ocorreu na cena e ruleRequest usa REWARD com status PAID.
-Quando uma ação exigir resolução mecânica, preencha ruleRequest com um pedido estruturado e deixe o aplicativo resolver. Use SAVE, DAMAGE, FATIGUE, REST, STABILIZE_CRITICAL, RECOVER_SCAR ou REWARD conforme apropriado; BEGIN_COMBAT é apenas uma proposta de encontro para aprovação do jogador.
+Quando uma ação exigir resolução mecânica, preencha ruleRequest com o formato exigido: SAVE requer attribute STR, DEX ou WIL; DAMAGE e FATIGUE requerem amount inteiro positivo; REST, STABILIZE_CRITICAL e RECOVER_SCAR usam somente type; REWARD descreve oferta ou pagamento; BEGIN_COMBAT requer encounter completo. O aplicativo é quem resolve todas as regras.
 Você também pode propor BEGIN_COMBAT somente quando character.combat estiver ausente. Isso é uma proposta completa de 1 a 8 oponentes, não o início do combate: o jogador precisa aceitar o encontro inteiro no aplicativo. Use encounter.opponents como lista de objetos, cada um com opponentId único, narrativa completa, stats completos e weapon completa. IDs não podem estar vazios nem ter espaços no início/fim. moraleLeaderId é opcional e, se fornecido, deve corresponder a um ID da lista. Para cada oponente, HP deve ser pelo menos 1 e não pode exceder maxHp; weapon.damage deve usar apenas d4/d6/d8/d10/d12 (por exemplo, d6 ou d6+d8); Armor deve estar entre 0 e 3. Não declare iniciativa, ataque, dano ou qualquer consequência.
 Com combate ativo, ataques são iniciados pelos controles do aplicativo. Não use DAMAGE para simular um ataque e não narre seu resultado antes de recebê-lo em ruleResult.
 Você pode propor atualizações narrativas em canonProposals, mas elas não são fatos até serem validadas pelo aplicativo. Use apenas UPSERT_NPC, DISCOVER_LOCATION, ADD_IMPORTANT_ITEM, CREATE_QUEST, ADD_DISCOVERY ou ADD_RUMOR. Nunca altere HP, atributos, inventário, facções, Growth ou outros dados mecânicos.
@@ -63,7 +63,15 @@ internal fun guardianSystemPrompt(): String = "$SYSTEM_PROMPT\n\n" +
         "cada sugestão deve ser apoiada explicitamente em availableActions, na cena atual e no " +
         "campo canon (cânone confirmado), e não invente " +
         "fatos, locais, NPCs, missões ou saídas. São apenas recomendações: não executam ações " +
-        "nem alteram o estado do jogo, e o jogador continua livre para escrever outra intenção."
+        "nem alteram o estado do jogo, e o jogador continua livre para escrever outra intenção." +
+    "\n\nFORMATO DE ruleRequest: SAVE exige attribute exatamente STR, DEX ou WIL; DAMAGE e FATIGUE exigem amount como inteiro maior ou igual a 1; REST, STABILIZE_CRITICAL e RECOVER_SCAR exigem somente type; REWARD exige id, status OFFERED/PAID, amountGp e itemCatalogIds; BEGIN_COMBAT exige encounter completo. Nunca omita campos obrigatórios nem invente resultados mecânicos." +
+    "\n\nFORMATO DA PROPOSTA BEGIN_COMBAT: use ruleRequest com type BEGIN_COMBAT e encounter.opponents " +
+        "como uma lista de 1 a 8 adversários completos; cada adversário exige opponentId único, narrative " +
+        "com name, appearance, behavior, intent e context, stats com str, dex, wil, hp, maxHp e armor " +
+        "(inteiros; str/dex/wil >= 0, hp >= 1, maxHp >= hp e armor de 0 a 3), e weapon com id, damage, " +
+        "blast e ranged. damage usa dados d4, d6, d8, d10 ou d12, que podem ser somados. moraleLeaderId " +
+        "é opcional e, se fornecido, deve identificar um opponentId da lista. Não omita campos do encontro; " +
+        "proponha BEGIN_COMBAT somente sem combate ativo."
 
 fun main() {
     val port = System.getenv("PORT")?.toIntOrNull() ?: 8080
@@ -113,9 +121,7 @@ Se esta for a solicitação de abertura de campanha, trate campaignSeed como uma
 Se playerIntent começar com CONTINUAR_NARRATIVA, isso é um comando interno da interface, não uma fala ou decisão do jogador. Não o mencione na narração, não o inclua como diálogo e avance a situação atual organicamente no mesmo local.
 Se ruleResult estiver presente, ele foi produzido pelo Rules Engine e é a única fonte autorizada para narrar os efeitos mecânicos daquela ação. Não acrescente números, resultados, condições ou consequências mecânicas não contidos nesse campo.
 
-Continue a cena de forma coerente. Se a intenção exigir uma resolução mecânica, preencha ruleRequest
-como objeto com type e os campos necessários. Use SAVE (attribute STR/DEX/WIL), DAMAGE (amount),
-FATIGUE (amount), REST, STABILIZE_CRITICAL, RECOVER_SCAR, REWARD (id/status/amountGp/itemCatalogIds) ou BEGIN_COMBAT (encounter com 1–8 oponentes em `opponents`, somente sem combate ativo).
+Continue a cena de forma coerente. Se a intenção exigir uma resolução mecânica, preencha ruleRequest com os campos obrigatórios do tipo: SAVE exige attribute exatamente STR, DEX ou WIL; DAMAGE e FATIGUE exigem amount inteiro maior ou igual a 1; REST, STABILIZE_CRITICAL e RECOVER_SCAR exigem somente type; REWARD usa id/status/amountGp/itemCatalogIds; BEGIN_COMBAT exige encounter com 1–8 oponentes em `opponents`, somente sem combate ativo.
 BEGIN_COMBAT apenas propõe o encontro inteiro para confirmação do jogador. Não informe resultados; o aplicativo resolve.
 Para REWARD, use OFFERED para promessa não entregue e PAID apenas quando a transferência já estiver concluída na cena; use GP sem converter cobre e selecione IDs somente de campaign.rewardableItems.
 Se não houver resolução mecânica, use null.
@@ -125,37 +131,7 @@ Inclua growthEvidenceProposals como uma lista, mesmo quando vazia. Cada item dev
 Inclua growthChangeProposals como uma lista, mesmo quando vazia. Não invente resultados; use apenas mudanças sustentadas pelas evidências disponíveis.
 """.trimIndent()
 
-    val schema = JsonObject().apply {
-        addProperty("type", "object")
-        val properties = JsonParser.parseString("""
-            {
-              "narration": {"type":"string"},
-              "sceneTitle": {"type":"string"},
-              "sceneDescription": {"type":"string"},
-              "ruleRequest": {"anyOf": [
-                {"type":"null"},
-                {"type":"object","properties":{"type":{"type":"string","enum":["SAVE"]},"attribute":{"type":"string","enum":["STR","DEX","WIL"]}},"required":["type","attribute"],"additionalProperties":false},
-                {"type":"object","properties":{"type":{"type":"string","enum":["DAMAGE"]},"amount":{"type":"integer","minimum":1}},"required":["type","amount"],"additionalProperties":false},
-                {"type":"object","properties":{"type":{"type":"string","enum":["FATIGUE"]},"amount":{"type":"integer","minimum":1}},"required":["type","amount"],"additionalProperties":false},
-                {"type":"object","properties":{"type":{"type":"string","enum":["REST"]}},"required":["type"],"additionalProperties":false},
-                {"type":"object","properties":{"type":{"type":"string","enum":["STABILIZE_CRITICAL"]}},"required":["type"],"additionalProperties":false},
-                {"type":"object","properties":{"type":{"type":"string","enum":["RECOVER_SCAR"]}},"required":["type"],"additionalProperties":false},
-                {"type":"object","properties":{"type":{"type":"string","enum":["BEGIN_COMBAT"]},"encounter":{"type":"object","properties":{"opponentId":{"type":"string","minLength":1,"maxLength":80},"narrative":{"type":"object","properties":{"name":{"type":"string","minLength":1,"maxLength":160},"appearance":{"type":"string","minLength":1,"maxLength":1000},"behavior":{"type":"string","minLength":1,"maxLength":1000},"intent":{"type":"string","minLength":1,"maxLength":1000},"context":{"type":"string","minLength":1,"maxLength":1000}},"required":["name","appearance","behavior","intent","context"],"additionalProperties":false},"stats":{"type":"object","properties":{"str":{"type":"integer","minimum":0},"dex":{"type":"integer","minimum":0},"wil":{"type":"integer","minimum":0},"hp":{"type":"integer","minimum":1},"maxHp":{"type":"integer","minimum":1},"armor":{"type":"integer","minimum":0,"maximum":3}},"required":["str","dex","wil","hp","maxHp","armor"],"additionalProperties":false},"weapon":{"type":"object","properties":{"id":{"type":"string","minLength":1,"maxLength":80},"damage":{"type":"string","minLength":1,"maxLength":32,"pattern":"^d(4|6|8|10|12)(\\s*\\+\\s*d(4|6|8|10|12))*$"},"blast":{"type":"boolean"},"ranged":{"type":"boolean"}},"required":["id","damage","blast","ranged"],"additionalProperties":false}},"required":["opponentId","narrative","stats","weapon"],"additionalProperties":false}},"required":["type","encounter"],"additionalProperties":false}
-              ]},
-              "canonProposals": {"type":"array","maxItems":5,"items":{"type":"object","properties":{"type":{"type":"string","enum":["UPSERT_NPC","DISCOVER_LOCATION","ADD_IMPORTANT_ITEM","CREATE_QUEST","UPDATE_QUEST","ADD_DISCOVERY","ADD_RUMOR"]},"id":{"type":"string","pattern":"^[a-z0-9-]{3,80}$"},"status":{"type":"string","enum":["CONFIRMED","RUMOR","DISCOVERED"]},"source":{"type":"string","enum":["PLAYER","GUARDIAN","NPC","RULES_ENGINE","SYSTEM"]},"name":{"type":"string"},"title":{"type":"string"},"text":{"type":"string"},"description":{"type":"string"},"role":{"type":"string"},"relatedEntityIds":{"type":"array","items":{"type":"string"}}},"required":["type","id","status","source"],"additionalProperties":false}},
-              "growthEvidenceProposals": {"type":"array","maxItems":3,"items":{"type":"object","properties":{"id":{"type":"string","pattern":"^[a-z0-9-]{3,80}$"},"summary":{"type":"string","minLength":1,"maxLength":1000},"relatedEntityIds":{"type":"array","items":{"type":"string"}},"focusedPattern":{"type":"boolean"},"seriousRisk":{"type":"boolean"},"uniqueInteraction":{"type":"boolean"}},"required":["id","summary","relatedEntityIds","focusedPattern","seriousRisk","uniqueInteraction"],"additionalProperties":false}}
-              ,"growthChangeProposals": {"type":"array","maxItems":3,"items":{"type":"object","properties":{"id":{"type":"string","pattern":"^[a-z0-9-]{3,80}$"},"evidenceIds":{"type":"array","minItems":1,"items":{"type":"string","pattern":"^[a-z0-9-]{3,80}$"}},"changeType":{"type":"string","enum":["RAISE_MAX_ATTRIBUTE","KEEP_HIGHER_ATTRIBUTE","GAIN_ABILITY"]},"attribute":{"type":"string","enum":["STR","DEX","WIL"]},"amount":{"type":"integer","minimum":1,"maximum":3},"candidate":{"type":"integer","minimum":3,"maximum":18},"abilityId":{"type":"string","pattern":"^[a-z0-9-]{3,80}$"},"abilityName":{"type":"string","maxLength":160},"abilityDescription":{"type":"string","maxLength":1000},"abilityCost":{"type":"string","maxLength":200},"rationale":{"type":"string","minLength":1,"maxLength":1000}},"required":["id","evidenceIds","changeType","rationale"],"additionalProperties":false}}
-            }
-        """).asJsonObject
-        properties.add("suggestedActions", suggestedActionsSchema())
-        replaceBeginCombatSchema(properties)
-        addRewardRequestSchema(properties)
-        add("properties", properties)
-        add("required", JsonParser.parseString(
-            """["narration","sceneTitle","sceneDescription","ruleRequest","suggestedActions","canonProposals","growthEvidenceProposals","growthChangeProposals"]"""
-        ).asJsonArray)
-        addProperty("additionalProperties", false)
-    }
+    val schema = guardianResponseSchema()
 
     val requestBody = JsonObject().apply {
         addProperty("model", MODEL)
@@ -182,7 +158,8 @@ Inclua growthChangeProposals como uma lista, mesmo quando vazia. Não invente re
         addProperty("store", true)
     }
 
-    val request = HttpRequest.newBuilder(URI(GEMINI_URL))
+    val geminiUrl = System.getenv("GEMINI_API_URL")?.takeIf { it.isNotBlank() } ?: GEMINI_URL
+    val request = HttpRequest.newBuilder(URI(geminiUrl))
         .header("Content-Type", "application/json")
         .header("x-goog-api-key", apiKey)
         .POST(HttpRequest.BodyPublishers.ofString(requestBody.toString()))
@@ -212,29 +189,36 @@ Inclua growthChangeProposals como uma lista, mesmo quando vazia. Não invente re
     error("Gemini response did not contain model text")
 }
 
-private fun replaceBeginCombatSchema(properties: JsonObject) {
-    val alternatives = properties.getAsJsonObject("ruleRequest").getAsJsonArray("anyOf")
-    val index = alternatives.indexOfFirst { candidate ->
-        val types = candidate.asJsonObject
-            .getAsJsonObject("properties")
-            ?.getAsJsonObject("type")
-            ?.getAsJsonArray("enum")
-        types?.any { it.asString == "BEGIN_COMBAT" } == true
-    }
-    check(index >= 0) { "BEGIN_COMBAT schema branch is missing." }
-    alternatives.set(index, JsonObject().apply {
+
+// Keep the wire schema shallow: Gemini may reject very large or deeply nested schemas.
+// Request types are constrained here; complete combat proposals are validated below and by the app.
+internal fun guardianResponseSchema(): JsonObject = JsonObject().apply {
         addProperty("type", "object")
-        add("properties", JsonObject().apply {
-            add("type", JsonObject().apply {
-                addProperty("type", "string")
-                add("enum", JsonParser.parseString("""["BEGIN_COMBAT"]""").asJsonArray)
-            })
-            add("encounter", combatEncounterSchema())
-        })
-        add("required", JsonParser.parseString("""["type","encounter"]""").asJsonArray)
+        val properties = JsonParser.parseString("""
+            {
+              "narration": {"type":"string"},
+              "sceneTitle": {"type":"string"},
+              "sceneDescription": {"type":"string"},
+              "ruleRequest": {"anyOf":[
+                {"type":"null"},
+                {"type":"object","properties":{"type":{"type":"string","enum":["SAVE"]},"attribute":{"type":"string","enum":["STR","DEX","WIL"]}},"required":["type","attribute"],"additionalProperties":false},
+                {"type":"object","properties":{"type":{"type":"string","enum":["DAMAGE","FATIGUE"]},"amount":{"type":"integer","minimum":1}},"required":["type","amount"],"additionalProperties":false},
+                {"type":"object","properties":{"type":{"type":"string","enum":["REST","STABILIZE_CRITICAL","RECOVER_SCAR"]}},"required":["type"],"additionalProperties":false},
+                {"type":"object","properties":{"type":{"type":"string","enum":["BEGIN_COMBAT"]},"encounter":{"type":"object","additionalProperties":true}},"required":["type","encounter"],"additionalProperties":false}
+              ]},
+              "canonProposals": {"type":"array","maxItems":5,"items":{"type":"object","properties":{"type":{"type":"string","enum":["UPSERT_NPC","DISCOVER_LOCATION","ADD_IMPORTANT_ITEM","CREATE_QUEST","UPDATE_QUEST","ADD_DISCOVERY","ADD_RUMOR"]},"id":{"type":"string"},"status":{"type":"string","enum":["CONFIRMED","RUMOR","DISCOVERED"]},"source":{"type":"string","enum":["PLAYER","GUARDIAN","NPC","RULES_ENGINE","SYSTEM"]},"name":{"type":"string"},"title":{"type":"string"},"text":{"type":"string"},"description":{"type":"string"},"role":{"type":"string"},"relatedEntityIds":{"type":"array","items":{"type":"string"}}},"required":["type","id","status","source"],"additionalProperties":false}},
+              "growthEvidenceProposals": {"type":"array","maxItems":3,"items":{"type":"object","properties":{"id":{"type":"string"},"summary":{"type":"string"},"relatedEntityIds":{"type":"array","items":{"type":"string"}},"focusedPattern":{"type":"boolean"},"seriousRisk":{"type":"boolean"},"uniqueInteraction":{"type":"boolean"}},"required":["id","summary","relatedEntityIds","focusedPattern","seriousRisk","uniqueInteraction"],"additionalProperties":false}}
+              ,"growthChangeProposals": {"type":"array","maxItems":3,"items":{"type":"object","properties":{"id":{"type":"string"},"evidenceIds":{"type":"array","minItems":1,"items":{"type":"string"}},"changeType":{"type":"string","enum":["RAISE_MAX_ATTRIBUTE","KEEP_HIGHER_ATTRIBUTE","GAIN_ABILITY"]},"attribute":{"type":"string","enum":["STR","DEX","WIL"]},"amount":{"type":"integer","minimum":1,"maximum":3},"candidate":{"type":"integer","minimum":3,"maximum":18},"abilityId":{"type":"string"},"abilityName":{"type":"string"},"abilityDescription":{"type":"string"},"abilityCost":{"type":"string"},"rationale":{"type":"string"}},"required":["id","evidenceIds","changeType","rationale"],"additionalProperties":false}}
+            }
+        """).asJsonObject
+        addRewardRequestSchema(properties)
+        properties.add("suggestedActions", suggestedActionsSchema())
+        add("properties", properties)
+        add("required", JsonParser.parseString(
+            """["narration","sceneTitle","sceneDescription","ruleRequest","suggestedActions","canonProposals","growthEvidenceProposals","growthChangeProposals"]"""
+        ).asJsonArray)
         addProperty("additionalProperties", false)
-    })
-}
+    }
 
 internal fun rewardRequestSchema(): JsonObject = JsonParser.parseString(
     """
@@ -242,10 +226,10 @@ internal fun rewardRequestSchema(): JsonObject = JsonParser.parseString(
       "type":"object",
       "properties":{
         "type":{"type":"string","enum":["REWARD"]},
-        "id":{"type":"string","minLength":3,"maxLength":80,"pattern":"^[a-z0-9-]{3,80}$"},
+        "id":{"type":"string"},
         "status":{"type":"string","enum":["OFFERED","PAID"]},
         "amountGp":{"type":"integer","minimum":0,"maximum":2147483647},
-        "itemCatalogIds":{"type":"array","maxItems":5,"items":{"type":"string","minLength":3,"maxLength":80,"pattern":"^[a-z0-9-]{3,80}$"}}
+        "itemCatalogIds":{"type":"array","maxItems":5,"items":{"type":"string"}}
       },
       "required":["type","id","status","amountGp","itemCatalogIds"],
       "additionalProperties":false
@@ -263,6 +247,8 @@ internal fun addRewardRequestSchema(properties: JsonObject) {
     alternatives.add(rewardRequestSchema())
 }
 
+// Keep string bounds and patterns in isCompleteEncounterProposal(): Gemini structured output
+// supports a smaller JSON Schema subset, and validating them here can make the whole request fail.
 internal fun combatEncounterSchema(): JsonObject = JsonParser.parseString(
     """
     {
@@ -273,15 +259,15 @@ internal fun combatEncounterSchema(): JsonObject = JsonParser.parseString(
           "items":{
             "type":"object",
             "properties":{
-              "opponentId":{"type":"string","minLength":1,"maxLength":80,"pattern":"^\\S(?:.*\\S)?$"},
+              "opponentId":{"type":"string"},
               "narrative":{
                 "type":"object",
                 "properties":{
-                  "name":{"type":"string","minLength":1,"maxLength":160,"pattern":"\\S"},
-                  "appearance":{"type":"string","minLength":1,"maxLength":1000,"pattern":"\\S"},
-                  "behavior":{"type":"string","minLength":1,"maxLength":1000,"pattern":"\\S"},
-                  "intent":{"type":"string","minLength":1,"maxLength":1000,"pattern":"\\S"},
-                  "context":{"type":"string","minLength":1,"maxLength":1000,"pattern":"\\S"}
+                  "name":{"type":"string"},
+                  "appearance":{"type":"string"},
+                  "behavior":{"type":"string"},
+                  "intent":{"type":"string"},
+                  "context":{"type":"string"}
                 },
                 "required":["name","appearance","behavior","intent","context"],"additionalProperties":false
               },
@@ -297,8 +283,8 @@ internal fun combatEncounterSchema(): JsonObject = JsonParser.parseString(
               "weapon":{
                 "type":"object",
                 "properties":{
-                  "id":{"type":"string","minLength":1,"maxLength":80,"pattern":"\\S"},
-                  "damage":{"type":"string","minLength":1,"maxLength":32,"pattern":"^d(4|6|8|10|12)(\\s*\\+\\s*d(4|6|8|10|12))*$"},
+                  "id":{"type":"string"},
+                  "damage":{"type":"string"},
                   "blast":{"type":"boolean"},"ranged":{"type":"boolean"}
                 },
                 "required":["id","damage","blast","ranged"],"additionalProperties":false
@@ -307,7 +293,7 @@ internal fun combatEncounterSchema(): JsonObject = JsonParser.parseString(
             "required":["opponentId","narrative","stats","weapon"],"additionalProperties":false
           }
         },
-        "moraleLeaderId":{"type":"string","minLength":1,"maxLength":80,"pattern":"^\\S(?:.*\\S)?$"}
+        "moraleLeaderId":{"type":"string"}
       },
       "required":["opponents"],"additionalProperties":false
     }
@@ -320,8 +306,6 @@ internal fun suggestedActionsSchema(): JsonObject = JsonObject().apply {
     addProperty("maxItems", 3)
     add("items", JsonObject().apply {
         addProperty("type", "string")
-        addProperty("minLength", 1)
-        addProperty("maxLength", 160)
     })
 }
 

@@ -1,0 +1,35 @@
+name: Guardian Production Smoke
+
+on:
+  workflow_dispatch:
+
+jobs:
+  production-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Wait for deployed Guardian health
+        shell: bash
+        env:
+          GUARDIAN_BASE_URL: https://cairn-guardian.onrender.com
+        run: |
+          set -euo pipefail
+          for attempt in {1..60}; do
+            if curl --fail --silent "$GUARDIAN_BASE_URL/health" > /dev/null; then
+              echo "Guardian production health: ok"
+              exit 0
+            fi
+            if [[ "$attempt" == "60" ]]; then
+              echo "Guardian production backend did not become healthy after deployment: $GUARDIAN_BASE_URL" >&2
+              exit 1
+            fi
+            sleep 1
+          done
+
+      - name: Run production Guardian HTTP smoke test
+        env:
+          GUARDIAN_BASE_URL: https://cairn-guardian.onrender.com
+        run: bash guardian-server/scripts/integration-test.sh "$GUARDIAN_BASE_URL"

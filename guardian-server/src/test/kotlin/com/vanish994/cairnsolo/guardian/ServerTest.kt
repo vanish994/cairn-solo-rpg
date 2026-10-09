@@ -8,14 +8,39 @@ import kotlin.test.assertTrue
 
 class ServerTest {
     @Test
-    fun encounterSchemaRejectsBlankNarrativeAndIdentifiers() {
-        val properties = combatEncounterSchema().getAsJsonObject("properties")
-        val opponent = properties.getAsJsonObject("opponents").getAsJsonObject("items").getAsJsonObject("properties")
-        assertEquals("^\\S(?:.*\\S)?$", opponent.getAsJsonObject("opponentId").get("pattern").asString)
-        assertEquals("\\S", opponent.getAsJsonObject("narrative").getAsJsonObject("properties")
-            .getAsJsonObject("name").get("pattern").asString)
-        assertEquals("\\S", opponent.getAsJsonObject("weapon").getAsJsonObject("properties")
-            .getAsJsonObject("id").get("pattern").asString)
+    fun guardianResponseSchemaUsesOnlyGeminiSupportedKeywords() {
+        val unsupported = mutableSetOf<String>()
+        val supported = setOf(
+            "type", "properties", "required", "additionalProperties", "items", "anyOf", "prefixItems",
+            "enum", "minimum", "maximum", "minItems", "maxItems", "format", "title", "description"
+        )
+
+        fun inspect(schema: com.google.gson.JsonObject, path: String) {
+            schema.keySet().filterNot { it in supported }.forEach { unsupported += "$path.$it" }
+            schema.get("properties")
+                ?.takeIf { it.isJsonObject }
+                ?.asJsonObject
+                ?.entrySet()
+                ?.forEach { property ->
+                    property.value.takeIf { it.isJsonObject }?.asJsonObject?.let { inspect(it, "$path.${property.key}") }
+                }
+            schema.get("items")
+                ?.takeIf { it.isJsonObject }
+                ?.asJsonObject
+                ?.let { inspect(it, "$path.items") }
+            listOf("anyOf", "prefixItems").forEach { keyword ->
+                schema.get(keyword)
+                    ?.takeIf { it.isJsonArray }
+                    ?.asJsonArray
+                    ?.forEachIndexed { index, child ->
+                        child.takeIf { it.isJsonObject }?.asJsonObject?.let { inspect(it, "$path.$keyword[$index]") }
+                    }
+            }
+        }
+
+        inspect(guardianResponseSchema(), "$")
+
+        assertTrue(unsupported.isEmpty(), "Unsupported Gemini schema keywords remain: $unsupported")
     }
 
     @Test
@@ -49,6 +74,163 @@ class ServerTest {
             setOf("id", "damage", "blast", "ranged"),
             opponentProperties.getAsJsonObject("weapon").getAsJsonArray("required").map { it.asString }.toSet()
         )
+    }
+
+    @Test
+    fun guardianResponseSchemaRequiresTypeSpecificRuleRequestFields() {
+        val ruleRequest = guardianResponseSchema()
+            .getAsJsonObject("properties")
+            .getAsJsonObject("ruleRequest")
+        val alternatives = ruleRequest.getAsJsonArray("anyOf").map { it.asJsonObject }
+        assertTrue(alternatives.any { it.get("type").asString == "null" })
+
+        fun branch(types: Set<String>) = alternatives.single { alternative ->
+            alternative.get("type")?.asString == "object" &&
+                alternative.getAsJsonObject("properties")
+                    .getAsJsonObject("type")
+                    .getAsJsonArray("enum")
+                    .map { it.asString }
+                    .toSet() == types
+        }
+
+        val save = branch(setOf("SAVE"))
+        assertEquals(listOf("type", "attribute"), save.getAsJsonArray("required").map { it.asString })
+        assertEquals(setOf("type", "attribute"), save.getAsJsonObject("properties").keySet())
+        assertEquals(
+            setOf("STR", "DEX", "WIL"),
+            save.getAsJsonObject("properties").getAsJsonObject("attribute").getAsJsonArray("enum").map { it.asString }.toSet()
+        )
+
+        val damage = branch(setOf("DAMAGE", "FATIGUE"))
+        assertEquals(listOf("type", "amount"), damage.getAsJsonArray("required").map { it.asString })
+        val amount = damage.getAsJsonObject("properties").getAsJsonObject("amount")
+        assertEquals("integer", amount.get("type").asString)
+        assertEquals(1, amount.get("minimum").asInt)
+
+        val noPayload = branch(setOf("REST", "STABILIZE_CRITICAL", "RECOVER_SCAR"))
+        assertEquals(listOf("type"), noPayload.getAsJsonArray("required").map { it.asString })
+
+        val combat = branch(setOf("BEGIN_COMBAT"))
+        assertEquals(listOf("type", "encounter"), combat.getAsJsonArray("required").map { it.asString })
+        val encounter = combat.getAsJsonObject("properties").getAsJsonObject("encounter")
+        assertEquals("object", encounter.get("type").asString)
+        assertTrue(encounter.get("additionalProperties").asBoolean)
+        val reward = branch(setOf("REWARD"))
+        assertEquals(listOf("type", "id", "status", "amountGp", "itemCatalogIds"), reward.getAsJsonArray("required").map { it.asString })
+        assertEquals(setOf("type", "id", "status", "amountGp", "itemCatalogIds"), reward.getAsJsonObject("properties").keySet())
+        assertTrue(alternatives.filter { it.get("type")?.asString == "object" }
+            .all { !it.get("additionalProperties").asBoolean })
+    }
+
+    @Test
+    fun promptRequiresTypeSpecificRuleRequestFields() {
+        val prompt = guardianSystemPrompt().lowercase()
+
+        assertTrue(prompt.contains("save") && prompt.contains("attribute") && prompt.contains("str, dex ou wil"))
+        assertTrue(prompt.contains("damage") && prompt.contains("fatigue") && prompt.contains("amount"))
+        assertTrue(prompt.contains("inteiro") && prompt.contains("1"))
+        assertTrue(prompt.contains("begin_combat") && prompt.contains("encounter"))
+    }
+
+    @Test
+    fun rewardSchemaRequiresGpStatusAndAtMostFiveCatalogIdsWithoutUnsupportedTextKeywords() {
+        val schema = rewardRequestSchema()
+        val properties = schema.getAsJsonObject("properties")
+        val id = properties.getAsJsonObject("id")
+        val items = properties.getAsJsonObject("itemCatalogIds")
+        val item = items.getAsJsonObject("items")
+
+        assertEquals("object", schema.get("type").asString)
+        assertEquals(
+            setOf("type", "id", "status", "amountGp", "itemCatalogIds"),
+            schema.getAsJsonArray("required").map { it.asString }.toSet()
+        )
+        assertEquals(0, properties.getAsJsonObject("amountGp").get("minimum").asInt)
+        assertEquals(Int.MAX_VALUE, properties.getAsJsonObject("amountGp").get("maximum").asInt)
+        assertEquals(5, items.get("maxItems").asInt)
+        assertEquals("string", item.get("type").asString)
+        assertEquals(
+            setOf("OFFERED", "PAID"),
+            properties.getAsJsonObject("status").getAsJsonArray("enum").map { it.asString }.toSet()
+        )
+        assertFalse(schema.get("additionalProperties").asBoolean)
+        listOf(id, item).forEach { textSchema ->
+            assertFalse(textSchema.has("pattern"))
+            assertFalse(textSchema.has("minLength"))
+            assertFalse(textSchema.has("maxLength"))
+        }
+    }
+
+    @Test
+    fun rewardSchemaBranchIsAddedToRuleRequestAlternatives() {
+        val properties = JsonParser.parseString("""{"ruleRequest":{"anyOf":[]}}""").asJsonObject
+
+        addRewardRequestSchema(properties)
+
+        val alternatives = properties.getAsJsonObject("ruleRequest").getAsJsonArray("anyOf")
+        assertEquals(1, alternatives.size())
+        assertEquals("REWARD", alternatives[0].asJsonObject.getAsJsonObject("properties")
+            .getAsJsonObject("type").getAsJsonArray("enum")[0].asString)
+    }
+
+    @Test
+    fun rewardNormalizerPreservesValidProposalIncludingRepeatedCatalogIds() {
+        val normalized = normalizeRewardProposal(validRewardResponse())
+
+        assertEquals("A recompensa foi entregue.", normalized.get("narration").asString)
+        assertEquals(2, normalized.getAsJsonObject("ruleRequest").getAsJsonArray("itemCatalogIds").size())
+    }
+
+    @Test
+    fun rewardNormalizerCanonicalizesLowercaseType() {
+        val response = validRewardResponse().apply {
+            getAsJsonObject("ruleRequest").addProperty("type", "reward")
+        }
+
+        val normalized = normalizeRewardProposal(response)
+        val request = normalized.getAsJsonObject("ruleRequest")
+
+        assertEquals("A recompensa foi entregue.", normalized.get("narration").asString)
+        assertEquals("REWARD", request.get("type").asString)
+        assertEquals(2, request.getAsJsonArray("itemCatalogIds").size())
+    }
+
+    @Test
+    fun malformedRewardProposalIsStrippedWithoutLosingNarrationOrRequestType() {
+        val invalidResponses = listOf(
+            validRewardResponse().apply { getAsJsonObject("ruleRequest").addProperty("amountGp", -1) },
+            validRewardResponse().apply { getAsJsonObject("ruleRequest").addProperty("amountGp", 2147483648L) },
+            validRewardResponse().apply { getAsJsonObject("ruleRequest").addProperty("amountGp", 1.5) },
+            validRewardResponse().apply { getAsJsonObject("ruleRequest").addProperty("status", "PROMISED") },
+            validRewardResponse().apply {
+                val ids = getAsJsonObject("ruleRequest").getAsJsonArray("itemCatalogIds")
+                repeat(4) { ids.add("unknown-$it") }
+            },
+            validRewardResponse().apply { getAsJsonObject("ruleRequest").addProperty("copper", 12) },
+            validRewardResponse().apply {
+                getAsJsonObject("ruleRequest").addProperty("amountGp", 0)
+                getAsJsonObject("ruleRequest").add("itemCatalogIds", JsonParser.parseString("[]"))
+            }
+        )
+
+        invalidResponses.forEach { response ->
+            val normalized = normalizeRewardProposal(response)
+            val request = normalized.getAsJsonObject("ruleRequest")
+            assertEquals("A recompensa foi entregue.", normalized.get("narration").asString)
+            assertEquals("REWARD", request.get("type").asString)
+            assertEquals(setOf("type"), request.keySet())
+        }
+    }
+
+    @Test
+    fun rewardPromptDistinguishesOfferedFromPaidAndUsesGpCatalogContext() {
+        val prompt = guardianSystemPrompt().lowercase()
+
+        assertTrue(prompt.contains("offered"))
+        assertTrue(prompt.contains("paid"))
+        assertTrue(prompt.contains("amountgp"))
+        assertTrue(prompt.contains("rewardableitems"))
+        assertTrue(prompt.contains("não converta cobre"))
     }
 
     @Test
@@ -87,8 +269,12 @@ class ServerTest {
     }
 
     @Test
-    fun invalidArmorWeaponOrNarrativeIsRejectedWithoutLosingNarration() {
+    fun invalidArmorWeaponNarrativeOrIdentifiersAreRejectedWithoutLosingNarration() {
         val invalidResponses = listOf(
+            validEncounterResponse().apply {
+                getAsJsonObject("ruleRequest").getAsJsonObject("encounter").getAsJsonArray("opponents")[0]
+                    .asJsonObject.addProperty("opponentId", "  ")
+            },
             validEncounterResponse().apply {
                 getAsJsonObject("ruleRequest").getAsJsonObject("encounter").getAsJsonArray("opponents")[0]
                     .asJsonObject.getAsJsonObject("stats").addProperty("armor", 4)
@@ -100,6 +286,10 @@ class ServerTest {
             validEncounterResponse().apply {
                 getAsJsonObject("ruleRequest").getAsJsonObject("encounter").getAsJsonArray("opponents")[0]
                     .asJsonObject.getAsJsonObject("narrative").addProperty("name", "  ")
+            },
+            validEncounterResponse().apply {
+                getAsJsonObject("ruleRequest").getAsJsonObject("encounter").getAsJsonArray("opponents")[0]
+                    .asJsonObject.getAsJsonObject("weapon").addProperty("id", "  ")
             }
         )
 
@@ -107,7 +297,7 @@ class ServerTest {
     }
 
     @Test
-    fun suggestedActionsSchemaRequiresOneToThreeBoundedStrings() {
+    fun suggestedActionsSchemaRequiresOneToThreeStringItems() {
         val schema = suggestedActionsSchema()
         val items = schema.getAsJsonObject("items")
 
@@ -115,8 +305,8 @@ class ServerTest {
         assertEquals(1, schema.get("minItems").asInt)
         assertEquals(3, schema.get("maxItems").asInt)
         assertEquals("string", items.get("type").asString)
-        assertEquals(1, items.get("minLength").asInt)
-        assertEquals(160, items.get("maxLength").asInt)
+        assertFalse(items.has("minLength"))
+        assertFalse(items.has("maxLength"))
     }
 
     @Test
@@ -152,97 +342,17 @@ class ServerTest {
     }
 
     @Test
-    fun rewardSchemaRequiresGpStatusAndAtMostFiveCatalogIds() {
-        val schema = rewardRequestSchema()
-        val properties = schema.getAsJsonObject("properties")
-
-        assertEquals("object", schema.get("type").asString)
-        assertEquals(
-            setOf("type", "id", "status", "amountGp", "itemCatalogIds"),
-            schema.getAsJsonArray("required").map { it.asString }.toSet()
-        )
-        assertEquals(0, properties.getAsJsonObject("amountGp").get("minimum").asInt)
-        assertEquals(Int.MAX_VALUE, properties.getAsJsonObject("amountGp").get("maximum").asInt)
-        assertEquals(5, properties.getAsJsonObject("itemCatalogIds").get("maxItems").asInt)
-        assertEquals(
-            setOf("OFFERED", "PAID"),
-            properties.getAsJsonObject("status").getAsJsonArray("enum").map { it.asString }.toSet()
-        )
-        assertFalse(schema.get("additionalProperties").asBoolean)
-    }
-
-    @Test
-    fun rewardSchemaBranchIsAddedToRuleRequestAlternatives() {
-        val properties = JsonParser.parseString("""{"ruleRequest":{"anyOf":[]}}""").asJsonObject
-
-        addRewardRequestSchema(properties)
-
-        val alternatives = properties.getAsJsonObject("ruleRequest").getAsJsonArray("anyOf")
-        assertEquals(1, alternatives.size())
-        assertEquals("REWARD", alternatives[0].asJsonObject.getAsJsonObject("properties")
-            .getAsJsonObject("type").getAsJsonArray("enum")[0].asString)
-    }
-
-    @Test
-    fun rewardNormalizerPreservesValidProposalIncludingRepeatedCatalogIds() {
-        val response = validRewardResponse()
-
-        val normalized = normalizeRewardProposal(response)
-
-        assertEquals("A recompensa foi entregue.", normalized.get("narration").asString)
-        assertEquals(
-            2,
-            normalized.getAsJsonObject("ruleRequest").getAsJsonArray("itemCatalogIds").size()
-        )
-    }
-
-    @Test
-    fun rewardNormalizerCanonicalizesLowercaseType() {
-        val response = validRewardResponse().apply {
-            getAsJsonObject("ruleRequest").addProperty("type", "reward")
-        }
-
-        val normalized = normalizeRewardProposal(response)
-        val request = normalized.getAsJsonObject("ruleRequest")
-
-        assertEquals("A recompensa foi entregue.", normalized.get("narration").asString)
-        assertEquals("REWARD", request.get("type").asString)
-        assertEquals(2, request.getAsJsonArray("itemCatalogIds").size())
-    }
-
-    @Test
-    fun malformedRewardProposalIsStrippedWithoutLosingNarrationOrRequestType() {
-        val invalidResponses = listOf(
-            validRewardResponse().apply { getAsJsonObject("ruleRequest").addProperty("amountGp", -1) },
-            validRewardResponse().apply { getAsJsonObject("ruleRequest").addProperty("amountGp", 2147483648L) },
-            validRewardResponse().apply { getAsJsonObject("ruleRequest").addProperty("amountGp", 1.5) },
-            validRewardResponse().apply { getAsJsonObject("ruleRequest").addProperty("status", "PROMISED") },
-            validRewardResponse().apply { getAsJsonObject("ruleRequest").getAsJsonArray("itemCatalogIds").add("unknown-1"); getAsJsonObject("ruleRequest").getAsJsonArray("itemCatalogIds").add("unknown-2"); getAsJsonObject("ruleRequest").getAsJsonArray("itemCatalogIds").add("unknown-3"); getAsJsonObject("ruleRequest").getAsJsonArray("itemCatalogIds").add("unknown-4"); getAsJsonObject("ruleRequest").getAsJsonArray("itemCatalogIds").add("unknown-5"); getAsJsonObject("ruleRequest").getAsJsonArray("itemCatalogIds").add("unknown-6") },
-            validRewardResponse().apply { getAsJsonObject("ruleRequest").addProperty("copper", 12) },
-            validRewardResponse().apply {
-                getAsJsonObject("ruleRequest").addProperty("amountGp", 0)
-                getAsJsonObject("ruleRequest").add("itemCatalogIds", JsonParser.parseString("[]"))
-            }
-        )
-
-        invalidResponses.forEach { response ->
-            val normalized = normalizeRewardProposal(response)
-            val request = normalized.getAsJsonObject("ruleRequest")
-            assertEquals("A recompensa foi entregue.", normalized.get("narration").asString)
-            assertEquals("REWARD", request.get("type").asString)
-            assertEquals(setOf("type"), request.keySet())
-        }
-    }
-
-    @Test
-    fun rewardPromptDistinguishesOfferedFromPaidAndUsesGpCatalogContext() {
+    fun promptDefinesCompleteCombatProposalFieldsForShallowWireSchema() {
         val prompt = guardianSystemPrompt().lowercase()
+        val requiredGuidance = listOf(
+            "begin_combat", "1 a 8", "opponentid", "narrative", "appearance", "behavior", "intent", "context",
+            "stats", "str", "dex", "wil", "hp", "maxhp", "armor", "weapon", "damage", "blast", "ranged",
+            "moraleleaderid", "maxhp >= hp", "0 a 3", "d4", "d12"
+        )
 
-        assertTrue(prompt.contains("offered"))
-        assertTrue(prompt.contains("paid"))
-        assertTrue(prompt.contains("amountgp"))
-        assertTrue(prompt.contains("rewardableitems"))
-        assertTrue(prompt.contains("não converta cobre"))
+        requiredGuidance.forEach { term ->
+            assertTrue(prompt.contains(term), "Prompt is missing combat proposal guidance: $term")
+        }
     }
 
     private fun assertEncounterRejectedWithoutLosingNarration(response: com.google.gson.JsonObject) {
