@@ -22,7 +22,7 @@
 
 1. `ruleRequest = null`: deve continuar válido sem campo mecânico inventado.
 2. `SAVE`, `DAMAGE`, `FATIGUE`, `REST`, `STABILIZE_CRITICAL` e `RECOVER_SCAR`: seus tipos continuam permitidos; validação semântica segue no app.
-3. `BEGIN_COMBAT` válido com 1–8 oponentes: o schema raso não remove dados necessários e o normalizador preserva uma proposta completa.
+3. `BEGIN_COMBAT` válido com 1–8 oponentes: o prompt ainda descreve todos os campos necessários, e o normalizador preserva uma proposta completa apesar do schema raso.
 4. `BEGIN_COMBAT` inválido, incompleto ou com stats fracionários: a narração é preservada e a proposta incompleta continua rejeitada.
 5. Crescimento do schema além da profundidade conservadora do projeto: o stub deve falhar localmente antes de qualquer requisição Gemini.
 
@@ -38,10 +38,10 @@
 - `guardianResponseSchema()` expõe `ruleRequest` como `type: ["object", "null"]`, exige `type` somente para o ramo objeto, enumera os sete tipos de pedido aceitos e define `additionalProperties: true`.
 - `combatEncounterSchema()` continua descrevendo o contrato multi-oponente para testes; não será incorporado no schema enviado à Gemini.
 
-- [ ] Substituir a asserção de ramo Gemini profundo por `guardianResponseSchemaKeepsRuleRequestShallowAndNullable`, verificando enum, anulabilidade, `additionalProperties` e ausência de schema aninhado para `encounter`.
-- [ ] Rodar a suíte de testes do servidor para confirmar a falha RED da nova expectativa.
-- [ ] Alterar o teste Python do stub para rejeitar schema wire acima de profundidade máxima 5 (política conservadora do projeto; não é apresentada como limite oficial da Gemini) e para aceitar o novo contrato raso.
-- [ ] Rodar `python3 guardian-server/scripts/test_mock_gemini.py` e confirmar a falha RED do contrato atualizado.
+- [x] Substituir a asserção de ramo Gemini profundo por `guardianResponseSchemaKeepsRuleRequestShallowAndNullable`, verificando enum, anulabilidade, `additionalProperties` e ausência de schema aninhado para `encounter`.
+- [x] Rodar a suíte de testes do servidor para confirmar a falha RED da nova expectativa.
+- [x] Alterar o teste Python do stub para rejeitar schema wire acima de profundidade máxima 5 (política conservadora do projeto; não é apresentada como limite oficial da Gemini) e para aceitar o novo contrato raso.
+- [x] Rodar `python3 guardian-server/scripts/test_mock_gemini.py` e confirmar a falha RED do contrato atualizado.
 
 ### Task 2: Simplificar o schema enviado sem relaxar a autoridade
 
@@ -50,10 +50,11 @@
 - Modify: `guardian-server/src/test/kotlin/com/vanish994/cairnsolo/guardian/ServerTest.kt`
 - Modify: `guardian-server/scripts/mock_gemini.py`
 
-- [ ] Fazer `guardianResponseSchema()` enviar para `ruleRequest` somente um objeto anulável raso com `type` no enum `SAVE`, `DAMAGE`, `FATIGUE`, `REST`, `STABILIZE_CRITICAL`, `RECOVER_SCAR`, `BEGIN_COMBAT` e `additionalProperties: true`; remover o acoplamento de `replaceBeginCombatSchema()` ao wire schema.
-- [ ] Manter `combatEncounterSchema()` e `isCompleteEncounterProposal()` como contrato/validação local; propostas inválidas continuam perdendo apenas `encounter`, nunca a narração.
-- [ ] Atualizar o stub para validar o enum de `ruleRequest`, a profundidade conservadora do schema final, o envelope HTTP e as keywords documentadas.
-- [ ] Rodar `:guardian-server:test`, `python3 guardian-server/scripts/test_mock_gemini.py` e o smoke HTTP local via `guardian-server/scripts/local-integration-test.sh`; todos devem passar sem qualquer acesso à produção.
+- [x] Fazer `guardianResponseSchema()` enviar para `ruleRequest` somente um objeto anulável raso com `type` no enum `SAVE`, `DAMAGE`, `FATIGUE`, `REST`, `STABILIZE_CRITICAL`, `RECOVER_SCAR`, `BEGIN_COMBAT` e `additionalProperties: true`; remover o acoplamento de `replaceBeginCombatSchema()` ao wire schema.
+- [x] Descrever em `guardianSystemPrompt()` todos os campos de `BEGIN_COMBAT`, seus limites mecânicos e a opcionalidade de `moraleLeaderId`; testar os nomes/limites com `promptDefinesCompleteCombatProposalFieldsForShallowWireSchema`.
+- [x] Manter `combatEncounterSchema()` e `isCompleteEncounterProposal()` como contrato/validação local; propostas inválidas continuam perdendo apenas `encounter`, nunca a narração.
+- [x] Atualizar o stub para validar o enum de `ruleRequest`, a profundidade conservadora do schema final, o envelope HTTP e as keywords documentadas.
+- [x] Rodar `:guardian-server:test`, `python3 guardian-server/scripts/test_mock_gemini.py` e o smoke HTTP local via `guardian-server/scripts/local-integration-test.sh`; todos devem passar sem qualquer acesso à produção.
 
 ### Task 3: Validar em CI e abrir PR
 
