@@ -125,19 +125,61 @@ def validate_interactions_request(request):
     # The full encounter is semantically validated after generation; keep its wire schema shallow.
     try:
         rule_request = schema["properties"]["ruleRequest"]
-        properties = rule_request["properties"]
-        request_type = properties["type"]
-    except (KeyError, TypeError, StopIteration) as exc:
-        raise ValueError("shallow ruleRequest type schema is missing") from exc
+        alternatives = rule_request["anyOf"]
+    except (KeyError, TypeError) as exc:
+        raise ValueError("type-specific ruleRequest alternatives are missing") from exc
 
-    if rule_request.get("type") != ["object", "null"]:
-        raise ValueError("ruleRequest must be a nullable object")
-    if set(properties) != {"type"}:
-        raise ValueError("ruleRequest must not embed nested payload schemas")
-    if request_type.get("type") != "string" or set(request_type.get("enum", [])) != RULE_REQUEST_TYPES:
-        raise ValueError("ruleRequest type enum does not match supported request types")
-    if rule_request.get("required") != ["type"] or rule_request.get("additionalProperties") is not True:
-        raise ValueError("ruleRequest must require only type and allow structured payload fields")
+    expected_fields = {
+        frozenset({"SAVE"}): ["type", "attribute"],
+        frozenset({"DAMAGE", "FATIGUE"}): ["type", "amount"],
+        frozenset({"REST", "STABILIZE_CRITICAL", "RECOVER_SCAR"}): ["type"],
+        frozenset({"BEGIN_COMBAT"}): ["type", "encounter"],
+    }
+    seen_groups = set()
+    has_nullable_branch = False
+
+    for alternative in alternatives:
+        if not isinstance(alternative, dict):
+            raise ValueError("ruleRequest anyOf branches must be schema objects")
+        if alternative.get("type") == "null":
+            has_nullable_branch = True
+            continue
+        if alternative.get("type") != "object":
+            raise ValueError("ruleRequest branches must be null or object")
+
+        properties = alternative.get("properties")
+        if not isinstance(properties, dict) or not isinstance(properties.get("type"), dict):
+            raise ValueError("ruleRequest branch must define its type enum")
+        request_type = properties["type"]
+        group = frozenset(request_type.get("enum", []))
+        required = expected_fields.get(group)
+        if request_type.get("type") != "string" or required is None:
+            raise ValueError("ruleRequest type groups do not match supported request types")
+        if group in seen_groups:
+            raise ValueError("ruleRequest contains a duplicate type group")
+        seen_groups.add(group)
+        if set(properties) != set(required) or alternative.get("required") != required:
+            raise ValueError(f"ruleRequest fields for {sorted(group)} must be required: {required}")
+        if alternative.get("additionalProperties") is not False:
+            raise ValueError("ruleRequest branches must reject undeclared top-level fields")
+
+        if group == frozenset({"SAVE"}):
+            attribute = properties["attribute"]
+            if attribute.get("type") != "string" or set(attribute.get("enum", [])) != {"STR", "DEX", "WIL"}:
+                raise ValueError("SAVE attribute must be the STR/DEX/WIL enum")
+        elif group == frozenset({"DAMAGE", "FATIGUE"}):
+            amount = properties["amount"]
+            if amount.get("type") != "integer" or amount.get("minimum") != 1:
+                raise ValueError("DAMAGE/FATIGUE amount must be a positive integer")
+        elif group == frozenset({"BEGIN_COMBAT"}):
+            encounter = properties["encounter"]
+            if encounter != {"type": "object", "additionalProperties": True}:
+                raise ValueError("BEGIN_COMBAT encounter must remain a shallow object")
+
+    if not has_nullable_branch or seen_groups != set(expected_fields):
+        raise ValueError("ruleRequest must cover null and every supported type group")
+    if set().union(*seen_groups) != RULE_REQUEST_TYPES:
+        raise ValueError("ruleRequest type groups do not match supported request types")
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -178,7 +220,7 @@ class Handler(BaseHTTPRequestHandler):
             "sceneTitle": "A torre",
             "sceneDescription": "A passagem estreita se abre para uma escadaria escura.",
             "suggestedActions": ["Examinar a escadaria"],
-            "ruleRequest": None,
+            "ruleRequest": {"type": "SAVE", "attribute": "DEX"},
             "canonProposals": [],
             "growthEvidenceProposals": [],
             "growthChangeProposals": [],

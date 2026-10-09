@@ -77,20 +77,56 @@ class ServerTest {
     }
 
     @Test
-    fun guardianResponseSchemaKeepsRuleRequestShallowAndNullable() {
+    fun guardianResponseSchemaRequiresTypeSpecificRuleRequestFields() {
         val ruleRequest = guardianResponseSchema()
             .getAsJsonObject("properties")
             .getAsJsonObject("ruleRequest")
-        val properties = ruleRequest.getAsJsonObject("properties")
-        val allowedTypes = setOf(
-            "SAVE", "DAMAGE", "FATIGUE", "REST", "STABILIZE_CRITICAL", "RECOVER_SCAR", "BEGIN_COMBAT"
+        val alternatives = ruleRequest.getAsJsonArray("anyOf").map { it.asJsonObject }
+        assertTrue(alternatives.any { it.get("type").asString == "null" })
+
+        fun branch(types: Set<String>) = alternatives.single { alternative ->
+            alternative.get("type")?.asString == "object" &&
+                alternative.getAsJsonObject("properties")
+                    .getAsJsonObject("type")
+                    .getAsJsonArray("enum")
+                    .map { it.asString }
+                    .toSet() == types
+        }
+
+        val save = branch(setOf("SAVE"))
+        assertEquals(listOf("type", "attribute"), save.getAsJsonArray("required").map { it.asString })
+        assertEquals(setOf("type", "attribute"), save.getAsJsonObject("properties").keySet())
+        assertEquals(
+            setOf("STR", "DEX", "WIL"),
+            save.getAsJsonObject("properties").getAsJsonObject("attribute").getAsJsonArray("enum").map { it.asString }.toSet()
         )
 
-        assertEquals(listOf("object", "null"), ruleRequest.getAsJsonArray("type").map { it.asString })
-        assertEquals(setOf("type"), properties.keySet())
-        assertEquals(allowedTypes, properties.getAsJsonObject("type").getAsJsonArray("enum").map { it.asString }.toSet())
-        assertEquals(listOf("type"), ruleRequest.getAsJsonArray("required").map { it.asString })
-        assertTrue(ruleRequest.get("additionalProperties").asBoolean)
+        val damage = branch(setOf("DAMAGE", "FATIGUE"))
+        assertEquals(listOf("type", "amount"), damage.getAsJsonArray("required").map { it.asString })
+        val amount = damage.getAsJsonObject("properties").getAsJsonObject("amount")
+        assertEquals("integer", amount.get("type").asString)
+        assertEquals(1, amount.get("minimum").asInt)
+
+        val noPayload = branch(setOf("REST", "STABILIZE_CRITICAL", "RECOVER_SCAR"))
+        assertEquals(listOf("type"), noPayload.getAsJsonArray("required").map { it.asString })
+
+        val combat = branch(setOf("BEGIN_COMBAT"))
+        assertEquals(listOf("type", "encounter"), combat.getAsJsonArray("required").map { it.asString })
+        val encounter = combat.getAsJsonObject("properties").getAsJsonObject("encounter")
+        assertEquals("object", encounter.get("type").asString)
+        assertTrue(encounter.get("additionalProperties").asBoolean)
+        assertTrue(alternatives.filter { it.get("type")?.asString == "object" }
+            .all { !it.get("additionalProperties").asBoolean })
+    }
+
+    @Test
+    fun promptRequiresTypeSpecificRuleRequestFields() {
+        val prompt = guardianSystemPrompt().lowercase()
+
+        assertTrue(prompt.contains("save") && prompt.contains("attribute") && prompt.contains("str, dex ou wil"))
+        assertTrue(prompt.contains("damage") && prompt.contains("fatigue") && prompt.contains("amount"))
+        assertTrue(prompt.contains("inteiro") && prompt.contains("1"))
+        assertTrue(prompt.contains("begin_combat") && prompt.contains("encounter"))
     }
 
     @Test

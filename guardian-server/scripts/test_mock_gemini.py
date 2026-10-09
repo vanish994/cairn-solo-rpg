@@ -3,28 +3,49 @@ import unittest
 from mock_gemini import unsupported_schema_keywords, validate_interactions_request
 
 
-ALLOWED_REQUEST_TYPES = [
-    "SAVE",
-    "DAMAGE",
-    "FATIGUE",
-    "REST",
-    "STABILIZE_CRITICAL",
-    "RECOVER_SCAR",
-    "BEGIN_COMBAT",
-]
-
-
 def shallow_response_schema():
     return {
         "type": "object",
         "properties": {
             "ruleRequest": {
-                "type": ["object", "null"],
-                "properties": {
-                    "type": {"type": "string", "enum": ALLOWED_REQUEST_TYPES},
-                },
-                "required": ["type"],
-                "additionalProperties": True,
+                "anyOf": [
+                    {"type": "null"},
+                    {
+                        "type": "object",
+                        "properties": {
+                            "type": {"type": "string", "enum": ["SAVE"]},
+                            "attribute": {"type": "string", "enum": ["STR", "DEX", "WIL"]},
+                        },
+                        "required": ["type", "attribute"],
+                        "additionalProperties": False,
+                    },
+                    {
+                        "type": "object",
+                        "properties": {
+                            "type": {"type": "string", "enum": ["DAMAGE", "FATIGUE"]},
+                            "amount": {"type": "integer", "minimum": 1},
+                        },
+                        "required": ["type", "amount"],
+                        "additionalProperties": False,
+                    },
+                    {
+                        "type": "object",
+                        "properties": {
+                            "type": {"type": "string", "enum": ["REST", "STABILIZE_CRITICAL", "RECOVER_SCAR"]},
+                        },
+                        "required": ["type"],
+                        "additionalProperties": False,
+                    },
+                    {
+                        "type": "object",
+                        "properties": {
+                            "type": {"type": "string", "enum": ["BEGIN_COMBAT"]},
+                            "encounter": {"type": "object", "additionalProperties": True},
+                        },
+                        "required": ["type", "encounter"],
+                        "additionalProperties": False,
+                    },
+                ]
             },
         },
         "required": ["ruleRequest"],
@@ -93,40 +114,29 @@ class MockGeminiSchemaTest(unittest.TestCase):
             unsupported_schema_keywords(schema),
         )
 
-    def test_accepts_shallow_nullable_rule_request_schema(self):
+    def test_accepts_shallow_nullable_type_specific_rule_request_schema(self):
         validate_interactions_request(interactions_request(shallow_response_schema()))
 
     def test_rejects_deep_combat_schema_before_upstream_request(self):
         schema = shallow_response_schema()
-        schema["properties"]["ruleRequest"] = {
-            "anyOf": [
-                {"type": "null"},
-                {
-                    "type": "object",
-                    "properties": {
-                        "type": {"type": "string", "enum": ["BEGIN_COMBAT"]},
-                        "encounter": {
-                            "type": "object",
-                            "properties": {
-                                "opponents": {
-                                    "type": "array",
-                                    "minItems": 1,
-                                    "maxItems": 8,
-                                    "items": {
-                                        "type": "object",
-                                        "properties": {
-                                            "narrative": {
-                                                "type": "object",
-                                                "properties": {"name": {"type": "string"}},
-                                            }
-                                        },
-                                    },
-                                }
-                            },
+        schema["properties"]["ruleRequest"]["anyOf"][-1]["properties"]["encounter"] = {
+            "type": "object",
+            "properties": {
+                "opponents": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 8,
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "narrative": {
+                                "type": "object",
+                                "properties": {"name": {"type": "string"}},
+                            }
                         },
                     },
-                },
-            ]
+                }
+            },
         }
 
         with self.assertRaisesRegex(ValueError, "depth"):
@@ -134,19 +144,33 @@ class MockGeminiSchemaTest(unittest.TestCase):
 
     def test_rejects_nested_rule_payload_schema_even_within_depth_budget(self):
         schema = shallow_response_schema()
-        schema["properties"]["ruleRequest"]["properties"]["encounter"] = {
+        schema["properties"]["ruleRequest"]["anyOf"][-1]["properties"]["encounter"] = {
             "type": "object",
-            "properties": {"opponents": {"type": "array", "items": {"type": "object"}}},
+            "properties": {"opponents": {"type": "array"}},
         }
 
-        with self.assertRaisesRegex(ValueError, "nested payload"):
+        with self.assertRaisesRegex(ValueError, "shallow object"):
             validate_interactions_request(interactions_request(schema))
 
     def test_rejects_rule_request_schema_without_begin_combat_type(self):
         schema = shallow_response_schema()
-        schema["properties"]["ruleRequest"]["properties"]["type"]["enum"].remove("BEGIN_COMBAT")
+        schema["properties"]["ruleRequest"]["anyOf"][-1]["properties"]["type"]["enum"].remove("BEGIN_COMBAT")
 
-        with self.assertRaisesRegex(ValueError, "enum"):
+        with self.assertRaisesRegex(ValueError, "type groups"):
+            validate_interactions_request(interactions_request(schema))
+
+    def test_rejects_save_attribute_missing_from_enum(self):
+        schema = shallow_response_schema()
+        schema["properties"]["ruleRequest"]["anyOf"][1]["properties"]["attribute"]["enum"].remove("WIL")
+
+        with self.assertRaisesRegex(ValueError, "SAVE attribute"):
+            validate_interactions_request(interactions_request(schema))
+
+    def test_rejects_save_attribute_that_is_not_required(self):
+        schema = shallow_response_schema()
+        schema["properties"]["ruleRequest"]["anyOf"][1]["required"] = ["type"]
+
+        with self.assertRaisesRegex(ValueError, "must be required"):
             validate_interactions_request(interactions_request(schema))
 
 
