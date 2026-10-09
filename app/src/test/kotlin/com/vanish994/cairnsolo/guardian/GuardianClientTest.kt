@@ -267,4 +267,20 @@ class GuardianClientTest {
         assertEquals("Mara", payload.getJSONObject("campaign").getJSONObject("character").getString("name"))
         assertFalse(payload.getString("playerIntent").contains("Ataque:"))
     }
+
+    @Test
+    fun campaignOpeningUsesInternalMarkerAndFreshCampaignContext() {
+        val initial = newCharacter("Mara", 10, 11, 12)
+        val state = initial.copy(
+            campaign = initial.campaign.copy(campaignSeed = "opening-seed")
+        )
+        val payload = guardianRequestPayload(state, playerIntent = "INICIAR_CAMPANHA")
+        val campaign = payload.getJSONObject("campaign")
+
+        assertEquals("INICIAR_CAMPANHA", payload.getString("playerIntent"))
+        assertEquals("opening-seed", campaign.getString("campaignSeed"))
+        assertNull(state.campaign.guardianInteractionId)
+        assertEquals(0, campaign.getJSONArray("recentHistory").length())
+        assertFalse(campaign.has("guardianInteractionId"))
+    }
 }

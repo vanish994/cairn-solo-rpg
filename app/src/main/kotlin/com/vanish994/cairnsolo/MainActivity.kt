@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import com.vanish994.cairnsolo.game.GameAction
 import com.vanish994.cairnsolo.guardian.HttpGuardianClient
 import com.vanish994.cairnsolo.guardian.GuardianRuleResolver
+import com.vanish994.cairnsolo.guardian.resolveCampaignOpening
 import com.vanish994.cairnsolo.game.GameActionResolver
 import com.vanish994.cairnsolo.game.GameState
 import com.vanish994.cairnsolo.game.CombatState
@@ -42,6 +43,8 @@ import com.vanish994.cairnsolo.feedback.FeedbackType
 import com.vanish994.cairnsolo.feedback.inventoryItemLabel
 import com.vanish994.cairnsolo.rules.*
 import kotlin.random.Random
+
+private const val CAMPAIGN_START_INTENT = "INICIAR_CAMPANHA"
 
 private val CairnBackground = Color(0xFF0A090B)
 private val CairnSurface = Color(0xFF121116)
@@ -125,14 +128,35 @@ class MainActivity : ComponentActivity() {
                                     repository.save(created)
                                     state = created
                                     screen = AppScreen.EXPLORATION
-                                    guardianFlow = GuardianFlow.EXPLORATION
-                                    guardianLoading = false
+                                    guardianFlow = GuardianFlow.GUARDIAN_THINKING
+                                    guardianLoading = true
                                     guardianError = null
                                     rewardFeedback = emptyList()
                                     pendingRule = null
                                     lastResolution = null
                                     suggestedActions = emptyList()
                                     guardianIntentDraft = ""
+                                    scope.launch {
+                                        val openingContext = created.copy(
+                                            campaign = created.campaign.copy(guardianMessage = "")
+                                        )
+                                        val outcome = resolveCampaignOpening(
+                                            initialState = created,
+                                            result = guardianClient.narrate(
+                                                openingContext,
+                                                CAMPAIGN_START_INTENT,
+                                                ruleResult = null,
+                                                encounterContext = null
+                                            ),
+                                            actionResolver = actionResolver
+                                        )
+                                        repository.save(outcome.state)
+                                        state = outcome.state
+                                        suggestedActions = outcome.suggestedActions
+                                        guardianError = outcome.error
+                                        guardianFlow = GuardianFlow.EXPLORATION
+                                        guardianLoading = false
+                                    }
                                 }
                             )
                         }

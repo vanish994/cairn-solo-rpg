@@ -145,7 +145,9 @@ O servidor deve aplicar schema/validação e nunca aceitar uma mutação mecâni
 
 ### Narrativa de abertura
 
-A abertura deve ser gerada a partir do estado, mundo e `campaignSeed`. Não reintroduzir texto fixo como prólogo obrigatório. O seed é uma âncora de diversidade, não uma autorização para contradizer o domínio.
+A abertura é solicitada automaticamente ao Guardião após a criação do personagem, usando o marcador interno `INICIAR_CAMPANHA`; o marcador e o prompt de sistema ficam no backend e não aparecem como fala do jogador. O prompt integral versionado em `guardian-server/src/main/resources/guardian-system-prompt.txt` é carregado pelo servidor e combinado, em toda chamada, com o contrato técnico de Cairn. As instruções devem gerar a primeira situação a partir do personagem, mundo, cânone e `campaignSeed`.
+
+Não reintroduzir prólogo fixo nem ponto de partida obrigatório em Cinzália, praça central, taverna ou quest giver. A seed seleciona deterministicamente o assentamento inicial e serve de âncora para variar o enquadramento narrativo, sem mover a localização mecânica ou contradizer o domínio. A abertura deve conservar `suggestedActions` para o card **Próximas Ações** e não pode resolver mecânicas, Growth ou recompensas. Se a chamada falhar, manter a campanha e sua abertura local de contingência jogáveis.
 
 ## 7. UI e experiência de chat
 
