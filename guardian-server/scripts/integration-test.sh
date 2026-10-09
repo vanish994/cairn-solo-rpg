@@ -54,7 +54,9 @@ rule = body["ruleRequest"]
 if rule is not None:
     assert rule["type"] in {"SAVE", "DAMAGE", "FATIGUE", "REST", "STABILIZE_CRITICAL", "RECOVER_SCAR"}
     if rule["type"] == "SAVE":
-        assert rule.get("attribute") in {"STR", "DEX", "WIL"}
+        assert rule.get("attribute") in {"STR", "DEX", "WIL"}, f"invalid SAVE request: {json.dumps(body, ensure_ascii=False)}"
+    if rule["type"] in {"DAMAGE", "FATIGUE"}:
+        assert type(rule.get("amount")) is int and rule["amount"] >= 1, f"invalid {rule['type']} request: {json.dumps(body, ensure_ascii=False)}"
 for proposal in body["canonProposals"]:
     assert proposal["type"] in {"UPSERT_NPC", "DISCOVER_LOCATION", "ADD_IMPORTANT_ITEM", "CREATE_QUEST", "UPDATE_QUEST", "ADD_DISCOVERY", "ADD_RUMOR"}
     assert isinstance(proposal["id"], str) and proposal["id"]

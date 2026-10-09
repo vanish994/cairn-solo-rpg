@@ -32,7 +32,7 @@ condições, morte, recursos e resultados aleatórios.
 
 Nunca invente ou altere valores mecânicos.
 Nunca diga que um teste foi bem-sucedido, que dano foi causado ou que um item foi obtido, a menos que o campo ruleResult forneça explicitamente esse fato.
-Quando uma ação exigir resolução mecânica, preencha ruleRequest com um pedido estruturado e deixe o aplicativo resolver. Use SAVE, DAMAGE, FATIGUE, REST, STABILIZE_CRITICAL ou RECOVER_SCAR conforme apropriado; BEGIN_COMBAT é apenas uma proposta de encontro para aprovação do jogador.
+Quando uma ação exigir resolução mecânica, preencha ruleRequest com o formato exigido: SAVE requer attribute STR, DEX ou WIL; DAMAGE e FATIGUE requerem amount inteiro positivo; REST, STABILIZE_CRITICAL e RECOVER_SCAR usam somente type; BEGIN_COMBAT requer encounter completo. O aplicativo é quem resolve todas as regras.
 Você também pode propor BEGIN_COMBAT somente quando character.combat estiver ausente. Isso é uma proposta completa de 1 a 8 oponentes, não o início do combate: o jogador precisa aceitar o encontro inteiro no aplicativo. Use encounter.opponents como lista de objetos, cada um com opponentId único, narrativa completa, stats completos e weapon completa. IDs não podem estar vazios nem ter espaços no início/fim. moraleLeaderId é opcional e, se fornecido, deve corresponder a um ID da lista. Para cada oponente, HP deve ser pelo menos 1 e não pode exceder maxHp; weapon.damage deve usar apenas d4/d6/d8/d10/d12 (por exemplo, d6 ou d6+d8); Armor deve estar entre 0 e 3. Não declare iniciativa, ataque, dano ou qualquer consequência.
 Com combate ativo, ataques são iniciados pelos controles do aplicativo. Não use DAMAGE para simular um ataque e não narre seu resultado antes de recebê-lo em ruleResult.
 Você pode propor atualizações narrativas em canonProposals, mas elas não são fatos até serem validadas pelo aplicativo. Use apenas UPSERT_NPC, DISCOVER_LOCATION, ADD_IMPORTANT_ITEM, CREATE_QUEST, ADD_DISCOVERY ou ADD_RUMOR. Nunca altere HP, atributos, inventário, facções, Growth ou outros dados mecânicos.
@@ -62,6 +62,7 @@ internal fun guardianSystemPrompt(): String = "$SYSTEM_PROMPT\n\n" +
         "campo canon (cânone confirmado), e não invente " +
         "fatos, locais, NPCs, missões ou saídas. São apenas recomendações: não executam ações " +
         "nem alteram o estado do jogo, e o jogador continua livre para escrever outra intenção." +
+    "\n\nFORMATO DE ruleRequest: SAVE exige attribute exatamente STR, DEX ou WIL; DAMAGE e FATIGUE exigem amount como inteiro maior ou igual a 1; REST, STABILIZE_CRITICAL e RECOVER_SCAR exigem somente type; BEGIN_COMBAT exige encounter completo. Nunca omita campos obrigatórios nem invente resultados mecânicos." +
     "\n\nFORMATO DA PROPOSTA BEGIN_COMBAT: use ruleRequest com type BEGIN_COMBAT e encounter.opponents " +
         "como uma lista de 1 a 8 adversários completos; cada adversário exige opponentId único, narrative " +
         "com name, appearance, behavior, intent e context, stats com str, dex, wil, hp, maxHp e armor " +
@@ -118,9 +119,7 @@ Se esta for a solicitação de abertura de campanha, trate campaignSeed como uma
 Se playerIntent começar com CONTINUAR_NARRATIVA, isso é um comando interno da interface, não uma fala ou decisão do jogador. Não o mencione na narração, não o inclua como diálogo e avance a situação atual organicamente no mesmo local.
 Se ruleResult estiver presente, ele foi produzido pelo Rules Engine e é a única fonte autorizada para narrar os efeitos mecânicos daquela ação. Não acrescente números, resultados, condições ou consequências mecânicas não contidos nesse campo.
 
-Continue a cena de forma coerente. Se a intenção exigir uma resolução mecânica, preencha ruleRequest
-como objeto com type e os campos necessários. Use SAVE (attribute STR/DEX/WIL), DAMAGE (amount),
-FATIGUE (amount), REST, STABILIZE_CRITICAL, RECOVER_SCAR ou BEGIN_COMBAT (encounter com 1–8 oponentes em `opponents`, somente sem combate ativo).
+Continue a cena de forma coerente. Se a intenção exigir uma resolução mecânica, preencha ruleRequest como objeto com os campos obrigatórios do tipo: SAVE exige attribute exatamente STR, DEX ou WIL; DAMAGE e FATIGUE exigem amount inteiro maior ou igual a 1; REST, STABILIZE_CRITICAL e RECOVER_SCAR exigem somente type; BEGIN_COMBAT exige encounter com 1–8 oponentes em `opponents`, somente sem combate ativo.
 BEGIN_COMBAT apenas propõe o encontro inteiro para confirmação do jogador. Não informe resultados; o aplicativo resolve.
 Se não houver resolução mecânica, use null.
 Se houver um ruleResult na solicitação, trate-o como resultado autoritativo do motor e narre somente suas consequências mecânicas autorizadas.
@@ -197,7 +196,13 @@ internal fun guardianResponseSchema(): JsonObject = JsonObject().apply {
               "narration": {"type":"string"},
               "sceneTitle": {"type":"string"},
               "sceneDescription": {"type":"string"},
-              "ruleRequest": {"type":["object","null"],"properties":{"type":{"type":"string","enum":["SAVE","DAMAGE","FATIGUE","REST","STABILIZE_CRITICAL","RECOVER_SCAR","BEGIN_COMBAT"]}},"required":["type"],"additionalProperties":true},
+              "ruleRequest": {"anyOf":[
+                {"type":"null"},
+                {"type":"object","properties":{"type":{"type":"string","enum":["SAVE"]},"attribute":{"type":"string","enum":["STR","DEX","WIL"]}},"required":["type","attribute"],"additionalProperties":false},
+                {"type":"object","properties":{"type":{"type":"string","enum":["DAMAGE","FATIGUE"]},"amount":{"type":"integer","minimum":1}},"required":["type","amount"],"additionalProperties":false},
+                {"type":"object","properties":{"type":{"type":"string","enum":["REST","STABILIZE_CRITICAL","RECOVER_SCAR"]}},"required":["type"],"additionalProperties":false},
+                {"type":"object","properties":{"type":{"type":"string","enum":["BEGIN_COMBAT"]},"encounter":{"type":"object","additionalProperties":true}},"required":["type","encounter"],"additionalProperties":false}
+              ]},
               "canonProposals": {"type":"array","maxItems":5,"items":{"type":"object","properties":{"type":{"type":"string","enum":["UPSERT_NPC","DISCOVER_LOCATION","ADD_IMPORTANT_ITEM","CREATE_QUEST","UPDATE_QUEST","ADD_DISCOVERY","ADD_RUMOR"]},"id":{"type":"string"},"status":{"type":"string","enum":["CONFIRMED","RUMOR","DISCOVERED"]},"source":{"type":"string","enum":["PLAYER","GUARDIAN","NPC","RULES_ENGINE","SYSTEM"]},"name":{"type":"string"},"title":{"type":"string"},"text":{"type":"string"},"description":{"type":"string"},"role":{"type":"string"},"relatedEntityIds":{"type":"array","items":{"type":"string"}}},"required":["type","id","status","source"],"additionalProperties":false}},
               "growthEvidenceProposals": {"type":"array","maxItems":3,"items":{"type":"object","properties":{"id":{"type":"string"},"summary":{"type":"string"},"relatedEntityIds":{"type":"array","items":{"type":"string"}},"focusedPattern":{"type":"boolean"},"seriousRisk":{"type":"boolean"},"uniqueInteraction":{"type":"boolean"}},"required":["id","summary","relatedEntityIds","focusedPattern","seriousRisk","uniqueInteraction"],"additionalProperties":false}}
               ,"growthChangeProposals": {"type":"array","maxItems":3,"items":{"type":"object","properties":{"id":{"type":"string"},"evidenceIds":{"type":"array","minItems":1,"items":{"type":"string"}},"changeType":{"type":"string","enum":["RAISE_MAX_ATTRIBUTE","KEEP_HIGHER_ATTRIBUTE","GAIN_ABILITY"]},"attribute":{"type":"string","enum":["STR","DEX","WIL"]},"amount":{"type":"integer","minimum":1,"maximum":3},"candidate":{"type":"integer","minimum":3,"maximum":18},"abilityId":{"type":"string"},"abilityName":{"type":"string"},"abilityDescription":{"type":"string"},"abilityCost":{"type":"string"},"rationale":{"type":"string"}},"required":["id","evidenceIds","changeType","rationale"],"additionalProperties":false}}
