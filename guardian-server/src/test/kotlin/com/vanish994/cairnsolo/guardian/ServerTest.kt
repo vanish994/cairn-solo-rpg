@@ -77,29 +77,20 @@ class ServerTest {
     }
 
     @Test
-    fun composedResponseSchemaRetainsMultiOpponentBeginCombatBranch() {
-        val alternatives = guardianResponseSchema()
+    fun guardianResponseSchemaKeepsRuleRequestShallowAndNullable() {
+        val ruleRequest = guardianResponseSchema()
             .getAsJsonObject("properties")
             .getAsJsonObject("ruleRequest")
-            .getAsJsonArray("anyOf")
-        val combat = alternatives.first { branch ->
-            branch.asJsonObject.get("properties")
-                ?.takeIf { it.isJsonObject }
-                ?.asJsonObject
-                ?.get("type")
-                ?.takeIf { it.isJsonObject }
-                ?.asJsonObject
-                ?.getAsJsonArray("enum")
-                ?.any { it.asString == "BEGIN_COMBAT" } == true
-        }.asJsonObject
-        val opponents = combat.getAsJsonObject("properties")
-            .getAsJsonObject("encounter")
-            .getAsJsonObject("properties")
-            .getAsJsonObject("opponents")
+        val properties = ruleRequest.getAsJsonObject("properties")
+        val allowedTypes = setOf(
+            "SAVE", "DAMAGE", "FATIGUE", "REST", "STABILIZE_CRITICAL", "RECOVER_SCAR", "BEGIN_COMBAT"
+        )
 
-        assertEquals("array", opponents.get("type").asString)
-        assertEquals(1, opponents.get("minItems").asInt)
-        assertEquals(8, opponents.get("maxItems").asInt)
+        assertEquals(listOf("object", "null"), ruleRequest.getAsJsonArray("type").map { it.asString })
+        assertEquals(setOf("type"), properties.keySet())
+        assertEquals(allowedTypes, properties.getAsJsonObject("type").getAsJsonArray("enum").map { it.asString }.toSet())
+        assertEquals(listOf("type"), ruleRequest.getAsJsonArray("required").map { it.asString })
+        assertTrue(ruleRequest.get("additionalProperties").asBoolean)
     }
 
     @Test
@@ -208,6 +199,20 @@ class ServerTest {
         assertTrue(encounterInstruction.contains("aprovad"))
         assertTrue(prompt.contains("ruleresult") && prompt.contains("única autoridade"))
         assertTrue(encounterInstruction.contains("não autoriza") && encounterInstruction.contains("resultados mecânicos"))
+    }
+
+    @Test
+    fun promptDefinesCompleteCombatProposalFieldsForShallowWireSchema() {
+        val prompt = guardianSystemPrompt().lowercase()
+        val requiredGuidance = listOf(
+            "begin_combat", "1 a 8", "opponentid", "narrative", "appearance", "behavior", "intent", "context",
+            "stats", "str", "dex", "wil", "hp", "maxhp", "armor", "weapon", "damage", "blast", "ranged",
+            "moraleleaderid", "maxhp >= hp", "0 a 3", "d4", "d12"
+        )
+
+        requiredGuidance.forEach { term ->
+            assertTrue(prompt.contains(term), "Prompt is missing combat proposal guidance: $term")
+        }
     }
 
     private fun assertEncounterRejectedWithoutLosingNarration(response: com.google.gson.JsonObject) {
