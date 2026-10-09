@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -16,10 +17,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -1003,26 +1006,67 @@ private fun RollResultCard(
 ) {
     val save = resolution.gameResult.events.filterIsInstance<com.vanish994.cairnsolo.game.GameEvent.SaveResolved>().firstOrNull()
     val success = save?.success
+    val dieFrames = listOf(
+        R.drawable.cairn_d20_frame_01,
+        R.drawable.cairn_d20_frame_02,
+        R.drawable.cairn_d20_frame_03,
+        R.drawable.cairn_d20_frame_04,
+        R.drawable.cairn_d20_frame_05,
+        R.drawable.cairn_d20_frame_06
+    )
+    var frameIndex by remember(resolution) { mutableIntStateOf(0) }
+    var animationFinished by remember(resolution) { mutableStateOf(save == null) }
+
+    LaunchedEffect(resolution, save?.roll) {
+        if (save != null) {
+            repeat(18) { frame ->
+                frameIndex = frame % dieFrames.size
+                delay(60)
+            }
+            frameIndex = dieFrames.lastIndex
+            animationFinished = true
+        }
+    }
+
     SectionCard {
         Text("RESULTADO", color = CairnAccent, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(5.dp))
         if (save != null) {
-            Text("${save.roll}", color = CairnText, style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Image(
+                    painter = painterResource(dieFrames[frameIndex]),
+                    contentDescription = if (animationFinished) "Dado d20" else "Dado d20 rolando",
+                    modifier = Modifier.size(88.dp)
+                )
+                Spacer(Modifier.width(14.dp))
+                Text(
+                    if (animationFinished) "${save.roll}" else "…",
+                    color = CairnText,
+                    style = MaterialTheme.typography.displaySmall,
+                    fontWeight = FontWeight.Bold
+                )
+            }
             Text(
-                if (success == true) "SUCESSO" else "FALHA",
-                color = if (success == true) CairnAccent else CairnDanger,
+                if (!animationFinished) "ROLANDO…" else if (success == true) "SUCESSO" else "FALHA",
+                color = if (!animationFinished) CairnMuted else if (success == true) CairnAccent else CairnDanger,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )
             Text("Teste de ${save.attribute.name}", color = CairnMuted, style = MaterialTheme.typography.bodySmall)
-            Text(resolution.resultText, color = CairnMuted, style = MaterialTheme.typography.bodySmall)
+            if (animationFinished) {
+                Text(resolution.resultText, color = CairnMuted, style = MaterialTheme.typography.bodySmall)
+            }
         } else {
             Text(resolution.resultText, color = CairnText, style = MaterialTheme.typography.bodyMedium)
         }
         Spacer(Modifier.height(8.dp))
         Button(
             onClick = onContinue,
-            enabled = enabled,
+            enabled = enabled && (save == null || animationFinished),
             modifier = Modifier.fillMaxWidth().height(42.dp),
             shape = RoundedCornerShape(7.dp)
         ) { Text("Continuar história", fontWeight = FontWeight.Bold) }
