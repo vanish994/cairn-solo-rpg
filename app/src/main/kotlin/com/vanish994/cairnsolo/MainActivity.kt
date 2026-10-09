@@ -22,7 +22,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -1041,8 +1040,7 @@ private fun RollResultCard(
                 Image(
                     painter = painterResource(dieFrames[frameIndex]),
                     contentDescription = if (animationFinished) "Dado d20" else "Dado d20 rolando",
-                    modifier = Modifier.size(88.dp),
-                    filterQuality = FilterQuality.None
+                    modifier = Modifier.size(88.dp)
                 )
                 Spacer(Modifier.width(14.dp))
                 Text(
