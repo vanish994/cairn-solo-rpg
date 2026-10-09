@@ -6,6 +6,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.horizontalScroll
@@ -29,6 +30,7 @@ import com.vanish994.cairnsolo.guardian.resolveCampaignOpening
 import com.vanish994.cairnsolo.game.GameActionResolver
 import com.vanish994.cairnsolo.game.GameState
 import com.vanish994.cairnsolo.game.CombatState
+import com.vanish994.cairnsolo.game.CombatOpponentState
 import com.vanish994.cairnsolo.game.CombatOpponentStatus
 import com.vanish994.cairnsolo.game.GrowthChangeProposal
 import com.vanish994.cairnsolo.game.ExplorationEngine
@@ -667,39 +669,88 @@ private fun ExplorationScreen(
             "T" + c.turn + " · " + sceneTypeLabel(c.sceneType) + " · " + guardianFlowLabel(guardianFlow)
         )
 
-        SectionCard(
+        // Atmospheric scene art is presentation-only: campaign state and rules remain untouched.
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(88.dp)
+                .height(108.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .border(1.dp, CairnBorder, RoundedCornerShape(10.dp))
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        "CONTEXTO",
-                        color = CairnAccent,
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        c.sceneTitle.ifBlank { "A cena se revela diante de você." },
-                        color = CairnText,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        c.sceneDescription,
-                        color = CairnMuted,
-                        style = MaterialTheme.typography.bodySmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+            Canvas(Modifier.fillMaxSize()) {
+                drawRect(Color(0xFF171821), size = size)
+                drawCircle(
+                    color = Color(0xFFC7A56B).copy(alpha = 0.24f),
+                    radius = size.minDimension * 0.13f,
+                    center = androidx.compose.ui.geometry.Offset(size.width * 0.79f, size.height * 0.27f)
+                )
+                val farRidge = androidx.compose.ui.graphics.Path().apply {
+                    moveTo(0f, size.height * 0.68f)
+                    lineTo(size.width * 0.18f, size.height * 0.43f)
+                    lineTo(size.width * 0.34f, size.height * 0.62f)
+                    lineTo(size.width * 0.55f, size.height * 0.38f)
+                    lineTo(size.width * 0.77f, size.height * 0.66f)
+                    lineTo(size.width, size.height * 0.48f)
+                    lineTo(size.width, size.height)
+                    lineTo(0f, size.height)
+                    close()
                 }
-                Spacer(Modifier.width(8.dp))
+                drawPath(farRidge, Color(0xFF292832))
+                drawRect(
+                    Color(0xFF111116),
+                    topLeft = androidx.compose.ui.geometry.Offset(size.width * 0.61f, size.height * 0.30f),
+                    size = androidx.compose.ui.geometry.Size(size.width * 0.12f, size.height * 0.53f)
+                )
+                drawRect(
+                    Color(0xFF111116),
+                    topLeft = androidx.compose.ui.geometry.Offset(size.width * 0.57f, size.height * 0.26f),
+                    size = androidx.compose.ui.geometry.Size(size.width * 0.20f, size.height * 0.07f)
+                )
+                drawRect(
+                    Color(0xFF70583C),
+                    topLeft = androidx.compose.ui.geometry.Offset(size.width * 0.65f, size.height * 0.44f),
+                    size = androidx.compose.ui.geometry.Size(size.width * 0.025f, size.height * 0.08f)
+                )
+                drawRect(
+                    Color(0xFF0B0A0D).copy(alpha = 0.8f),
+                    topLeft = androidx.compose.ui.geometry.Offset(0f, size.height * 0.82f),
+                    size = androidx.compose.ui.geometry.Size(size.width, size.height * 0.18f)
+                )
+            }
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .background(Color(0xCC0A090B))
+                    .padding(horizontal = 10.dp, vertical = 7.dp),
+                verticalArrangement = Arrangement.spacedBy(1.dp)
+            ) {
                 Text(
-                    "HP " + r.hp + "/" + r.maxHp + " · ARM " + r.armor,
+                    c.sceneTitle.ifBlank { "A cena se revela diante de você." },
+                    color = CairnText,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    c.sceneDescription.ifBlank { "O silêncio guarda algo além das ruínas." },
                     color = CairnMuted,
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Surface(
+                modifier = Modifier.align(Alignment.TopEnd).padding(6.dp),
+                color = Color(0xDD0A090B),
+                shape = RoundedCornerShape(5.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, CairnBorder)
+            ) {
+                Text(
+                    "HP ${r.hp}/${r.maxHp} · ARM ${r.armor}",
+                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp),
+                    color = CairnText,
                     style = MaterialTheme.typography.labelSmall,
                     maxLines = 1
                 )
@@ -762,6 +813,9 @@ private fun ExplorationScreen(
             }.ifEmpty { listOf(WeaponProfile("unarmed", "d4")) }
             CombatCard(
                 combat = combat,
+                adventurerName = c.character.name,
+                adventurerHp = r.hp,
+                adventurerMaxHp = r.maxHp,
                 weapons = availableWeapons,
                 enabled = !guardianLoading && pendingRule == null && lastResolution == null,
                 onAttack = onCombatAttack
@@ -1028,9 +1082,87 @@ private fun EncounterProposalCard(
     }
 }
 
+
+@Composable
+private fun BattleMap(
+    opponents: List<CombatOpponentState>,
+    adventurerName: String,
+    adventurerHp: Int,
+    adventurerMaxHp: Int,
+    selectedOpponentId: String?,
+    onSelectOpponent: (String) -> Unit
+) {
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
+            .background(Color(0xFF171A18)).border(1.dp, CairnBorder, RoundedCornerShape(10.dp)).padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text("CAMPO DE CONFRONTO", color = CairnAccent, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+        BoxWithConstraints(Modifier.fillMaxWidth().heightIn(min = 142.dp, max = 190.dp)) {
+            val mapWidth = maxWidth
+            Canvas(Modifier.fillMaxSize()) {
+                drawRect(Color(0xFF202923), size = size)
+                val tile = size.width / 12f
+                for (i in 0..12) {
+                    drawLine(Color(0xFF28342A), androidx.compose.ui.geometry.Offset(i * tile, 0f), androidx.compose.ui.geometry.Offset(i * tile, size.height), 1f)
+                }
+                for (i in 0..6) {
+                    drawLine(Color(0xFF28342A), androidx.compose.ui.geometry.Offset(0f, i * tile), androidx.compose.ui.geometry.Offset(size.width, i * tile), 1f)
+                }
+                drawCircle(Color(0xFF35402D), size.width * .12f, androidx.compose.ui.geometry.Offset(size.width * .25f, size.height * .30f))
+                drawCircle(Color(0xFF303A2B), size.width * .09f, androidx.compose.ui.geometry.Offset(size.width * .76f, size.height * .70f))
+                drawRect(Color(0xFF3C3529), topLeft = androidx.compose.ui.geometry.Offset(0f, size.height * .46f), size = androidx.compose.ui.geometry.Size(size.width, size.height * .12f))
+                drawRect(Color(0xFF51412C), topLeft = androidx.compose.ui.geometry.Offset(0f, size.height * .49f), size = androidx.compose.ui.geometry.Size(size.width, size.height * .025f))
+            }
+            Column(
+                Modifier.align(Alignment.CenterStart).padding(start = 8.dp).widthIn(max = mapWidth * .37f),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(3.dp)
+            ) {
+                Box(Modifier.size(34.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xFF3A3027)).border(1.dp, CairnAccent, RoundedCornerShape(6.dp)), contentAlignment = Alignment.Center) {
+                    Text("◆", color = CairnAccent, style = MaterialTheme.typography.titleMedium)
+                }
+                Text(adventurerName, color = CairnText, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("HP $adventurerHp/$adventurerMaxHp", color = if (adventurerHp <= 2) CairnDanger else CairnMuted, style = MaterialTheme.typography.labelSmall)
+            }
+            Row(
+                Modifier.align(Alignment.CenterEnd).fillMaxHeight().fillMaxWidth(.60f).padding(end = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                opponents.take(4).forEach { opponent ->
+                    val active = opponent.status == CombatOpponentStatus.ACTIVE
+                    val selected = opponent.id == selectedOpponentId
+                    Column(
+                        Modifier.weight(1f).clip(RoundedCornerShape(6.dp))
+                            .background(if (selected) Color(0xFF55452D) else Color(0xCC171A18))
+                            .border(if (selected) 2.dp else 1.dp, if (selected) CairnAccent else CairnBorder, RoundedCornerShape(6.dp))
+                            .clickable(enabled = active) { onSelectOpponent(opponent.id) }
+                            .padding(4.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(3.dp)
+                    ) {
+                        Text(if (!active) "×" else "▲", color = if (active) Color(0xFFD3A16B) else CairnMuted, style = MaterialTheme.typography.titleMedium)
+                        Text(opponent.narrative.name, color = if (active) CairnText else CairnMuted, style = MaterialTheme.typography.labelSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text("HP ${opponent.stats.hp}/${opponent.stats.maxHp}", color = CairnMuted, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                        Text(combatOpponentStatusLabel(opponent.status), color = if (active) CairnAccent else CairnMuted, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                    }
+                }
+            }
+            if (opponents.size > 4) {
+                Text("+${opponents.size - 4} fora do mapa", color = CairnMuted, style = MaterialTheme.typography.labelSmall, modifier = Modifier.align(Alignment.BottomEnd).padding(4.dp))
+            }
+        }
+        Text("Toque em um oponente ativo para selecioná-lo. Posições apenas ilustrativas; não representam alcance ou distância.", color = CairnMuted, style = MaterialTheme.typography.bodySmall)
+    }
+}
+
 @Composable
 private fun CombatCard(
     combat: CombatState,
+    adventurerName: String,
+    adventurerHp: Int,
+    adventurerMaxHp: Int,
     weapons: List<WeaponProfile>,
     enabled: Boolean,
     onAttack: (String, WeaponProfile?) -> Unit
@@ -1049,6 +1181,14 @@ private fun CombatCard(
             "${activeOpponents.size} adversário(s) ativo(s) · ${combat.opponents.size} no encontro",
             color = CairnMuted,
             style = MaterialTheme.typography.bodySmall
+        )
+        BattleMap(
+            opponents = combat.opponents,
+            adventurerName = adventurerName,
+            adventurerHp = adventurerHp,
+            adventurerMaxHp = adventurerMaxHp,
+            selectedOpponentId = selectedOpponent?.id,
+            onSelectOpponent = { id -> if (enabled && activeOpponents.any { it.id == id }) selectedOpponentId = id }
         )
         Column(
             modifier = Modifier
@@ -1332,17 +1472,51 @@ private fun CharacterSheet(
         item { CairnHeader("CAIRN", c.character.name, "T" + c.turn + " · " + sceneTypeLabel(c.sceneType)) }
         item {
             SectionCard {
-                Text("ESTADO", color = CairnAccent, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(6.dp))
-                Text("HP " + r.hp + "/" + r.maxHp, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Text("FOR " + r.str + "   DES " + r.dex + "   VON " + r.wil)
-                Text("Armadura " + r.armor + "   Espaços " + r.usedSlots + "/10", color = CairnMuted)
-                Text("Ouro " + c.profile.gold + " GP", color = CairnAccent, fontWeight = FontWeight.SemiBold)
-                c.profile.background?.let { Text(backgroundLabel(it), color = CairnAccent) }
-                if (r.deprived) Text("Privado", color = CairnDanger)
-                if (r.critical) Text("Dano crítico", color = CairnDanger)
-                r.scar?.let { Text("Cicatriz: " + scarLabel(it), color = CairnDanger) }
-                if (combatActive) Text("Combate ativo · retorne à exploração para agir.", color = CairnDanger)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Box(
+                        modifier = Modifier.size(76.dp).clip(RoundedCornerShape(10.dp)).background(CairnSurfaceRaised).border(1.dp, CairnAccentSoft, RoundedCornerShape(10.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Canvas(Modifier.fillMaxSize()) {
+                            val unit = size.width / 8f
+                            drawRect(Color(0xFF28212A), size = size)
+                            drawCircle(Color(0xFF6D5946), radius = unit * 2.4f, center = androidx.compose.ui.geometry.Offset(size.width * .5f, size.height * .34f))
+                            drawRect(Color(0xFF17151A), topLeft = androidx.compose.ui.geometry.Offset(unit * 1.5f, unit * 2.4f), size = androidx.compose.ui.geometry.Size(unit * 5f, unit * 5.6f))
+                            drawRect(CairnAccentSoft, topLeft = androidx.compose.ui.geometry.Offset(unit * 2.5f, unit * 2.7f), size = androidx.compose.ui.geometry.Size(unit, unit * .7f))
+                            drawRect(CairnAccentSoft, topLeft = androidx.compose.ui.geometry.Offset(unit * 4.5f, unit * 2.7f), size = androidx.compose.ui.geometry.Size(unit, unit * .7f))
+                        }
+                    }
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text(c.character.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = CairnText, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(c.profile.background?.let(::backgroundLabel) ?: "Aventureiro sem ofício", color = CairnAccent, style = MaterialTheme.typography.labelLarge)
+                        Text("T" + c.turn + " · " + sceneTypeLabel(c.sceneType), color = CairnMuted, style = MaterialTheme.typography.bodySmall)
+                        Text("✦ " + c.profile.gold + " GP", color = CairnAccent, fontWeight = FontWeight.Bold)
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                    Text("VITALIDADE", color = CairnMuted, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                    Text(r.hp.toString() + "/" + r.maxHp + " HP", color = if (r.hp <= 2) CairnDanger else CairnText, fontWeight = FontWeight.Bold)
+                }
+                Spacer(Modifier.height(5.dp))
+                Box(Modifier.fillMaxWidth().height(10.dp).clip(RoundedCornerShape(8.dp)).background(CairnBorder)) {
+                    Box(Modifier.fillMaxWidth((r.hp.toFloat() / r.maxHp.coerceAtLeast(1)).coerceIn(0f, 1f)).fillMaxHeight().clip(RoundedCornerShape(8.dp)).background(if (r.hp <= 2) CairnDanger else CairnAccent))
+                }
+                Spacer(Modifier.height(12.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                    StatTile("FOR", r.str, Modifier.weight(1f))
+                    StatTile("DES", r.dex, Modifier.weight(1f))
+                    StatTile("VON", r.wil, Modifier.weight(1f))
+                }
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    MiniInfoTile("ARMADURA", r.armor.toString(), Modifier.weight(1f))
+                    MiniInfoTile("MOCHILA", r.usedSlots.toString() + "/10", Modifier.weight(1f))
+                }
+                if (r.deprived) Text("⚠ Privado", color = CairnDanger, modifier = Modifier.padding(top = 8.dp))
+                if (r.critical) Text("⚠ Dano crítico", color = CairnDanger, modifier = Modifier.padding(top = 4.dp))
+                r.scar?.let { Text("Cicatriz: " + scarLabel(it), color = CairnDanger, modifier = Modifier.padding(top = 4.dp)) }
+                if (combatActive) Text("Combate ativo · retorne à exploração para agir.", color = CairnDanger, modifier = Modifier.padding(top = 4.dp))
             }
         }
         item {
@@ -1365,21 +1539,39 @@ private fun CharacterSheet(
         }
         item {
             SectionCard {
-                Text("INVENTÁRIO", color = CairnAccent, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
-                if (r.inventory.isEmpty()) Text("Nenhum item", color = CairnMuted)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                    Text("INVENTÁRIO", color = CairnAccent, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+                    Text(r.usedSlots.toString() + "/10 espaços", color = CairnMuted, style = MaterialTheme.typography.labelMedium)
+                }
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(3.dp), modifier = Modifier.fillMaxWidth()) {
+                    repeat(10) { index ->
+                        Box(Modifier.weight(1f).height(7.dp).clip(RoundedCornerShape(2.dp)).background(if (index < r.usedSlots) CairnAccent else CairnBorder))
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                if (r.inventory.isEmpty()) Text("A mochila está vazia.", color = CairnMuted, modifier = Modifier.padding(vertical = 8.dp))
                 r.inventory.forEach { item ->
-                    ListItem(
-                        headlineContent = { Text(inventoryItemLabel(item)) },
-                        supportingContent = {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(RoundedCornerShape(8.dp))
+                            .background(CairnSurfaceRaised).border(1.dp, CairnBorder, RoundedCornerShape(8.dp)).padding(10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Box(Modifier.size(42.dp).clip(RoundedCornerShape(6.dp)).background(CairnBackground).border(1.dp, CairnAccentSoft, RoundedCornerShape(6.dp)), contentAlignment = Alignment.Center) {
+                            Text(when { item.armor > 0 -> "▣"; item.damage != null -> "⚔"; item.uses != null -> "✦"; else -> "◇" }, color = CairnAccent, style = MaterialTheme.typography.titleMedium)
+                        }
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Text(inventoryItemLabel(item), fontWeight = FontWeight.SemiBold, color = CairnText)
                             Text(buildList {
                                 add(item.slotCost.toString() + if (item.slotCost == 1) " espaço" else " espaços")
-                                item.damage?.let { add(it) }
+                                item.damage?.let { add("Dano " + it) }
                                 item.armor.takeIf { it > 0 }?.let { add("Armadura " + it) }
                                 item.uses?.let { add(it.toString() + " usos") }
-                            }.joinToString(" • "))
-                        },
-                        trailingContent = { TextButton(onClick = { onRemoveItem(item.id) }, enabled = !combatActive) { Text("Remover") } }
-                    )
+                            }.joinToString(" · "), color = CairnMuted, style = MaterialTheme.typography.bodySmall)
+                        }
+                        TextButton(onClick = { onRemoveItem(item.id) }, enabled = !combatActive) { Text("×") }
+                    }
                 }
                 Spacer(Modifier.height(4.dp))
                 OutlinedButton(onClick = onAddItem, enabled = r.freeSlots > 0 && !combatActive, modifier = Modifier.fillMaxWidth()) { Text("Adicionar item") }
@@ -1426,6 +1618,19 @@ private fun CharacterSheet(
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = CairnDanger)
             ) { Text("Apagar campanha") }
         }
+    }
+}
+
+
+@Composable
+private fun MiniInfoTile(label: String, value: String, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier.clip(RoundedCornerShape(7.dp)).background(CairnSurfaceRaised)
+            .border(1.dp, CairnBorder, RoundedCornerShape(7.dp)).padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        Text(label, color = CairnMuted, style = MaterialTheme.typography.labelSmall)
+        Text(value, color = CairnText, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
     }
 }
 
