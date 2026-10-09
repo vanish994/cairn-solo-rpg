@@ -88,7 +88,7 @@ PY
 
 echo "guardian: exploration JSON contract ok"
 
-attack_payload='{"playerIntent":"ATACO_GARRICK","campaign":{"campaignId":"integration-attack-test","campaignSeed":"seed-attack-1","turn":2,"sceneId":"inn-yard","sceneType":"EXPLORATION","sceneTitle":"O pátio","sceneDescription":"Um espaço de treino junto à estalagem.","exits":[],"guardianHistory":[],"worldCanon":{"locations":[],"npcs":[],"importantItems":[],"quests":[],"discoveries":[]},"recentHistory":[],"stats":{"str":10,"dex":12,"wil":9,"hp":6,"maxHp":6,"armor":0,"deprived":false,"critical":false,"dead":false},"inventory":[]}}'
+attack_payload='{"playerIntent":"Ataco Garrick, o duelista que acabei de conhecer, com um soco.","campaign":{"campaignId":"integration-attack-test","campaignSeed":"seed-attack-1","turn":2,"sceneId":"inn-yard","sceneType":"EXPLORATION","sceneTitle":"O pátio","sceneDescription":"Garrick, um duelista de casaco escuro, termina um treino e permanece perto da entrada da estalagem.","exits":[],"guardianHistory":[],"worldCanon":{"locations":[],"npcs":[],"importantItems":[],"quests":[],"discoveries":[]},"recentHistory":[],"stats":{"str":10,"dex":12,"wil":9,"hp":6,"maxHp":6,"armor":0,"deprived":false,"critical":false,"dead":false},"inventory":[]}}'
 attack_status="$(curl --silent --show-error --output "$response_file" --write-out '%{http_code}' \
   --connect-timeout 10 --max-time 60 \
   -H 'Content-Type: application/json' \

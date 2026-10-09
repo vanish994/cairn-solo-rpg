@@ -78,7 +78,7 @@ def interactions_request(schema):
         "model": "gemini-3.5-flash-lite",
         "input": "Uma porta range sob a chuva.",
         "system_instruction": "Responda com JSON estruturado.",
-        "generation_config": {"thinking_level": "low", "max_output_tokens": 700},
+        "generation_config": {"thinking_level": "low", "max_output_tokens": 2048},
         "response_format": {"type": "text", "mime_type": "application/json", "schema": schema},
         "store": True,
     }
@@ -136,6 +136,13 @@ class MockGeminiSchemaTest(unittest.TestCase):
 
     def test_accepts_shallow_nullable_type_specific_rule_request_schema(self):
         validate_interactions_request(interactions_request(shallow_response_schema()))
+
+    def test_rejects_output_budget_that_can_truncate_dynamic_combat_profiles(self):
+        request = interactions_request(shallow_response_schema())
+        request["generation_config"]["max_output_tokens"] = 700
+
+        with self.assertRaisesRegex(ValueError, "at least 2048"):
+            validate_interactions_request(request)
 
     def test_rejects_deep_combat_schema_before_upstream_request(self):
         schema = shallow_response_schema()

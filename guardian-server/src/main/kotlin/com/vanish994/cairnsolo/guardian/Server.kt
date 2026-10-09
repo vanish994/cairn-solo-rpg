@@ -109,7 +109,7 @@ Inclua growthChangeProposals como uma lista, mesmo quando vazia. Não invente re
             }
         addProperty("system_instruction", guardianSystemPrompt())
         add("generation_config", JsonParser.parseString(
-            """{"max_output_tokens":700,"thinking_level":"low"}"""
+            """{"max_output_tokens":2048,"thinking_level":"low"}"""
         ))
         add("response_format", JsonParser.parseString(
             gson.toJson(mapOf(

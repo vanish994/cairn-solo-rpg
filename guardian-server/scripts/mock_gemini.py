@@ -103,6 +103,10 @@ def validate_interactions_request(request):
     if not isinstance(request["system_instruction"], str) or not request["system_instruction"].strip():
         raise ValueError("system_instruction must be non-empty text")
 
+    generation_config = request["generation_config"]
+    if not isinstance(generation_config, dict) or generation_config.get("max_output_tokens", 0) < 2048:
+        raise ValueError("max_output_tokens must be at least 2048 for complete dynamic combat proposals")
+
     response_format = request["response_format"]
     if not isinstance(response_format, dict):
         raise ValueError("response_format must be an object")
@@ -243,7 +247,7 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         campaign_opening = '"playerIntent":"INICIAR_CAMPANHA"' in request["input"]
-        dynamic_npc_attack = '"playerIntent":"ATACO_GARRICK"' in request["input"]
+        dynamic_npc_attack = '"playerIntent":"Ataco Garrick' in request["input"]
         if dynamic_npc_attack:
             opponent = {
                 "opponentId": "garrick",
