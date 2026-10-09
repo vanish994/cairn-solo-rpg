@@ -6,6 +6,7 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.horizontalScroll
@@ -29,6 +30,7 @@ import com.vanish994.cairnsolo.guardian.resolveCampaignOpening
 import com.vanish994.cairnsolo.game.GameActionResolver
 import com.vanish994.cairnsolo.game.GameState
 import com.vanish994.cairnsolo.game.CombatState
+import com.vanish994.cairnsolo.game.CombatOpponent
 import com.vanish994.cairnsolo.game.CombatOpponentStatus
 import com.vanish994.cairnsolo.game.GrowthChangeProposal
 import com.vanish994.cairnsolo.game.ExplorationEngine
