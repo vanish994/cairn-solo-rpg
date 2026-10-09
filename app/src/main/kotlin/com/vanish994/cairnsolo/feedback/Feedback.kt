@@ -30,6 +30,7 @@ object FeedbackMapper {
             is GameEvent.FatigueAdded -> "Você ganhou " + event.amount + " de fadiga." to FeedbackType.WARNING
             is GameEvent.DeprivationChanged -> if (event.deprived) "Você está privado." to FeedbackType.WARNING else "A privação foi removida." to FeedbackType.SUCCESS
             is GameEvent.SaveResolved -> saveMessage(event.attribute, event.roll, event.success) to if (event.success) FeedbackType.SUCCESS else FeedbackType.FAILURE
+            is GameEvent.DiceRollResolved -> "Rolagem de dano · ${event.actorLabel}: ${event.dice.joinToString(", ") { "d${it.sides}=${it.result}" }}." to FeedbackType.INFO
             GameEvent.CriticalStabilized -> "A condição crítica foi estabilizada." to FeedbackType.SUCCESS
             is GameEvent.ScarRecovered -> "Cicatriz recuperada: " + event.scar.toDisplayName() + "." to FeedbackType.SUCCESS
             is GameEvent.CombatStarted -> "Combate iniciado contra ${event.opponentId}; rodada ${event.round}." to FeedbackType.INFO

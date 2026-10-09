@@ -4,6 +4,8 @@ import com.vanish994.cairnsolo.game.CombatOpponentNarrative
 import com.vanish994.cairnsolo.game.CombatOpponentState
 import com.vanish994.cairnsolo.game.CombatEndReason
 import com.vanish994.cairnsolo.game.CombatState
+import com.vanish994.cairnsolo.game.CanonNpc
+import com.vanish994.cairnsolo.game.CanonStatus
 import com.vanish994.cairnsolo.game.GameAction
 import com.vanish994.cairnsolo.game.ExplorationEngine
 import com.vanish994.cairnsolo.game.GameActionResolver
@@ -11,6 +13,7 @@ import com.vanish994.cairnsolo.game.GameEvent
 import com.vanish994.cairnsolo.game.newCharacter
 import com.vanish994.cairnsolo.rules.CharacterState
 import com.vanish994.cairnsolo.rules.FixedRandomSource
+import com.vanish994.cairnsolo.rules.InventoryItem
 import com.vanish994.cairnsolo.rules.RulesEngine
 import com.vanish994.cairnsolo.rules.WeaponProfile
 import kotlin.test.Test
@@ -193,6 +196,50 @@ class GuardianRuleResolverTest {
         assertTrue(result.resultText.contains("Dano causado pelo oponente ao jogador"))
         assertTrue(result.resultText.contains("1 HP perdido"))
         assertFalse(result.resultText.contains("Dano causado pelo jogador"))
+    }
+
+    @Test
+    fun acceptedNaturalAttackAgainstKnownNpcStartsCombatAndUsesEngineRolls() {
+        val random = FixedRandomSource(d20Value = 10, d6Value = 4, d4Value = 2)
+        val rules = GuardianRuleResolver(GameActionResolver(ExplorationEngine(random), RulesEngine(random)))
+        val base = newCharacter("Mara", 10, 11, 12)
+        val state = base.copy(campaign = base.campaign.copy(
+            rules = base.campaign.rules.copy(inventory = listOf(InventoryItem("adaga", damage = "d6"))),
+            worldCanon = base.campaign.worldCanon.copy(
+                npcs = listOf(CanonNpc("mercenario-01", "Mizera", "mercenário", status = CanonStatus.CONFIRMED))
+            )
+        ))
+        val proposal = GuardianEncounterProposal(listOf(
+            cultist("mercenario-01", "Mizera", CharacterState(5, 7, 4, 10, 10, 0), WeaponProfile("faca", "d4"))
+        ))
+        val request = GuardianRuleRequest("BEGIN_COMBAT", encounter = proposal)
+        val intent = GuardianActionIntent(GuardianActionType.ATTACK, "mercenario-01", "adaga")
+
+        assertNull(rules.validateAttackIntent(state, intent, request))
+        val result = rules.resolveAttackIntent(state, intent, request)
+
+        assertTrue(result.gameResult.events.any { it is GameEvent.CombatStarted })
+        val rolls = result.gameResult.events.filterIsInstance<GameEvent.DiceRollResolved>()
+        assertEquals(listOf("player", "mercenario-01"), rolls.map { it.actorId })
+        assertEquals(listOf(listOf(com.vanish994.cairnsolo.rules.DieRollResult(6, 4)), listOf(com.vanish994.cairnsolo.rules.DieRollResult(4, 2))), rolls.map { it.dice })
+        assertTrue(result.gameResult.events.any { it is GameEvent.CombatAttackResolved && it.damageDealtByPlayer?.rawDamage == 4 })
+        assertTrue(result.resultText.contains("d6=4"))
+    }
+
+    @Test
+    fun attackIntentCannotCreateOrTargetAnUnrecordedNpc() {
+        val random = FixedRandomSource(10)
+        val rules = GuardianRuleResolver(GameActionResolver(ExplorationEngine(random), RulesEngine(random)))
+        val base = newCharacter("Mara", 10, 11, 12)
+        val known = base.copy(campaign = base.campaign.copy(
+            worldCanon = base.campaign.worldCanon.copy(npcs = listOf(CanonNpc("known-npc", "Mizera")))
+        ))
+        val intent = GuardianActionIntent(GuardianActionType.ATTACK, "unknown-npc", null)
+        val unknown = GuardianRuleRequest("BEGIN_COMBAT", encounter = GuardianEncounterProposal(listOf(
+            cultist("unknown-npc", "Novo inimigo", CharacterState(5, 7, 4, 4, 4, 0), WeaponProfile("faca", "d4"))
+        )))
+
+        assertTrue(rules.validateAttackIntent(known, intent, unknown)?.contains("NPC conhecido") == true)
     }
 
     @Test

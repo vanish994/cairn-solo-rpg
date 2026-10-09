@@ -37,6 +37,7 @@ class CombatRulesTest {
         assertEquals(6, result.rawDamage)
         assertEquals(2, result.armorAbsorbed)
         assertEquals(6, result.target.hp)
+        assertEquals(listOf(DieRollResult(8, 6)), result.diceRolls)
         assertFalse(result.target.critical)
     }
 
@@ -69,6 +70,7 @@ class CombatRulesTest {
 
         assertEquals(7, result.rawDamage)
         assertEquals(3, result.target.hp)
+        assertEquals(listOf(DieRollResult(6, 4), DieRollResult(8, 7)), result.diceRolls)
     }
 
     @Test
@@ -82,6 +84,13 @@ class CombatRulesTest {
         )
 
         assertEquals(mapOf("cultist-a" to 4, "cultist-b" to 5), result.damageRolls)
+        assertEquals(
+            mapOf(
+                "cultist-a" to listOf(DieRollResult(6, 4)),
+                "cultist-b" to listOf(DieRollResult(8, 5))
+            ),
+            result.diceRolls
+        )
         val damageEvent = result.events.filterIsInstance<RuleEvent.DamageApplied>().single()
         assertEquals(5, damageEvent.rawDamage)
         assertEquals(2, damageEvent.armorAbsorbed)

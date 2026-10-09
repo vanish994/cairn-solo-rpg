@@ -35,6 +35,19 @@ data class GuardianRuleRequest(
     val reward: GuardianRewardProposal? = null
 )
 
+enum class GuardianActionType { ATTACK }
+
+data class GuardianActionIntent(
+    val type: GuardianActionType,
+    val targetId: String,
+    val weaponId: String?
+) {
+    init {
+        require(targetId.isNotBlank() && targetId == targetId.trim() && targetId.length <= 80)
+        require(weaponId == null || (weaponId.isNotBlank() && weaponId == weaponId.trim() && weaponId.length <= 80))
+    }
+}
+
 enum class RewardStatus { OFFERED, PAID }
 
 data class GuardianRewardProposal(
@@ -95,7 +108,8 @@ data class GuardianResponse(
     val interactionId: String?,
     val canonProposals: List<CanonProposal> = emptyList(),
     val growthEvidenceProposals: List<GrowthEvidenceProposal> = emptyList(),
-    val growthChangeProposals: List<GrowthChangeProposal> = emptyList()
+    val growthChangeProposals: List<GrowthChangeProposal> = emptyList(),
+    val actionIntent: GuardianActionIntent? = null
 )
 
 interface GuardianClient {
@@ -213,6 +227,10 @@ class HttpGuardianClient(
             ?.takeIf { it.isJsonObject }
             ?.asJsonObject
         val ruleRequest = ruleObject?.let { parseRuleRequest(it, exactRuleRequest) }
+        val actionIntent = parseActionIntent(
+            json.optJSONObject("actionIntent"),
+            exactJson.get("actionIntent")?.takeIf { it.isJsonObject }?.asJsonObject
+        )
         val actions = buildList {
             val array = json.optJSONArray("suggestedActions") ?: JSONArray()
             for (i in 0 until array.length()) {
@@ -267,8 +285,27 @@ class HttpGuardianClient(
             interactionId = json.optString("interactionId").takeIf { it.isNotBlank() },
             canonProposals = proposals,
             growthEvidenceProposals = growthProposals,
-            growthChangeProposals = changeProposals
+            growthChangeProposals = changeProposals,
+            actionIntent = actionIntent
         )
+    }
+
+    private fun parseActionIntent(json: JSONObject?, exactJson: JsonObject?): GuardianActionIntent? {
+        if (json == null || exactJson == null) return null
+        return runCatching {
+            require(exactJson.keySet() == setOf("type", "targetId", "weaponId")) {
+                "actionIntent contains missing or unsupported fields"
+            }
+            val type = GuardianActionType.valueOf(exactJson.getExactString("type"))
+            val targetId = exactJson.getExactString("targetId")
+            val weaponIdElement = exactJson.get("weaponId")
+            val weaponId = when {
+                weaponIdElement == null || weaponIdElement.isJsonNull -> null
+                weaponIdElement.isJsonPrimitive && weaponIdElement.asJsonPrimitive.isString -> weaponIdElement.asString
+                else -> throw IllegalArgumentException("weaponId must be a string or null")
+            }
+            GuardianActionIntent(type, targetId, weaponId)
+        }.getOrNull()
     }
 
     private fun parseRuleRequest(json: JSONObject, exactJson: JsonObject?): GuardianRuleRequest? {

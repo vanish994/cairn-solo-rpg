@@ -6,8 +6,11 @@ import com.vanish994.cairnsolo.game.GameEvent
 import com.vanish994.cairnsolo.game.GameResult
 import com.vanish994.cairnsolo.game.GameState
 import com.vanish994.cairnsolo.game.CombatOpponentState
+import com.vanish994.cairnsolo.game.CanonStatus
 import com.vanish994.cairnsolo.game.isValidRewardId
 import com.vanish994.cairnsolo.rules.Attribute
+import com.vanish994.cairnsolo.rules.WeaponProfile
+import com.vanish994.cairnsolo.rules.isSupportedWeaponDamageExpression
 
 data class GuardianRuleResolution(
     val state: GameState,
@@ -19,6 +22,88 @@ data class GuardianRuleResolution(
 class GuardianRuleResolver(
     private val actionResolver: GameActionResolver
 ) {
+    fun validateAttackIntent(
+        state: GameState,
+        intent: GuardianActionIntent,
+        request: GuardianRuleRequest?
+    ): String? {
+        val knownNpcIds = state.campaign.worldCanon.npcs
+            .filter { it.status != CanonStatus.RUMOR }
+            .map { it.id }
+            .toSet()
+        val activeCombat = state.campaign.combat
+        if (activeCombat != null) {
+            if (request != null) return "Um ataque em combate não pode vir acompanhado de outro pedido de regra."
+            if (!activeCombat.playerCanAct) return "O personagem ainda não pode agir nesta rodada."
+            if (activeCombat.opponents.none { it.id == intent.targetId && it.status == com.vanish994.cairnsolo.game.CombatOpponentStatus.ACTIVE }) {
+                return "O alvo indicado não é um oponente ativo deste combate; nenhum ataque foi resolvido."
+            }
+        } else {
+            if (intent.targetId !in knownNpcIds) return "O alvo não corresponde a um NPC conhecido; esclareça quem você pretende atacar."
+            if (request == null || !request.type.equals("BEGIN_COMBAT", ignoreCase = true)) {
+                return "O Guardião precisa propor o perfil do NPC para sua confirmação antes do primeiro ataque."
+            }
+            validationError(state, request)?.let { return it }
+            val proposal = request.encounter ?: return "A proposta de combate está incompleta."
+            if (proposal.opponents.none { it.opponentId == intent.targetId }) {
+                return "A proposta de combate não contém o alvo indicado; nenhum combate foi iniciado."
+            }
+            if (proposal.opponents.any { it.opponentId !in knownNpcIds }) {
+                return "A proposta inclui um oponente que ainda não existe no cânone conhecido; nenhum combate foi iniciado."
+            }
+        }
+        intent.weaponId?.let { id ->
+            if (id == "unarmed") return null
+            val item = state.campaign.rules.inventory.firstOrNull { it.id == id }
+                ?: return "A arma proposta não está no inventário; nenhum ataque foi resolvido."
+            if (!isSupportedWeaponDamageExpression(item.damage)) {
+                return "O item proposto não possui um dano de arma válido; nenhum ataque foi resolvido."
+            }
+        }
+        return null
+    }
+
+    fun resolveAttackIntent(
+        state: GameState,
+        intent: GuardianActionIntent,
+        request: GuardianRuleRequest? = null
+    ): GuardianRuleResolution {
+        val error = validateAttackIntent(state, intent, request)
+        require(error == null) { error ?: "Invalid attack intent" }
+        val weapon = attackWeapon(state, intent.weaponId)
+        if (state.campaign.combat != null) {
+            return resolve(state, GameAction.CombatAttack(intent.targetId, weapon))
+        }
+
+        val encounterRequest = requireNotNull(request)
+        val started = resolve(state, encounterRequest)
+        val activeCombat = started.state.campaign.combat
+        if (activeCombat == null || !activeCombat.playerCanAct ||
+            activeCombat.opponents.none { it.id == intent.targetId && it.status == com.vanish994.cairnsolo.game.CombatOpponentStatus.ACTIVE }
+        ) return started
+
+        val attack = resolve(started.state, GameAction.CombatAttack(intent.targetId, weapon))
+        val combined = GameResult(attack.state, started.gameResult.events + attack.gameResult.events)
+        return GuardianRuleResolution(
+            state = attack.state,
+            resultText = listOf(started.resultText, attack.resultText).filter { it.isNotBlank() }.joinToString("\n"),
+            gameResult = combined,
+            encounterContexts = attack.encounterContexts.ifEmpty { started.encounterContexts }
+        )
+    }
+
+    private fun attackWeapon(state: GameState, weaponId: String?): WeaponProfile? {
+        if (weaponId == null) return null
+        if (weaponId == "unarmed") return WeaponProfile("unarmed", "d4")
+        val item = requireNotNull(state.campaign.rules.inventory.firstOrNull { it.id == weaponId })
+        return WeaponProfile(
+            id = item.id,
+            damage = item.damage,
+            blast = item.tags.any { it.equals("BLAST", ignoreCase = true) },
+            ranged = item.tags.any { it.equals("RANGED", ignoreCase = true) }
+        )
+    }
+
     fun validationError(state: GameState, request: GuardianRuleRequest): String? {
         val type = request.type.uppercase()
         when (type) {
@@ -133,6 +218,9 @@ class GuardianRuleResolver(
                 is GameEvent.SaveResolved ->
                     "Teste de ${event.attribute.name}: d20=${event.roll}; " +
                         (if (event.success) "sucesso" else "falha") + "."
+                is GameEvent.DiceRollResolved ->
+                    "Rolagem de dano (${if (event.purpose == com.vanish994.cairnsolo.game.RollPurpose.PLAYER_ATTACK_DAMAGE) "jogador" else event.actorLabel}): " +
+                        event.dice.joinToString(", ") { "d${it.sides}=${it.result}" } + "."
                 is GameEvent.DamageResolved ->
                     combatDamageFact("Dano", event, reportCharacterDeath = true)
                 is GameEvent.CombatStarted ->

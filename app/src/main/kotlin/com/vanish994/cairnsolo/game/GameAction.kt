@@ -5,6 +5,7 @@ import com.vanish994.cairnsolo.rules.CharacterState
 import com.vanish994.cairnsolo.rules.CombatAttackSource
 import com.vanish994.cairnsolo.rules.CombatRules
 import com.vanish994.cairnsolo.rules.DamageRecipient
+import com.vanish994.cairnsolo.rules.DieRollResult
 import com.vanish994.cairnsolo.rules.DowntimeAction
 import com.vanish994.cairnsolo.rules.DungeonAction
 import com.vanish994.cairnsolo.rules.Season
@@ -98,6 +99,8 @@ data class GameResult(val state: GameState, val events: List<GameEvent>)
 
 data class EnemyAttackRoll(val opponentId: String, val damageRolled: Int)
 
+enum class RollPurpose { PLAYER_ATTACK_DAMAGE, ENEMY_ATTACK_DAMAGE }
+
 data class EnemyMoraleOutcome(
     val opponentId: String,
     val trigger: CombatMoraleTrigger,
@@ -117,6 +120,12 @@ sealed interface GameEvent {
     data class FatigueAdded(val amount: Int) : GameEvent
     data class DeprivationChanged(val deprived: Boolean) : GameEvent
     data class SaveResolved(val attribute: Attribute, val roll: Int, val success: Boolean) : GameEvent
+    data class DiceRollResolved(
+        val actorId: String,
+        val purpose: RollPurpose,
+        val dice: List<DieRollResult>,
+        val actorLabel: String = actorId
+    ) : GameEvent
     data object CriticalStabilized : GameEvent
     data class ScarRecovered(val scar: String) : GameEvent
     data class CombatStarted(val opponentIds: List<String>, val round: Int, val playerCanAct: Boolean) : GameEvent {
@@ -702,8 +711,16 @@ class GameActionResolver(
         ))
         val events = mutableListOf<GameEvent>(
             GameEvent.CombatStarted(opponentIds, 1, false),
-            GameEvent.SaveResolved(Attribute.DEX, save.roll, false),
-            GameEvent.CombatAttackResolved(
+            GameEvent.SaveResolved(Attribute.DEX, save.roll, false)
+        )
+        events += enemyAttack.diceRolls.map { (opponentId, dice) ->
+            val label = initialCombat.opponents.firstOrNull { it.id == opponentId }?.narrative?.name ?: opponentId
+            GameEvent.DiceRollResolved(opponentId, RollPurpose.ENEMY_ATTACK_DAMAGE, dice, label)
+        }
+        events += enemyAttack.events.filterIsInstance<RuleEvent.CriticalDamage>().map { critical ->
+            GameEvent.SaveResolved(Attribute.STR, critical.saveRoll, critical.saveSuccess)
+        }
+        events += GameEvent.CombatAttackResolved(
                 targetOpponentId = null,
                 round = 1,
                 damageDealtByPlayer = null,
@@ -714,7 +731,6 @@ class GameActionResolver(
                 fledOpponentIds = emptyList(),
                 playerCanAct = !dead
             )
-        )
         if (dead) events += GameEvent.CombatEnded(opponentIds, CombatEndReason.PLAYER_DEFEATED)
         return GameResult(
             next.withHistory("combat-start-${state.campaign.turn}", HistoryEventType.COMBAT_UPDATED, "Combate iniciado contra ${opponentIds.joinToString()}; os inimigos agiram primeiro.", opponentIds),
@@ -741,6 +757,12 @@ class GameActionResolver(
         )
         val playerDamage = playerAttack.events.toOpponentDamageEvent()
         val criticalDamage = playerAttack.events.filterIsInstance<RuleEvent.CriticalDamage>().firstOrNull()
+        val playerRollEvents = buildList<GameEvent> {
+            add(GameEvent.DiceRollResolved("player", RollPurpose.PLAYER_ATTACK_DAMAGE, playerAttack.diceRolls, "Você"))
+            playerAttack.events.filterIsInstance<RuleEvent.CriticalDamage>().forEach { critical ->
+                add(GameEvent.SaveResolved(Attribute.STR, critical.saveRoll, critical.saveSuccess))
+            }
+        }
         val defeatedOpponentIds = mutableListOf<String>()
         val fledOpponentIds = mutableListOf<String>()
         var opponents = current.opponents.map { opponent ->
@@ -798,7 +820,9 @@ class GameActionResolver(
         if (activeOpponents.isEmpty()) {
             val endReason = combatEndReason(opponents)
             val next = state.copy(campaign = state.campaign.copy(combat = null, turn = state.campaign.turn + 1))
-            val events = listOf(
+            val events = playerRollEvents + moraleOutcomes.map { outcome ->
+                GameEvent.SaveResolved(Attribute.WIL, outcome.roll, !outcome.fled)
+            } + listOf(
                 GameEvent.CombatAttackResolved(
                     target.id,
                     current.round,
@@ -826,6 +850,16 @@ class GameActionResolver(
             activeOpponents.map { CombatAttackSource(it.id, it.weapon) }
         )
         val enemyDamage = enemyAttack.events.toDamageEvent(enemyAttack.target)
+        val enemyRollEvents = enemyAttack.diceRolls.map { (opponentId, dice) ->
+            val label = current.opponents.firstOrNull { it.id == opponentId }?.narrative?.name ?: opponentId
+            GameEvent.DiceRollResolved(opponentId, RollPurpose.ENEMY_ATTACK_DAMAGE, dice, label)
+        }
+        val enemyCriticalSaveEvents = enemyAttack.events.filterIsInstance<RuleEvent.CriticalDamage>().map { critical ->
+            GameEvent.SaveResolved(Attribute.STR, critical.saveRoll, critical.saveSuccess)
+        }
+        val moraleSaveEvents = moraleOutcomes.map { outcome ->
+            GameEvent.SaveResolved(Attribute.WIL, outcome.roll, !outcome.fled)
+        }
         val playerDead = enemyAttack.target.dead
         val nextCombat = if (playerDead) null else current.copy(
             opponents = opponents,
@@ -841,8 +875,12 @@ class GameActionResolver(
             ),
             updatedAtEpochMs = System.currentTimeMillis()
         )
-        val events = mutableListOf<GameEvent>(
-            GameEvent.CombatAttackResolved(
+        val events = mutableListOf<GameEvent>().apply {
+            addAll(playerRollEvents)
+            addAll(moraleSaveEvents)
+            addAll(enemyRollEvents)
+            addAll(enemyCriticalSaveEvents)
+            add(GameEvent.CombatAttackResolved(
                 target.id,
                 current.round,
                 playerDamage,
@@ -852,8 +890,8 @@ class GameActionResolver(
                 defeatedOpponentIds,
                 fledOpponentIds,
                 !playerDead
-            )
-        )
+            ))
+        }
         if (playerDead) events += GameEvent.CombatEnded(opponents.map { it.id }, CombatEndReason.PLAYER_DEFEATED)
         val nextWithHistory = next.withHistory(
             if (playerDead) "combat-end-${state.campaign.turn}" else "combat-round-${state.campaign.turn}",

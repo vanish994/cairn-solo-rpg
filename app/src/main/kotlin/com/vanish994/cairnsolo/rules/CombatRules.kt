@@ -20,8 +20,13 @@ data class AttackResult(
     val target: CharacterState,
     val rawDamage: Int,
     val armorAbsorbed: Int,
-    val events: List<RuleEvent>
+    val events: List<RuleEvent>,
+    val diceRolls: List<DieRollResult> = emptyList()
 )
+
+data class DieRollResult(val sides: Int, val result: Int) {
+    init { require(sides in 2..100 && result in 1..sides) }
+}
 
 data class CombatAttackSource(val id: String, val weapon: WeaponProfile) {
     init { require(id.isNotBlank() && id == id.trim()) }
@@ -30,7 +35,8 @@ data class CombatAttackSource(val id: String, val weapon: WeaponProfile) {
 data class CombatGroupAttackResult(
     val target: CharacterState,
     val damageRolls: Map<String, Int>,
-    val events: List<RuleEvent>
+    val events: List<RuleEvent>,
+    val diceRolls: Map<String, List<DieRollResult>> = emptyMap()
 )
 
 /**
@@ -47,15 +53,16 @@ class CombatRules(private val random: RandomSource) {
         mode: AttackMode = AttackMode.NORMAL,
         recipient: DamageRecipient = DamageRecipient.PLAYER_CHARACTER
     ): AttackResult {
-        val rawDamage = rollDamage(weapon?.damage, mode)
-        val result = rules.applyDamage(target, rawDamage, recipient)
+        val damageRoll = rollDamage(weapon?.damage, mode)
+        val result = rules.applyDamage(target, damageRoll.total, recipient)
         val damageEvent = result.events.filterIsInstance<RuleEvent.DamageApplied>().single()
         return AttackResult(
             attacker = attacker,
             target = result.newState,
-            rawDamage = rawDamage,
+            rawDamage = damageRoll.total,
             armorAbsorbed = damageEvent.armorAbsorbed,
-            events = result.events
+            events = result.events,
+            diceRolls = damageRoll.dice
         )
     }
 
@@ -63,23 +70,34 @@ class CombatRules(private val random: RandomSource) {
         require(attackers.isNotEmpty()) { "A group attack requires at least one attacker." }
         require(attackers.map { it.id }.distinct().size == attackers.size) { "Group attacker ids must be unique." }
         val damageRolls = linkedMapOf<String, Int>()
+        val diceRolls = linkedMapOf<String, List<DieRollResult>>()
         attackers.forEach { source ->
-            damageRolls[source.id] = rollDamage(source.weapon.damage, AttackMode.NORMAL)
+            val rolled = rollDamage(source.weapon.damage, AttackMode.NORMAL)
+            damageRolls[source.id] = rolled.total
+            diceRolls[source.id] = rolled.dice
         }
         val result = rules.applyDamage(target, damageRolls.values.max())
-        return CombatGroupAttackResult(result.newState, damageRolls, result.events)
+        return CombatGroupAttackResult(result.newState, damageRolls, result.events, diceRolls)
     }
 
-    private fun rollDamage(damage: String?, mode: AttackMode): Int {
-        if (mode == AttackMode.IMPAIRED) return random.roll(4)
-        if (mode == AttackMode.ENHANCED) return random.roll(12)
+    private data class DamageRoll(val total: Int, val dice: List<DieRollResult>)
+
+    private fun rollDamage(damage: String?, mode: AttackMode): DamageRoll {
+        if (mode == AttackMode.IMPAIRED) return rollSingleDie(4)
+        if (mode == AttackMode.ENHANCED) return rollSingleDie(12)
         val expression = damage?.trim().orEmpty().ifBlank { "d4" }
         require(isSupportedWeaponDamageExpression(expression)) { "Unsupported damage expression: $expression" }
-        return expression.split('+').maxOf { die ->
+        val dice = expression.split('+').map { die ->
             val sides = die.trim().removePrefix("d").toIntOrNull()
                 ?: error("Unsupported damage die: $die")
             require(sides in setOf(4, 6, 8, 10, 12))
-            random.roll(sides)
+            DieRollResult(sides, random.roll(sides))
         }
+        return DamageRoll(dice.maxOf { it.result }, dice)
+    }
+
+    private fun rollSingleDie(sides: Int): DamageRoll {
+        val result = random.roll(sides)
+        return DamageRoll(result, listOf(DieRollResult(sides, result)))
     }
 }

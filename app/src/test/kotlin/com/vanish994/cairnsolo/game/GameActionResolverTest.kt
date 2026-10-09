@@ -3,6 +3,7 @@ package com.vanish994.cairnsolo.game
 import com.vanish994.cairnsolo.rules.CharacterState
 import com.vanish994.cairnsolo.rules.InventoryItem
 import com.vanish994.cairnsolo.rules.FixedRandomSource
+import com.vanish994.cairnsolo.rules.DieRollResult
 import com.vanish994.cairnsolo.rules.RandomSource
 import com.vanish994.cairnsolo.rules.RulesEngine
 import com.vanish994.cairnsolo.rules.Scar
@@ -332,6 +333,9 @@ class CombatGameActionResolverTest {
         assertEquals(null, attacked.state.campaign.combat)
         val attack = attacked.events.filterIsInstance<GameEvent.CombatAttackResolved>().single()
         assertEquals("wolf", attack.targetOpponentId)
+        val damageRoll = attacked.events.filterIsInstance<GameEvent.DiceRollResolved>().single()
+        assertEquals(RollPurpose.PLAYER_ATTACK_DAMAGE, damageRoll.purpose)
+        assertEquals(listOf(DieRollResult(8, 6)), damageRoll.dice)
         assertEquals(CombatMoraleTrigger.SINGLE_OPPONENT_ZERO_HP, attack.moraleOutcomes.single().trigger)
         assertEquals(listOf("wolf"), attack.fledOpponentIds)
         val ended = attacked.events.filterIsInstance<GameEvent.CombatEnded>().single()

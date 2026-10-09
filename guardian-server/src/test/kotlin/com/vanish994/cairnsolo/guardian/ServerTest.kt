@@ -78,6 +78,12 @@ class ServerTest {
 
     @Test
     fun guardianResponseSchemaRequiresTypeSpecificRuleRequestFields() {
+        val responseSchema = guardianResponseSchema()
+        val responseRequired = responseSchema.getAsJsonArray("required").map { it.asString }.toSet()
+        assertTrue("actionIntent" in responseRequired)
+        val actionIntent = responseSchema.getAsJsonObject("properties").getAsJsonObject("actionIntent")
+        assertTrue(actionIntent.getAsJsonArray("anyOf").any { it.asJsonObject.get("type")?.asString == "null" })
+
         val ruleRequest = guardianResponseSchema()
             .getAsJsonObject("properties")
             .getAsJsonObject("ruleRequest")
@@ -130,6 +136,8 @@ class ServerTest {
         assertTrue(prompt.contains("damage") && prompt.contains("fatigue") && prompt.contains("amount"))
         assertTrue(prompt.contains("inteiro") && prompt.contains("1"))
         assertTrue(prompt.contains("begin_combat") && prompt.contains("encounter"))
+        assertTrue(prompt.contains("actionintent") && prompt.contains("targetid") && prompt.contains("weaponid"))
+        assertTrue(prompt.contains("não invente ids") || prompt.contains("nunca invente ids"))
     }
 
     @Test
@@ -157,12 +165,13 @@ class ServerTest {
     @Test
     fun campaignOpeningNormalizationRemovesMechanicalRequestButKeepsNarrationAndActions() {
         val response = JsonParser.parseString(
-            """{"narration":"A névoa cobre o vau.","suggestedActions":["Examinar as marcas"],"ruleRequest":{"type":"REWARD","id":"opening-pay","status":"PAID","amountGp":12,"itemCatalogIds":[]}}"""
+            """{"narration":"A névoa cobre o vau.","suggestedActions":["Examinar as marcas"],"actionIntent":{"type":"ATTACK","targetId":"npc-1","weaponId":null},"ruleRequest":{"type":"REWARD","id":"opening-pay","status":"PAID","amountGp":12,"itemCatalogIds":[]}}"""
         ).asJsonObject
 
         val normalized = normalizeCampaignOpening(response, "INICIAR_CAMPANHA")
 
         assertTrue(normalized.get("ruleRequest").isJsonNull)
+        assertTrue(normalized.get("actionIntent").isJsonNull)
         assertEquals("A névoa cobre o vau.", normalized.get("narration").asString)
         assertEquals("Examinar as marcas", normalized.getAsJsonArray("suggestedActions")[0].asString)
         assertEquals(0, normalized.getAsJsonArray("growthEvidenceProposals").size())

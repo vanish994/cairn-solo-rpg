@@ -45,8 +45,9 @@ condições, morte, recursos e resultados aleatórios.
 Nunca invente ou altere valores mecânicos.
 Nunca diga que um teste foi bem-sucedido ou que dano foi causado, a menos que o campo ruleResult forneça explicitamente esse fato. Só narre um item como entregue quando a transferência já ocorreu na cena e ruleRequest usa REWARD com status PAID.
 Quando uma ação exigir resolução mecânica, preencha ruleRequest com o formato exigido: SAVE requer attribute STR, DEX ou WIL; DAMAGE e FATIGUE requerem amount inteiro positivo; REST, STABILIZE_CRITICAL e RECOVER_SCAR usam somente type; REWARD descreve oferta ou pagamento; BEGIN_COMBAT requer encounter completo. O aplicativo é quem resolve todas as regras.
-Você também pode propor BEGIN_COMBAT somente quando character.combat estiver ausente. Isso é uma proposta completa de 1 a 8 oponentes, não o início do combate: o jogador precisa aceitar o encontro inteiro no aplicativo. Use encounter.opponents como lista de objetos, cada um com opponentId único, narrativa completa, stats completos e weapon completa. IDs não podem estar vazios nem ter espaços no início/fim. moraleLeaderId é opcional e, se fornecido, deve corresponder a um ID da lista. Para cada oponente, HP deve ser pelo menos 1 e não pode exceder maxHp; weapon.damage deve usar apenas d4/d6/d8/d10/d12 (por exemplo, d6 ou d6+d8); Armor deve estar entre 0 e 3. Não declare iniciativa, ataque, dano ou qualquer consequência.
-Com combate ativo, ataques são iniciados pelos controles do aplicativo. Não use DAMAGE para simular um ataque e não narre seu resultado antes de recebê-lo em ruleResult.
+Você também pode propor BEGIN_COMBAT somente quando character.combat estiver ausente. Isso é uma proposta completa de 1 a 8 oponentes, não o início do combate: o jogador precisa aceitar o encontro inteiro no aplicativo. Use encounter.opponents como lista de objetos, cada um com opponentId único, narrativa completa, stats completos e weapon completa. IDs não podem estar vazios nem ter espaços no início/fim. moraleLeaderId é opcional e, se fornecido, deve corresponder a um ID da lista. Para cada oponente, HP deve ser pelo menos 1 e não pode exceder maxHp; weapon.damage deve usar apenas d4/d6/d8/d10/d12 (por exemplo, d6 ou d6+d8); Armor deve estar entre 0 e 3. Não declare resultados de iniciativa, acerto, dano ou qualquer outra consequência mecânica.
+Com combate ativo, classifique ataques explicitamente declarados com actionIntent; o aplicativo resolve o ataque pelo motor de regras. Não use DAMAGE para simular um ataque e não narre seu resultado antes de recebê-lo em ruleResult.
+INTENÇÃO DE AÇÃO: actionIntent é null ou descreve somente um ataque explicitamente declarado pelo jogador. Para ataque, use {"type":"ATTACK","targetId":"ID_EXISTENTE","weaponId":"ID_DO_INVENTARIO_OU_NULL"}. targetId deve ser exatamente o ID de um NPC já presente em canon.npcs quando não houver combate, ou o ID de um oponente ativo em character.combat. Se o jogador nomear uma arma, weaponId deve ser o ID exato do item compatível em character.inventory; se a arma não estiver no inventário ou não puder ser identificada sem ambiguidade, use actionIntent null e peça esclarecimento. Use weaponId null somente quando nenhuma arma foi especificada. Nunca invente IDs, alvos, armas ou resultados. Sem combate ativo, acompanhe ATTACK de ruleRequest BEGIN_COMBAT completo contendo o alvo exato e apenas NPCs existentes no cânone; isso continua sendo proposta sujeita à confirmação do jogador. Com combate ativo, para ATTACK use ruleRequest null: o aplicativo executa o ataque pelo motor de regras. Se não puder identificar um único alvo existente, use actionIntent null e peça esclarecimento. Nunca decida acerto, dano, iniciativa ou consequência mecânica.
 Você pode propor atualizações narrativas em canonProposals, mas elas não são fatos até serem validadas pelo aplicativo. Use apenas UPSERT_NPC, DISCOVER_LOCATION, ADD_IMPORTANT_ITEM, CREATE_QUEST, ADD_DISCOVERY ou ADD_RUMOR. Nunca altere HP, atributos, inventário, facções, Growth ou outros dados mecânicos.
 O estado growth.evidence contém experiências já registradas pelo domínio. Não crie evidências, habilidades ou aumentos de atributo por conta própria. Se uma experiência parecer um gatilho de Growth, narre a consequência e aguarde o fluxo de Growth do aplicativo.
 Consulte worldCanon, world, growth e recentHistory antes de narrar. Você pode improvisar NPCs, lugares, pistas e diálogos coerentes com a situação, como orienta o prompt de campanha; não os apresente como fatos antigos ou confirmados sem base no contexto. Qualquer fato novo que precise persistir deve ser enviado como canonProposal para validação do aplicativo.
@@ -214,6 +215,10 @@ internal fun guardianResponseSchema(): JsonObject = JsonObject().apply {
               "narration": {"type":"string"},
               "sceneTitle": {"type":"string"},
               "sceneDescription": {"type":"string"},
+              "actionIntent": {"anyOf":[
+                {"type":"null"},
+                {"type":"object","properties":{"type":{"type":"string","enum":["ATTACK"]},"targetId":{"type":"string"},"weaponId":{"anyOf":[{"type":"null"},{"type":"string"}]}},"required":["type","targetId","weaponId"],"additionalProperties":false}
+              ]},
               "ruleRequest": {"anyOf":[
                 {"type":"null"},
                 {"type":"object","properties":{"type":{"type":"string","enum":["SAVE"]},"attribute":{"type":"string","enum":["STR","DEX","WIL"]}},"required":["type","attribute"],"additionalProperties":false},
@@ -230,7 +235,7 @@ internal fun guardianResponseSchema(): JsonObject = JsonObject().apply {
         properties.add("suggestedActions", suggestedActionsSchema())
         add("properties", properties)
         add("required", JsonParser.parseString(
-            """["narration","sceneTitle","sceneDescription","ruleRequest","suggestedActions","canonProposals","growthEvidenceProposals","growthChangeProposals"]"""
+            """["narration","sceneTitle","sceneDescription","actionIntent","ruleRequest","suggestedActions","canonProposals","growthEvidenceProposals","growthChangeProposals"]"""
         ).asJsonArray)
         addProperty("additionalProperties", false)
     }
@@ -358,6 +363,7 @@ internal fun normalizeRewardProposal(response: JsonObject): JsonObject {
 internal fun normalizeCampaignOpening(response: JsonObject, playerIntent: String): JsonObject {
     if (!playerIntent.trim().equals(CAMPAIGN_START_INTENT, ignoreCase = true)) return response
 
+    response.add("actionIntent", com.google.gson.JsonNull.INSTANCE)
     response.add("ruleRequest", com.google.gson.JsonNull.INSTANCE)
     response.add("growthEvidenceProposals", com.google.gson.JsonArray())
     response.add("growthChangeProposals", com.google.gson.JsonArray())

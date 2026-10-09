@@ -22,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -89,6 +90,7 @@ class MainActivity : ComponentActivity() {
                 var guardianError by remember { mutableStateOf<String?>(null) }
                 var rewardFeedback by remember { mutableStateOf(emptyList<FeedbackEntry>()) }
                 var pendingRule by remember { mutableStateOf<GuardianRuleRequest?>(null) }
+                var pendingAttackIntent by remember { mutableStateOf<com.vanish994.cairnsolo.guardian.GuardianActionIntent?>(null) }
                 var lastResolution by remember { mutableStateOf<GuardianRuleResolution?>(null) }
                 var guardianFlow by remember { mutableStateOf(GuardianFlow.EXPLORATION) }
                 var suggestedActions by remember { mutableStateOf(emptyList<String>()) }
@@ -138,6 +140,7 @@ class MainActivity : ComponentActivity() {
                                     guardianError = null
                                     rewardFeedback = emptyList()
                                     pendingRule = null
+                                    pendingAttackIntent = null
                                     lastResolution = null
                                     suggestedActions = emptyList()
                                     guardianIntentDraft = ""
@@ -207,6 +210,9 @@ class MainActivity : ComponentActivity() {
                                     suggestedActions = emptyList()
                                     rewardFeedback = emptyList()
                                     guardianIntentDraft = ""
+                                    pendingRule = null
+                                    pendingAttackIntent = null
+                                    lastResolution = null
                                 }
                             )
                             AppScreen.EXPLORATION -> ExplorationScreen(
@@ -240,6 +246,7 @@ class MainActivity : ComponentActivity() {
                                 guardianError = guardianError,
                                 guardianFlow = guardianFlow,
                                 pendingRule = pendingRule,
+                                attackAfterApproval = pendingAttackIntent != null,
                                 lastResolution = lastResolution,
                                 suggestedActions = suggestedActions,
                                 rewardFeedback = rewardFeedback,
@@ -248,13 +255,22 @@ class MainActivity : ComponentActivity() {
                                 onSuggestionSelected = { guardianIntentDraft = it },
                                 onResolveRule = {
                                     pendingRule?.let { request ->
-                                        runCatching { guardianRuleResolver.resolve(state!!, request) }
+                                        runCatching {
+                                            val attackIntent = pendingAttackIntent
+                                            if (attackIntent != null && request.type.equals("BEGIN_COMBAT", ignoreCase = true)) {
+                                                guardianRuleResolver.resolveAttackIntent(state!!, attackIntent, request)
+                                            } else {
+                                                guardianRuleResolver.resolve(state!!, request)
+                                            }
+                                        }
                                             .onSuccess { resolution ->
                                                 repository.save(resolution.state)
                                                 state = resolution.state
                                                 pendingRule = null
+                                                pendingAttackIntent = null
                                                 lastResolution = resolution
                                                 guardianFlow = GuardianFlow.ROLL_RESULT
+                                                guardianError = null
                                             }
                                             .onFailure { error ->
                                                 guardianError = error.message
@@ -264,11 +280,13 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onRejectEncounter = {
                                     pendingRule = null
+                                    pendingAttackIntent = null
                                     guardianFlow = GuardianFlow.EXPLORATION
                                     guardianError = null
                                 },
                                 onDismissRequest = {
                                     pendingRule = null
+                                    pendingAttackIntent = null
                                     guardianFlow = GuardianFlow.EXPLORATION
                                     guardianError = null
                                 },
@@ -358,52 +376,104 @@ class MainActivity : ComponentActivity() {
                                         scope.launch {
                                             guardianClient.narrate(intentState, intent, ruleResult = null, encounterContext = null)
                                                 .onSuccess { response ->
-                                                    val narrated = intentState.applyGuardianResponse(
-                                                        narration = response.narration,
-                                                        sceneTitle = response.sceneTitle,
-                                                        sceneDescription = response.sceneDescription,
-                                                        interactionId = response.interactionId
-                                                    )
-                                                    val next = runCatching {
-                                                        val withGrowth = response.growthEvidenceProposals.fold(narrated) { accumulated, proposal ->
-                                                            runCatching { actionResolver.resolve(accumulated, GameAction.RecordGrowthEvidenceProposal(proposal)).state }
-                                                                .getOrElse { accumulated }
-                                                        }
-                                                        val withChanges = response.growthChangeProposals.fold(withGrowth) { accumulated, proposal ->
-                                                            runCatching { actionResolver.resolve(accumulated, GameAction.RecordGrowthChangeProposal(proposal)).state }
-                                                                .getOrElse { accumulated }
-                                                        }
-                                                        actionResolver.resolve(withChanges, GameAction.ApplyCanonProposals(response.canonProposals)).state
-                                                    }.getOrElse { narrated }
-                                                    val requestError = response.ruleRequest?.let { guardianRuleResolver.validationError(next, it) }
-                                                    val rewardRequest = response.ruleRequest?.takeIf { it.type.equals("REWARD", ignoreCase = true) }
-                                                    var finalState = next
-                                                    var rewardError: String? = null
-                                                    var responseRewardFeedback = emptyList<FeedbackEntry>()
-                                                    if (requestError == null && rewardRequest != null) {
-                                                        runCatching { guardianRuleResolver.resolve(next, rewardRequest) }
-                                                            .onSuccess { resolution ->
-                                                                finalState = resolution.state
-                                                                responseRewardFeedback = FeedbackMapper.mapAll(
-                                                                    resolution.gameResult.events,
-                                                                    resolution.state.campaign.turn
+                                                    val attackIntent = response.actionIntent
+                                                    if (attackIntent != null) {
+                                                        val attackError = guardianRuleResolver.validateAttackIntent(
+                                                            intentState, attackIntent, response.ruleRequest
+                                                        )
+                                                        if (attackError != null) {
+                                                            repository.save(intentState)
+                                                            state = intentState
+                                                            pendingRule = null
+                                                            pendingAttackIntent = null
+                                                            lastResolution = null
+                                                            guardianError = attackError
+                                                            guardianFlow = GuardianFlow.EXPLORATION
+                                                        } else if (intentState.campaign.combat != null) {
+                                                            val resolution = runCatching {
+                                                                guardianRuleResolver.resolveAttackIntent(
+                                                                    intentState, attackIntent, response.ruleRequest
                                                                 )
+                                                            }.getOrElse { error ->
+                                                                guardianError = error.message ?: "Não foi possível resolver o ataque."
+                                                                guardianFlow = GuardianFlow.EXPLORATION
+                                                                null
                                                             }
-                                                            .onFailure { rewardError = it.message ?: "Não foi possível aplicar a recompensa confirmada." }
-                                                    }
-                                                    repository.save(finalState)
-                                                    state = finalState
-                                                    suggestedActions = response.suggestedActions
-                                                    rewardFeedback = responseRewardFeedback
-                                                    pendingRule = response.ruleRequest?.takeIf {
-                                                        requestError == null && !it.type.equals("REWARD", ignoreCase = true)
-                                                    }
-                                                    guardianError = requestError ?: rewardError
-                                                    lastResolution = null
-                                                    guardianFlow = when (pendingRule?.type?.uppercase()) {
-                                                        null -> GuardianFlow.EXPLORATION
-                                                        "BEGIN_COMBAT" -> GuardianFlow.ENCOUNTER_PROPOSED
-                                                        else -> GuardianFlow.ROLL_REQUIRED
+                                                            if (resolution != null) {
+                                                                repository.save(resolution.state)
+                                                                state = resolution.state
+                                                                pendingRule = null
+                                                                pendingAttackIntent = null
+                                                                lastResolution = resolution
+                                                                guardianError = null
+                                                                guardianFlow = GuardianFlow.ROLL_RESULT
+                                                            }
+                                                        } else {
+                                                            val narrated = intentState.applyGuardianResponse(
+                                                                narration = response.narration,
+                                                                sceneTitle = response.sceneTitle,
+                                                                sceneDescription = response.sceneDescription,
+                                                                interactionId = response.interactionId
+                                                            )
+                                                            repository.save(narrated)
+                                                            state = narrated
+                                                            pendingRule = response.ruleRequest
+                                                            pendingAttackIntent = attackIntent
+                                                            lastResolution = null
+                                                            guardianError = null
+                                                            guardianFlow = GuardianFlow.ENCOUNTER_PROPOSED
+                                                        }
+                                                        suggestedActions = response.suggestedActions
+                                                        rewardFeedback = emptyList()
+                                                    } else {
+                                                        val narrated = intentState.applyGuardianResponse(
+                                                            narration = response.narration,
+                                                            sceneTitle = response.sceneTitle,
+                                                            sceneDescription = response.sceneDescription,
+                                                            interactionId = response.interactionId
+                                                        )
+                                                        val next = runCatching {
+                                                            val withGrowth = response.growthEvidenceProposals.fold(narrated) { accumulated, proposal ->
+                                                                runCatching { actionResolver.resolve(accumulated, GameAction.RecordGrowthEvidenceProposal(proposal)).state }
+                                                                    .getOrElse { accumulated }
+                                                            }
+                                                            val withChanges = response.growthChangeProposals.fold(withGrowth) { accumulated, proposal ->
+                                                                runCatching { actionResolver.resolve(accumulated, GameAction.RecordGrowthChangeProposal(proposal)).state }
+                                                                    .getOrElse { accumulated }
+                                                            }
+                                                            actionResolver.resolve(withChanges, GameAction.ApplyCanonProposals(response.canonProposals)).state
+                                                        }.getOrElse { narrated }
+                                                        val requestError = response.ruleRequest?.let { guardianRuleResolver.validationError(next, it) }
+                                                        val rewardRequest = response.ruleRequest?.takeIf { it.type.equals("REWARD", ignoreCase = true) }
+                                                        var finalState = next
+                                                        var rewardError: String? = null
+                                                        var responseRewardFeedback = emptyList<FeedbackEntry>()
+                                                        if (requestError == null && rewardRequest != null) {
+                                                            runCatching { guardianRuleResolver.resolve(next, rewardRequest) }
+                                                                .onSuccess { resolution ->
+                                                                    finalState = resolution.state
+                                                                    responseRewardFeedback = FeedbackMapper.mapAll(
+                                                                        resolution.gameResult.events,
+                                                                        resolution.state.campaign.turn
+                                                                    )
+                                                                }
+                                                                .onFailure { rewardError = it.message ?: "Não foi possível aplicar a recompensa confirmada." }
+                                                        }
+                                                        repository.save(finalState)
+                                                        state = finalState
+                                                        suggestedActions = response.suggestedActions
+                                                        rewardFeedback = responseRewardFeedback
+                                                        pendingRule = response.ruleRequest?.takeIf {
+                                                            requestError == null && !it.type.equals("REWARD", ignoreCase = true)
+                                                        }
+                                                        pendingAttackIntent = null
+                                                        guardianError = requestError ?: rewardError
+                                                        lastResolution = null
+                                                        guardianFlow = when (pendingRule?.type?.uppercase()) {
+                                                            null -> GuardianFlow.EXPLORATION
+                                                            "BEGIN_COMBAT" -> GuardianFlow.ENCOUNTER_PROPOSED
+                                                            else -> GuardianFlow.ROLL_REQUIRED
+                                                        }
                                                     }
                                                 }
                                                 .onFailure { error ->
@@ -643,6 +713,7 @@ private fun ExplorationScreen(
     guardianError: String?,
     guardianFlow: GuardianFlow,
     pendingRule: GuardianRuleRequest?,
+    attackAfterApproval: Boolean,
     lastResolution: GuardianRuleResolution?,
     suggestedActions: List<String>,
     rewardFeedback: List<FeedbackEntry>,
@@ -784,6 +855,7 @@ private fun ExplorationScreen(
                 request.encounter?.let { proposal ->
                     EncounterProposalCard(
                         proposal = proposal,
+                        attackAfterApproval = attackAfterApproval,
                         enabled = !guardianLoading && c.combat == null,
                         onAccept = onResolveRule,
                         onReject = onRejectEncounter
@@ -1004,8 +1076,9 @@ private fun RollResultCard(
     enabled: Boolean,
     onContinue: () -> Unit
 ) {
-    val save = resolution.gameResult.events.filterIsInstance<com.vanish994.cairnsolo.game.GameEvent.SaveResolved>().firstOrNull()
-    val success = save?.success
+    val saves = resolution.gameResult.events.filterIsInstance<com.vanish994.cairnsolo.game.GameEvent.SaveResolved>()
+    val damageRolls = resolution.gameResult.events.filterIsInstance<com.vanish994.cairnsolo.game.GameEvent.DiceRollResolved>()
+    val hasRolls = saves.isNotEmpty() || damageRolls.isNotEmpty()
     val dieFrames = listOf(
         R.drawable.cairn_d20_frame_01,
         R.drawable.cairn_d20_frame_02,
@@ -1015,10 +1088,10 @@ private fun RollResultCard(
         R.drawable.cairn_d20_frame_06
     )
     var frameIndex by remember(resolution) { mutableIntStateOf(0) }
-    var animationFinished by remember(resolution) { mutableStateOf(save == null) }
+    var animationFinished by remember(resolution) { mutableStateOf(!hasRolls) }
 
-    LaunchedEffect(resolution, save?.roll) {
-        if (save != null) {
+    LaunchedEffect(resolution) {
+        if (hasRolls) {
             repeat(18) { frame ->
                 frameIndex = frame % dieFrames.size
                 delay(60)
@@ -1031,7 +1104,7 @@ private fun RollResultCard(
     SectionCard {
         Text("RESULTADO", color = CairnAccent, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(5.dp))
-        if (save != null) {
+        saves.forEach { save ->
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.Center,
@@ -1040,7 +1113,7 @@ private fun RollResultCard(
                 Image(
                     painter = painterResource(dieFrames[frameIndex]),
                     contentDescription = if (animationFinished) "Dado d20" else "Dado d20 rolando",
-                    modifier = Modifier.size(88.dp)
+                    modifier = Modifier.size(if (saves.size == 1) 76.dp else 54.dp)
                 )
                 Spacer(Modifier.width(14.dp))
                 Text(
@@ -1049,27 +1122,70 @@ private fun RollResultCard(
                     style = MaterialTheme.typography.displaySmall,
                     fontWeight = FontWeight.Bold
                 )
+                Spacer(Modifier.width(10.dp))
+                Column {
+                    Text("TESTE DE ${save.attribute.name}", color = CairnMuted, style = MaterialTheme.typography.labelSmall)
+                    Text(
+                        if (!animationFinished) "ROLANDO…" else if (save.success) "SUCESSO" else "FALHA",
+                        color = if (!animationFinished) CairnMuted else if (save.success) CairnAccent else CairnDanger,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
-            Text(
-                if (!animationFinished) "ROLANDO…" else if (success == true) "SUCESSO" else "FALHA",
-                color = if (!animationFinished) CairnMuted else if (success == true) CairnAccent else CairnDanger,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
-            Text("Teste de ${save.attribute.name}", color = CairnMuted, style = MaterialTheme.typography.bodySmall)
-            if (animationFinished) {
-                Text(resolution.resultText, color = CairnMuted, style = MaterialTheme.typography.bodySmall)
-            }
-        } else {
+        }
+        damageRolls.forEach { roll ->
+            DamageDiceRollCard(roll, frameIndex, animationFinished)
+        }
+        if (animationFinished || !hasRolls) {
             Text(resolution.resultText, color = CairnText, style = MaterialTheme.typography.bodyMedium)
+        } else {
+            Text("ROLANDO…", color = CairnMuted, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
         }
         Spacer(Modifier.height(8.dp))
         Button(
             onClick = onContinue,
-            enabled = enabled && (save == null || animationFinished),
+            enabled = enabled && animationFinished,
             modifier = Modifier.fillMaxWidth().height(42.dp),
             shape = RoundedCornerShape(7.dp)
         ) { Text("Continuar história", fontWeight = FontWeight.Bold) }
+    }
+}
+
+@Composable
+private fun DamageDiceRollCard(
+    roll: com.vanish994.cairnsolo.game.GameEvent.DiceRollResolved,
+    frameIndex: Int,
+    animationFinished: Boolean
+) {
+    val title = if (roll.purpose == com.vanish994.cairnsolo.game.RollPurpose.PLAYER_ATTACK_DAMAGE) {
+        "DANO DO SEU ATAQUE"
+    } else {
+        "DANO · ${roll.actorLabel}"
+    }
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(9.dp))
+            .background(CairnSurfaceRaised).border(1.dp, CairnBorder, RoundedCornerShape(9.dp)).padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Text(title, color = CairnAccent, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            roll.dice.forEach { die ->
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Box(
+                        Modifier.size(46.dp)
+                            .graphicsLayer { rotationZ = if (animationFinished) 0f else frameIndex * 45f }
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(Color(0xFF30261D))
+                            .border(1.dp, CairnAccentSoft, RoundedCornerShape(10.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(if (animationFinished) "${die.result}" else "…", color = CairnText, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    }
+                    Text("d${die.sides}", color = CairnMuted, style = MaterialTheme.typography.labelSmall)
+                }
+            }
+        }
     }
 }
 
@@ -1092,6 +1208,7 @@ private fun ruleRequestDescription(request: GuardianRuleRequest): String = when 
 @Composable
 private fun EncounterProposalCard(
     proposal: GuardianEncounterProposal,
+    attackAfterApproval: Boolean,
     enabled: Boolean,
     onAccept: () -> Unit,
     onReject: () -> Unit
@@ -1103,6 +1220,13 @@ private fun EncounterProposalCard(
         Text("Comportamento: ${proposal.narrative.behavior}", color = CairnMuted, style = MaterialTheme.typography.bodySmall, maxLines = 2)
         Text("Intenção: ${proposal.narrative.intent}", color = CairnMuted, style = MaterialTheme.typography.bodySmall, maxLines = 2)
         Text("Contexto: ${proposal.narrative.context}", color = CairnMuted, style = MaterialTheme.typography.bodySmall, maxLines = 2)
+        if (attackAfterApproval) {
+            Text(
+                "Ao aceitar, o combate começa e o motor resolve o ataque que você declarou.",
+                color = CairnAccent,
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
         Text(
             "FOR ${proposal.stats.str} · DES ${proposal.stats.dex} · VON ${proposal.stats.wil} · HP ${proposal.stats.hp}/${proposal.stats.maxHp} · ARM ${proposal.stats.armor}",
             color = CairnText,
@@ -1117,7 +1241,7 @@ private fun EncounterProposalCard(
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
             Button(onClick = onAccept, enabled = enabled, modifier = Modifier.weight(1f), shape = RoundedCornerShape(7.dp)) {
-                Text("Aceitar oponente", fontWeight = FontWeight.Bold)
+                Text(if (attackAfterApproval) "Aceitar e atacar" else "Aceitar encontro", fontWeight = FontWeight.Bold)
             }
             OutlinedButton(onClick = onReject, modifier = Modifier.weight(1f), shape = RoundedCornerShape(7.dp)) {
                 Text("Recusar")
@@ -1216,6 +1340,7 @@ private fun CombatCard(
     var selectedOpponentId by remember(opponentIds) {
         mutableStateOf(activeOpponents.firstOrNull()?.id)
     }
+    var showBattleMap by remember(opponentIds) { mutableStateOf(false) }
     val selectedOpponent = activeOpponents.firstOrNull { it.id == selectedOpponentId }
         ?: activeOpponents.firstOrNull()
 
@@ -1226,14 +1351,19 @@ private fun CombatCard(
             color = CairnMuted,
             style = MaterialTheme.typography.bodySmall
         )
-        BattleMap(
-            opponents = combat.opponents,
-            adventurerName = adventurerName,
-            adventurerHp = adventurerHp,
-            adventurerMaxHp = adventurerMaxHp,
-            selectedOpponentId = selectedOpponent?.id,
-            onSelectOpponent = { id -> if (enabled && activeOpponents.any { it.id == id }) selectedOpponentId = id }
-        )
+        TextButton(onClick = { showBattleMap = !showBattleMap }) {
+            Text(if (showBattleMap) "Ocultar mapa de combate" else "Mostrar mapa de combate")
+        }
+        if (showBattleMap) {
+            BattleMap(
+                opponents = combat.opponents,
+                adventurerName = adventurerName,
+                adventurerHp = adventurerHp,
+                adventurerMaxHp = adventurerMaxHp,
+                selectedOpponentId = selectedOpponent?.id,
+                onSelectOpponent = { id -> if (enabled && activeOpponents.any { it.id == id }) selectedOpponentId = id }
+            )
+        }
         Column(
             modifier = Modifier
                 .fillMaxWidth()
