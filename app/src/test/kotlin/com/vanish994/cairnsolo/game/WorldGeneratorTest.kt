@@ -16,6 +16,20 @@ class WorldGeneratorTest {
     }
 
     @Test
+    fun differentNarrativeSeedsCanSelectDifferentStartingSettlements() {
+        val names = (1..8).map { index ->
+            val seeded = seed.copy(narrativeSeed = "campaign-seed-$index")
+            WorldGenerator(FixedRandomSource(d20Value = 12, d6Value = 4))
+                .generate(seeded)
+                .settlements
+                .first()
+                .name
+        }
+
+        assertTrue(names.toSet().size > 1, "Different campaign seeds should vary the starting settlement: $names")
+    }
+
+    @Test
     fun generatedWorldContainsPlayableStartingStructure() {
         val world = WorldGenerator(FixedRandomSource(d20Value = 1, d6Value = 3)).generate(seed)
         assertEquals("As Cinzas de Vald", world.campaignName)

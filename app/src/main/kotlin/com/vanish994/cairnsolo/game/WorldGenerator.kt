@@ -63,12 +63,20 @@ data class RumorState(val id: String, val text: String, val reliability: Int = 1
 }
 
 class WorldGenerator(private val random: RandomSource) {
+    private val settlementNames = listOf(
+        "Cinzália", "Pedra Alta", "Vau Sombrio", "Porto Velho", "Três Pontes", "Candeia",
+        "Vale Seco", "Arroio Negro", "Moinho Baixo", "Limiar Frio", "Ponte de Ossos", "Vila do Sal"
+    )
+
     fun generate(seed: WorldSeed): WorldState {
         val regionTerrain = terrain(random.d6())
         val regionName = listOf("Cinzas", "Bosque", "Coroa", "Fronteira", "Véu", "Ermos")[random.d6() - 1]
         val region = RegionState("region-1", "${regionName} de ${seed.concept}", regionTerrain, "Uma região ${terrainDescription(regionTerrain)} moldada por ${seed.concept}.")
         val settlementCount = (random.d6() - 2).coerceIn(1, 4)
-        val settlements = (0 until settlementCount).map { settlement(it, seed.startingPoint, regionTerrain) }
+        val settlementNameOffset = Math.floorMod(seed.narrativeSeed.hashCode(), settlementNames.size)
+        val settlements = (0 until settlementCount).map {
+            settlement(it, seed.startingPoint, regionTerrain, settlementNameOffset)
+        }
         val landmarks = (0 until (random.d6() - 3).coerceAtLeast(1)).map { landmark(it, regionTerrain) }
         val factionCount = (random.d6() + 1).coerceIn(2, 5)
         val factions = (0 until factionCount).map { faction(it) }
@@ -89,10 +97,10 @@ class WorldGenerator(private val random: RandomSource) {
         )
     }
 
-    private fun settlement(index: Int, startingPoint: String, terrain: RegionTerrain): SettlementState {
+    private fun settlement(index: Int, startingPoint: String, terrain: RegionTerrain, nameOffset: Int): SettlementState {
         val type = if (index == 0) SettlementType.VILLAGE else SettlementType.entries[random.d6().coerceIn(1, 4) - 1]
-        val names = listOf("Cinzália", "Pedra Alta", "Vau Sombrio", "Porto Velho")
-        return SettlementState(if (index == 0) startingPoint else "settlement-$index", names[index % names.size], type, "Um assentamento ${terrainDescription(terrain)} com rumores e interesses conflitantes.")
+        val name = settlementNames[(nameOffset + index) % settlementNames.size]
+        return SettlementState(if (index == 0) startingPoint else "settlement-$index", name, type, "Um assentamento ${terrainDescription(terrain)} com rumores e interesses conflitantes.")
     }
 
     private fun landmark(index: Int, terrain: RegionTerrain): LandmarkState {

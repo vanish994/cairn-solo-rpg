@@ -233,16 +233,36 @@ class Handler(BaseHTTPRequestHandler):
             )
             return
 
-        guardian_response = {
-            "narration": "A porta range sob a chuva, mas o trinco cede.",
-            "sceneTitle": "A torre",
-            "sceneDescription": "A passagem estreita se abre para uma escadaria escura.",
-            "suggestedActions": ["Examinar a escadaria"],
-            "ruleRequest": {"type": "SAVE", "attribute": "DEX"},
-            "canonProposals": [],
-            "growthEvidenceProposals": [],
-            "growthChangeProposals": [],
-        }
+        campaign_opening = '"playerIntent":"INICIAR_CAMPANHA"' in request["input"]
+        if campaign_opening:
+            guardian_response = {
+                "narration": "Uma corda recém-cortada balança no vento frio.",
+                "sceneTitle": "O vau de pedra",
+                "sceneDescription": "A água escura cobre parte da travessia.",
+                "suggestedActions": ["Examinar a corda", "Observar a margem oposta"],
+                # Deliberately hostile fixture: startup must never credit a reward.
+                "ruleRequest": {
+                    "type": "REWARD",
+                    "id": "opening-payment",
+                    "status": "PAID",
+                    "amountGp": 12,
+                    "itemCatalogIds": [],
+                },
+                "canonProposals": [],
+                "growthEvidenceProposals": [{"id": "opening-growth"}],
+                "growthChangeProposals": [{"id": "opening-change"}],
+            }
+        else:
+            guardian_response = {
+                "narration": "A porta range sob a chuva, mas o trinco cede.",
+                "sceneTitle": "A torre",
+                "sceneDescription": "A passagem estreita se abre para uma escadaria escura.",
+                "suggestedActions": ["Examinar a escadaria"],
+                "ruleRequest": {"type": "SAVE", "attribute": "DEX"},
+                "canonProposals": [],
+                "growthEvidenceProposals": [],
+                "growthChangeProposals": [],
+            }
         self._send_json(
             200,
             {

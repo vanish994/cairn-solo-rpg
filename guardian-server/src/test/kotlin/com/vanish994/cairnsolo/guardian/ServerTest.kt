@@ -133,6 +133,54 @@ class ServerTest {
     }
 
     @Test
+    fun campaignOpeningPromptTreatsStartMarkerAsInternalAndRequiresVariety() {
+        val prompt = guardianSystemPrompt().lowercase()
+
+        assertTrue(prompt.contains("iniciar_campanha"))
+        assertTrue(prompt.contains("não mencione") || prompt.contains("não o mencione"))
+        assertTrue(prompt.contains("não use um prólogo fixo"))
+        assertTrue(prompt.contains("não pause a abertura"))
+        assertTrue(prompt.contains("mundo") && prompt.contains("campaignseed"))
+        assertTrue(prompt.contains("sugestões") || prompt.contains("suggestedactions"))
+    }
+
+    @Test
+    fun systemPromptIncludesTheCompleteProjectPromptResource() {
+        val prompt = guardianSystemPrompt()
+
+        assertTrue(prompt.startsWith("CAIRN SOLO RPG — SYSTEM PROMPT DO GUARDIÃO"))
+        assertTrue(prompt.contains("1. IDENTIDADE E MISSÃO"))
+        assertTrue(prompt.contains("13. PRINCÍPIO FINAL"))
+        assertTrue(prompt.contains("Nunca confunda essas responsabilidades."))
+    }
+
+    @Test
+    fun campaignOpeningNormalizationRemovesMechanicalRequestButKeepsNarrationAndActions() {
+        val response = JsonParser.parseString(
+            """{"narration":"A névoa cobre o vau.","suggestedActions":["Examinar as marcas"],"ruleRequest":{"type":"REWARD","id":"opening-pay","status":"PAID","amountGp":12,"itemCatalogIds":[]}}"""
+        ).asJsonObject
+
+        val normalized = normalizeCampaignOpening(response, "INICIAR_CAMPANHA")
+
+        assertTrue(normalized.get("ruleRequest").isJsonNull)
+        assertEquals("A névoa cobre o vau.", normalized.get("narration").asString)
+        assertEquals("Examinar as marcas", normalized.getAsJsonArray("suggestedActions")[0].asString)
+        assertEquals(0, normalized.getAsJsonArray("growthEvidenceProposals").size())
+        assertEquals(0, normalized.getAsJsonArray("growthChangeProposals").size())
+    }
+
+    @Test
+    fun ordinaryIntentKeepsMechanicalRequestDuringNormalization() {
+        val response = JsonParser.parseString(
+            """{"narration":"A porta range.","ruleRequest":{"type":"SAVE","attribute":"DEX"}}"""
+        ).asJsonObject
+
+        val normalized = normalizeCampaignOpening(response, "Abro a porta")
+
+        assertEquals("SAVE", normalized.getAsJsonObject("ruleRequest").get("type").asString)
+    }
+
+    @Test
     fun rewardSchemaRequiresGpStatusAndAtMostFiveCatalogIdsWithoutUnsupportedTextKeywords() {
         val schema = rewardRequestSchema()
         val properties = schema.getAsJsonObject("properties")
