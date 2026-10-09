@@ -325,6 +325,29 @@ class ServerTest {
     }
 
     @Test
+    fun combatProposalWithoutExplicitAttackIntentIsRejected() {
+        val response = validEncounterResponse().apply {
+            add("actionIntent", com.google.gson.JsonNull.INSTANCE)
+        }
+
+        val normalized = normalizeCombatProposal(response)
+
+        assertEquals("A cena continua.", normalized.get("narration").asString)
+        assertFalse(normalized.getAsJsonObject("ruleRequest").has("encounter"))
+    }
+
+    @Test
+    fun combatProposalMustContainTheActionIntentTarget() {
+        val response = validEncounterResponse().apply {
+            getAsJsonObject("actionIntent").addProperty("targetId", "another-npc")
+        }
+
+        val normalized = normalizeCombatProposal(response)
+
+        assertFalse(normalized.getAsJsonObject("ruleRequest").has("encounter"))
+    }
+
+    @Test
     fun serializedEncounterIsExpandedAndValidatedBeforeReturningToTheApp() {
         val response = validEncounterResponse()
         val encounter = response.getAsJsonObject("ruleRequest").getAsJsonObject("encounter")
@@ -460,6 +483,9 @@ class ServerTest {
             }
             assertTrue(present, "Prompt is missing combat proposal guidance: $term")
         }
+        assertTrue(prompt.contains("actionintent nunca pode ser null"))
+        assertTrue(prompt.contains("toda proposta begin_combat precisa vir junto do actionintent attack"))
+        assertTrue(prompt.contains("não descreva golpe, acerto, defesa, esquiva ou dano como ocorrido"))
     }
 
     private fun assertEncounterRejectedWithoutLosingNarration(response: com.google.gson.JsonObject) {
@@ -471,7 +497,7 @@ class ServerTest {
     }
 
     private fun validEncounterResponse() = JsonParser.parseString(
-        """{"narration":"A cena continua.","ruleRequest":{"type":"BEGIN_COMBAT","encounter":{"opponents":[{"opponentId":"cultist-a","narrative":{"name":"Cultista","appearance":"Manto escuro.","behavior":"Observa a passagem.","intent":"Protege o altar.","context":"Na capela."},"stats":{"str":5,"dex":7,"wil":8,"hp":3,"maxHp":4,"armor":1},"weapon":{"id":"ritual-dagger","damage":"d4","blast":false,"ranged":false}}]}}}"""
+        """{"narration":"A cena continua.","actionIntent":{"type":"ATTACK","targetId":"cultist-a","targetName":"Cultista","weaponId":null},"ruleRequest":{"type":"BEGIN_COMBAT","encounter":{"opponents":[{"opponentId":"cultist-a","narrative":{"name":"Cultista","appearance":"Manto escuro.","behavior":"Observa a passagem.","intent":"Protege o altar.","context":"Na capela."},"stats":{"str":5,"dex":7,"wil":8,"hp":3,"maxHp":4,"armor":1},"weapon":{"id":"ritual-dagger","damage":"d4","blast":false,"ranged":false}}]}}}"""
     ).asJsonObject
 
     private fun validRewardResponse() = JsonParser.parseString(

@@ -23,6 +23,16 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class GuardianAttackFlowTest {
+    @Test
+    fun explicitAttackFallbackOnlyMatchesClearPositiveDeclarations() {
+        assertTrue(GuardianAttackFlow.isExplicitAttackDeclaration("Ataco Garrick com um soco."))
+        assertTrue(GuardianAttackFlow.isExplicitAttackDeclaration("Eu quero atacar o duelista."))
+        assertTrue(GuardianAttackFlow.isExplicitAttackDeclaration("Vou golpear o cultista."))
+        assertTrue(!GuardianAttackFlow.isExplicitAttackDeclaration("Não vou atacar agora."))
+        assertTrue(!GuardianAttackFlow.isExplicitAttackDeclaration("Se ele me atacar, eu recuo."))
+        assertTrue(!GuardianAttackFlow.isExplicitAttackDeclaration("Talvez eu ataque depois."))
+    }
+
     private fun opponent() = GuardianOpponentProposal(
         opponentId = "garrick",
         narrative = CombatOpponentNarrative(

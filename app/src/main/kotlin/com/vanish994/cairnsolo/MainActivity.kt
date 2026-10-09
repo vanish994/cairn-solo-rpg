@@ -448,6 +448,22 @@ class MainActivity : ComponentActivity() {
                                                         }
                                                         suggestedActions = response.suggestedActions
                                                         rewardFeedback = emptyList()
+                                                    } else if (GuardianAttackFlow.isExplicitAttackDeclaration(intent)) {
+                                                        val narrativeCanonState = runCatching {
+                                                            actionResolver.resolve(
+                                                                intentState,
+                                                                GameAction.ApplyCanonProposals(response.canonProposals)
+                                                            ).state
+                                                        }.getOrElse { intentState }
+                                                        repository.save(narrativeCanonState)
+                                                        state = narrativeCanonState
+                                                        suggestedActions = emptyList()
+                                                        rewardFeedback = emptyList()
+                                                        pendingRule = null
+                                                        pendingAttackIntent = null
+                                                        lastResolution = null
+                                                        guardianError = "O Guardião não vinculou seu ataque a um alvo e ao motor de regras. Nenhuma rolagem, dano ou resultado narrativo foi aplicado; reformule o ataque."
+                                                        guardianFlow = GuardianFlow.EXPLORATION
                                                     } else {
                                                         val proposedState = runCatching {
                                                             val narrativeState = if (response.ruleRequest == null) {

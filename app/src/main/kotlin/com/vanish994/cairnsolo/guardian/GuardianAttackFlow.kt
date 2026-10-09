@@ -32,6 +32,21 @@ sealed interface GuardianAttackFlowResult {
 class GuardianAttackFlow(
     private val ruleResolver: GuardianRuleResolver
 ) {
+    companion object {
+        private val directAttack = Regex(
+            "^(?:eu\\s+)?(?:ataco|golpeio|bato|esfaqueio|disparo|arremesso|apunhalo|firo)\\b",
+            RegexOption.IGNORE_CASE
+        )
+        private val intendedAttack = Regex(
+            "^(?:eu\\s+)?(?:quero|vou|tento|tentarei|pretendo|decido|decidi)\\s+(?:atacar|golpear|bater|esfaquear|disparar|arremessar|apunhalar|ferir)\\b",
+            RegexOption.IGNORE_CASE
+        )
+
+        /** Conservative fail-closed fallback for clear positive Portuguese attack declarations. */
+        fun isExplicitAttackDeclaration(text: String): Boolean =
+            directAttack.containsMatchIn(text.trim()) || intendedAttack.containsMatchIn(text.trim())
+    }
+
     fun prepare(
         state: GameState,
         intent: GuardianActionIntent,

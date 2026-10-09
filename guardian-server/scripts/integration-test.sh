@@ -104,15 +104,16 @@ python3 - "$response_file" <<'PY'
 import json, sys
 from pathlib import Path
 body = json.loads(Path(sys.argv[1]).read_text())
-assert body["actionIntent"] == {
-    "type": "ATTACK", "targetId": "garrick", "targetName": "Garrick", "weaponId": None
-}, body
+action = body["actionIntent"]
+assert isinstance(action, dict) and action.get("type") == "ATTACK", body
 request = body["ruleRequest"]
 assert request["type"] == "BEGIN_COMBAT", body
 encounter = request["encounter"]
 assert "opponentsJson" not in encounter, encounter
 assert len(encounter["opponents"]) == 1, encounter
 opponent = encounter["opponents"][0]
+assert action["targetId"] == opponent["opponentId"], (action, opponent)
+assert action["targetName"] == opponent["narrative"]["name"], (action, opponent)
 assert set(opponent) == {"opponentId", "narrative", "stats", "weapon"}, opponent
 assert set(opponent["narrative"]) == {"name", "appearance", "behavior", "intent", "context"}, opponent
 assert set(opponent["stats"]) == {"str", "dex", "wil", "hp", "maxHp", "armor"}, opponent

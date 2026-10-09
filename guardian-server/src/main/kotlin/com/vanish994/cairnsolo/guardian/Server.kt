@@ -323,11 +323,25 @@ internal fun normalizeCombatProposal(response: JsonObject): JsonObject {
     val type = runCatching { ruleRequest.get("type")?.asString }.getOrNull()
     if (!type.equals("BEGIN_COMBAT", ignoreCase = true)) return response
 
+    val actionIntent = response.get("actionIntent")
+        ?.takeIf { it.isJsonObject }
+        ?.asJsonObject
+    val actionType = jsonString(actionIntent?.get("type"))
+    val targetId = jsonString(actionIntent?.get("targetId"))
+    if (!actionType.equals("ATTACK", ignoreCase = true) || targetId.isNullOrBlank()) {
+        // A combat proposal without the player's explicit attack intent must never start combat.
+        ruleRequest.remove("encounter")
+        return response
+    }
+
     val wireEncounter = ruleRequest.get("encounter")
         ?.takeIf { it.isJsonObject }
         ?.asJsonObject
     val encounter = expandSerializedEncounter(wireEncounter)
-    if (!isCompleteEncounterProposal(encounter)) {
+    val completeEncounter = isCompleteEncounterProposal(encounter)
+    val targetIsIncluded = completeEncounter && encounter?.getAsJsonArray("opponents")
+        ?.any { opponent -> jsonString(opponent.asJsonObject.get("opponentId")) == targetId } == true
+    if (!completeEncounter || !targetIsIncluded) {
         // Preserve the scene; the client turns this incomplete proposal into a visible validation error.
         ruleRequest.remove("encounter")
     } else {
