@@ -84,7 +84,7 @@ Se playerIntent for INICIAR_CAMPANHA, é um comando interno: produza somente a p
 Se playerIntent começar com CONTINUAR_NARRATIVA, isso é um comando interno da interface, não uma fala ou decisão do jogador. Não o mencione na narração, não o inclua como diálogo e avance a situação atual organicamente no mesmo local.
 Se ruleResult estiver presente, ele foi produzido pelo Rules Engine e é a única fonte autorizada para narrar os efeitos mecânicos daquela ação. Não acrescente números, resultados, condições ou consequências mecânicas não contidos nesse campo.
 
-Continue a cena de forma coerente. Se a intenção exigir uma resolução mecânica, preencha ruleRequest com os campos obrigatórios do tipo: SAVE exige attribute exatamente STR, DEX ou WIL; DAMAGE e FATIGUE exigem amount inteiro maior ou igual a 1; REST, STABILIZE_CRITICAL e RECOVER_SCAR exigem somente type; REWARD usa id/status/amountGp/itemCatalogIds; BEGIN_COMBAT exige encounter com 1–8 oponentes em `opponents`, somente sem combate ativo.
+Continue a cena de forma coerente. Se a intenção exigir uma resolução mecânica, preencha ruleRequest com os campos obrigatórios do tipo: SAVE exige attribute exatamente STR, DEX ou WIL; DAMAGE e FATIGUE exigem amount inteiro maior ou igual a 1; REST, STABILIZE_CRITICAL e RECOVER_SCAR exigem somente type; REWARD usa id/status/amountGp/itemCatalogIds; BEGIN_COMBAT exige encounter.opponentsJson como string JSON válida com 1–8 perfis completos, somente sem combate ativo.
 BEGIN_COMBAT apenas propõe o encontro inteiro para confirmação do jogador. Não informe resultados; o aplicativo resolve.
 Para REWARD, use OFFERED para promessa não entregue e PAID apenas quando a transferência já estiver concluída na cena; use GP sem converter cobre e selecione IDs somente de campaign.rewardableItems.
 Se não houver resolução mecânica, use null.
@@ -179,6 +179,7 @@ internal fun guardianResponseSchema(): JsonObject = JsonObject().apply {
             }
         """).asJsonObject
         addRewardRequestSchema(properties)
+        addCombatRequestSchema(properties)
         properties.add("suggestedActions", suggestedActionsSchema())
         add("properties", properties)
         add("required", JsonParser.parseString(
@@ -213,6 +214,45 @@ internal fun addRewardRequestSchema(properties: JsonObject) {
     }) { "REWARD schema branch already exists." }
     alternatives.add(rewardRequestSchema())
 }
+
+internal fun addCombatRequestSchema(properties: JsonObject) {
+    val alternatives = properties.getAsJsonObject("ruleRequest").getAsJsonArray("anyOf")
+    val index = alternatives.indexOfFirst { candidate ->
+        candidate.takeIf { it.isJsonObject }?.asJsonObject
+            ?.getAsJsonObject("properties")?.getAsJsonObject("type")
+            ?.getAsJsonArray("enum")?.map { it.asString } == listOf("BEGIN_COMBAT")
+    }
+    check(index >= 0) { "BEGIN_COMBAT schema branch is missing." }
+
+    val branch = JsonObject().apply {
+        addProperty("type", "object")
+        add("properties", JsonObject().apply {
+            add("type", JsonObject().apply {
+                addProperty("type", "string")
+                add("enum", JsonParser.parseString("[\"BEGIN_COMBAT\"]").asJsonArray)
+            })
+            add("encounter", combatWireEncounterSchema())
+        })
+        add("required", JsonParser.parseString("[\"type\",\"encounter\"]").asJsonArray)
+        addProperty("additionalProperties", false)
+    }
+    alternatives.set(index, branch)
+}
+
+/** Gemini wire schema stays within the tested depth budget; the server validates decoded contents. */
+internal fun combatWireEncounterSchema(): JsonObject = JsonParser.parseString(
+    """
+    {
+      "type":"object",
+      "properties":{
+        "opponentsJson":{"type":"string"},
+        "moraleLeaderId":{"type":"string"}
+      },
+      "required":["opponentsJson"],
+      "additionalProperties":false
+    }
+    """.trimIndent()
+).asJsonObject
 
 // Keep string bounds and patterns in isCompleteEncounterProposal(): Gemini structured output
 // supports a smaller JSON Schema subset, and validating them here can make the whole request fail.
@@ -283,14 +323,31 @@ internal fun normalizeCombatProposal(response: JsonObject): JsonObject {
     val type = runCatching { ruleRequest.get("type")?.asString }.getOrNull()
     if (!type.equals("BEGIN_COMBAT", ignoreCase = true)) return response
 
-    val encounter = ruleRequest.get("encounter")
+    val wireEncounter = ruleRequest.get("encounter")
         ?.takeIf { it.isJsonObject }
         ?.asJsonObject
+    val encounter = expandSerializedEncounter(wireEncounter)
     if (!isCompleteEncounterProposal(encounter)) {
         // Preserve the scene; the client turns this incomplete proposal into a visible validation error.
         ruleRequest.remove("encounter")
+    } else {
+        ruleRequest.add("encounter", encounter)
     }
     return response
+}
+
+private fun expandSerializedEncounter(wire: JsonObject?): JsonObject? {
+    if (wire == null) return null
+    if (!wire.has("opponentsJson")) return wire
+    if (wire.keySet().any { it !in setOf("opponentsJson", "moraleLeaderId") }) return null
+    val serialized = jsonString(wire.get("opponentsJson")) ?: return null
+    val opponents = runCatching {
+        JsonParser.parseString(serialized).takeIf { it.isJsonArray }?.asJsonArray
+    }.getOrNull() ?: return null
+    return JsonObject().apply {
+        add("opponents", opponents)
+        wire.get("moraleLeaderId")?.let { add("moraleLeaderId", it) }
+    }
 }
 
 internal fun normalizeRewardProposal(response: JsonObject): JsonObject {

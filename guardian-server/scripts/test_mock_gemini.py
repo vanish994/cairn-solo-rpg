@@ -40,7 +40,15 @@ def shallow_response_schema():
                         "type": "object",
                         "properties": {
                             "type": {"type": "string", "enum": ["BEGIN_COMBAT"]},
-                            "encounter": {"type": "object", "additionalProperties": True},
+                            "encounter": {
+                                "type": "object",
+                                "properties": {
+                                    "opponentsJson": {"type": "string"},
+                                    "moraleLeaderId": {"type": "string"},
+                                },
+                                "required": ["opponentsJson"],
+                                "additionalProperties": False,
+                            },
                         },
                         "required": ["type", "encounter"],
                         "additionalProperties": False,

@@ -174,8 +174,17 @@ def validate_interactions_request(request):
                 raise ValueError("DAMAGE/FATIGUE amount must be a positive integer")
         elif group == frozenset({"BEGIN_COMBAT"}):
             encounter = properties["encounter"]
-            if encounter != {"type": "object", "additionalProperties": True}:
-                raise ValueError("BEGIN_COMBAT encounter must remain a shallow object")
+            expected_encounter = {
+                "type": "object",
+                "properties": {
+                    "opponentsJson": {"type": "string"},
+                    "moraleLeaderId": {"type": "string"},
+                },
+                "required": ["opponentsJson"],
+                "additionalProperties": False,
+            }
+            if encounter != expected_encounter:
+                raise ValueError("BEGIN_COMBAT encounter must remain a shallow object using opponentsJson")
         elif group == frozenset({"REWARD"}):
             reward_id = properties["id"]
             status = properties["status"]
@@ -234,7 +243,42 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         campaign_opening = '"playerIntent":"INICIAR_CAMPANHA"' in request["input"]
-        if campaign_opening:
+        dynamic_npc_attack = '"playerIntent":"ATACO_GARRICK"' in request["input"]
+        if dynamic_npc_attack:
+            opponent = {
+                "opponentId": "garrick",
+                "narrative": {
+                    "name": "Garrick",
+                    "appearance": "Um duelista de casaco escuro.",
+                    "behavior": "Mantém a guarda alta.",
+                    "intent": "Quer testar o aventureiro.",
+                    "context": "No pátio da estalagem.",
+                },
+                "stats": {"str": 8, "dex": 12, "wil": 9, "hp": 8, "maxHp": 8, "armor": 1},
+                "weapon": {"id": "rapier-garrick", "damage": "d6", "blast": False, "ranged": False},
+            }
+            guardian_response = {
+                "narration": "Garrick mantém a guarda alta enquanto sua intenção se define.",
+                "sceneTitle": "O pátio",
+                "sceneDescription": "A disputa ainda aguarda resolução.",
+                "suggestedActions": ["Confirmar o perfil"],
+                "actionIntent": {
+                    "type": "ATTACK",
+                    "targetId": "garrick",
+                    "targetName": "Garrick",
+                    "weaponId": None,
+                },
+                "ruleRequest": {
+                    "type": "BEGIN_COMBAT",
+                    "encounter": {"opponentsJson": json.dumps([opponent], ensure_ascii=False)},
+                },
+                "canonProposals": [
+                    {"type": "UPSERT_NPC", "id": "garrick", "status": "CONFIRMED", "source": "GUARDIAN", "name": "Garrick", "role": "duelista"}
+                ],
+                "growthEvidenceProposals": [],
+                "growthChangeProposals": [],
+            }
+        elif campaign_opening:
             guardian_response = {
                 "narration": "Uma corda recém-cortada balança no vento frio.",
                 "sceneTitle": "O vau de pedra",

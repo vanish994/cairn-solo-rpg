@@ -88,6 +88,39 @@ PY
 
 echo "guardian: exploration JSON contract ok"
 
+attack_payload='{"playerIntent":"ATACO_GARRICK","campaign":{"campaignId":"integration-attack-test","campaignSeed":"seed-attack-1","turn":2,"sceneId":"inn-yard","sceneType":"EXPLORATION","sceneTitle":"O pátio","sceneDescription":"Um espaço de treino junto à estalagem.","exits":[],"guardianHistory":[],"worldCanon":{"locations":[],"npcs":[],"importantItems":[],"quests":[],"discoveries":[]},"recentHistory":[],"stats":{"str":10,"dex":12,"wil":9,"hp":6,"maxHp":6,"armor":0,"deprived":false,"critical":false,"dead":false},"inventory":[]}}'
+attack_status="$(curl --silent --show-error --output "$response_file" --write-out '%{http_code}' \
+  --connect-timeout 10 --max-time 60 \
+  -H 'Content-Type: application/json' \
+  -X POST "$BASE_URL/guardian" \
+  --data "$attack_payload")"
+if [[ "$attack_status" != "200" ]]; then
+  echo "dynamic NPC attack: unexpected HTTP status $attack_status" >&2
+  cat "$response_file" >&2
+  exit 1
+fi
+
+python3 - "$response_file" <<'PY'
+import json, sys
+from pathlib import Path
+body = json.loads(Path(sys.argv[1]).read_text())
+assert body["actionIntent"] == {
+    "type": "ATTACK", "targetId": "garrick", "targetName": "Garrick", "weaponId": None
+}, body
+request = body["ruleRequest"]
+assert request["type"] == "BEGIN_COMBAT", body
+encounter = request["encounter"]
+assert "opponentsJson" not in encounter, encounter
+assert len(encounter["opponents"]) == 1, encounter
+opponent = encounter["opponents"][0]
+assert set(opponent) == {"opponentId", "narrative", "stats", "weapon"}, opponent
+assert set(opponent["narrative"]) == {"name", "appearance", "behavior", "intent", "context"}, opponent
+assert set(opponent["stats"]) == {"str", "dex", "wil", "hp", "maxHp", "armor"}, opponent
+assert set(opponent["weapon"]) == {"id", "damage", "blast", "ranged"}, opponent
+assert opponent["stats"]["armor"] in range(0, 4), opponent
+print("dynamic NPC attack: complete proposal expanded and validated")
+PY
+
 opening_payload='{"playerIntent":"INICIAR_CAMPANHA","campaign":{"campaignId":"integration-opening-test","campaignSeed":"integration-seed-2026","turn":0,"sceneId":"starting-settlement","sceneType":"EXPLORATION","sceneTitle":"Arroio Negro","sceneDescription":"Um povoado junto a um vau escuro.","exits":[],"guardianHistory":[],"worldCanon":{"locations":[],"npcs":[],"importantItems":[],"quests":[],"discoveries":[]},"recentHistory":[],"stats":{"str":10,"dex":12,"wil":9,"hp":6,"maxHp":6,"armor":0,"deprived":false,"critical":false,"dead":false},"inventory":[]}}'
 opening_status="$(curl --silent --show-error --output "$response_file" --write-out '%{http_code}' \
   --connect-timeout 10 --max-time 60 \

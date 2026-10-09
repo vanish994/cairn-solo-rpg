@@ -29,6 +29,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.vanish994.cairnsolo.game.GameAction
 import com.vanish994.cairnsolo.guardian.HttpGuardianClient
+import com.vanish994.cairnsolo.guardian.GuardianAttackFlow
+import com.vanish994.cairnsolo.guardian.GuardianAttackFlowResult
 import com.vanish994.cairnsolo.guardian.GuardianRuleResolver
 import com.vanish994.cairnsolo.guardian.resolveCampaignOpening
 import com.vanish994.cairnsolo.game.GameActionResolver
@@ -99,6 +101,7 @@ class MainActivity : ComponentActivity() {
                     )
                 }
                 val guardianRuleResolver = remember { GuardianRuleResolver(actionResolver) }
+                val guardianAttackFlow = remember { GuardianAttackFlow(guardianRuleResolver) }
                 val canonResolver = remember { CanonResolver() }
                 var pendingRule by remember(state?.campaign?.pendingCombatApproval) {
                     mutableStateOf(state?.campaign?.pendingCombatApproval?.let(guardianRuleResolver::requestForPendingApproval))
@@ -295,7 +298,7 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onRejectEncounter = {
                                     state?.let { current ->
-                                        val rejected = current.copy(campaign = current.campaign.copy(pendingCombatApproval = null))
+                                        val rejected = guardianAttackFlow.reject(current)
                                         repository.save(rejected)
                                         state = rejected
                                     }
@@ -306,7 +309,7 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onDismissRequest = {
                                     state?.let { current ->
-                                        val dismissed = current.copy(campaign = current.campaign.copy(pendingCombatApproval = null))
+                                        val dismissed = guardianAttackFlow.reject(current)
                                         repository.save(dismissed)
                                         state = dismissed
                                     }
@@ -404,72 +407,40 @@ class MainActivity : ComponentActivity() {
                                                     val attackIntent = response.actionIntent
                                                     if (attackIntent != null) {
                                                         val proposedState = runCatching {
-                                                            val withGrowth = response.growthEvidenceProposals.fold(intentState) { accumulated, proposal ->
-                                                                runCatching { actionResolver.resolve(accumulated, GameAction.RecordGrowthEvidenceProposal(proposal)).state }
-                                                                    .getOrElse { accumulated }
-                                                            }
-                                                            val withChanges = response.growthChangeProposals.fold(withGrowth) { accumulated, proposal ->
-                                                                runCatching { actionResolver.resolve(accumulated, GameAction.RecordGrowthChangeProposal(proposal)).state }
-                                                                    .getOrElse { accumulated }
-                                                            }
-                                                            actionResolver.resolve(withChanges, GameAction.ApplyCanonProposals(response.canonProposals)).state
+                                                            actionResolver.resolve(
+                                                                intentState,
+                                                                GameAction.ApplyCanonProposals(response.canonProposals)
+                                                            ).state
                                                         }.getOrElse { intentState }
-                                                        val attackError = guardianRuleResolver.validateAttackIntent(
-                                                            proposedState, attackIntent, response.ruleRequest
-                                                        )
-                                                        if (attackError != null) {
-                                                            val narrated = proposedState.applyGuardianResponse(
-                                                                response.narration, response.sceneTitle, response.sceneDescription, response.interactionId
-                                                            )
-                                                            repository.save(narrated)
-                                                            state = narrated
-                                                            pendingRule = null
-                                                            pendingAttackIntent = null
-                                                            lastResolution = null
-                                                            guardianError = attackError
-                                                            guardianFlow = GuardianFlow.EXPLORATION
-                                                        } else if (proposedState.campaign.combat != null || proposedState.campaign.knownNpcs.any {
-                                                                it.id == attackIntent.targetId && it.combatProfile != null
-                                                            }) {
-                                                            val resolution = runCatching {
-                                                                guardianRuleResolver.resolveAttackIntent(
-                                                                    proposedState, attackIntent, response.ruleRequest
-                                                                )
-                                                            }.getOrElse { error ->
-                                                                guardianError = error.message ?: "Não foi possível resolver o ataque."
-                                                                guardianFlow = GuardianFlow.EXPLORATION
-                                                                null
-                                                            }
-                                                            if (resolution != null) {
-                                                                repository.save(resolution.state)
-                                                                state = resolution.state
+                                                        when (val outcome = guardianAttackFlow.prepare(
+                                                            proposedState,
+                                                            attackIntent,
+                                                            response.ruleRequest,
+                                                            java.util.UUID.randomUUID().toString()
+                                                        )) {
+                                                            is GuardianAttackFlowResult.Rejected -> {
+                                                                repository.save(outcome.state)
+                                                                state = outcome.state
                                                                 pendingRule = null
                                                                 pendingAttackIntent = null
-                                                                lastResolution = resolution
+                                                                lastResolution = null
+                                                                guardianError = outcome.message
+                                                                guardianFlow = GuardianFlow.EXPLORATION
+                                                            }
+                                                            is GuardianAttackFlowResult.Resolved -> {
+                                                                repository.save(outcome.resolution.state)
+                                                                state = outcome.resolution.state
+                                                                pendingRule = null
+                                                                pendingAttackIntent = null
+                                                                lastResolution = outcome.resolution
                                                                 guardianError = null
                                                                 guardianFlow = GuardianFlow.ROLL_RESULT
                                                             }
-                                                        } else {
-                                                            val narrated = proposedState.applyGuardianResponse(
-                                                                narration = response.narration,
-                                                                sceneTitle = response.sceneTitle,
-                                                                sceneDescription = response.sceneDescription,
-                                                                interactionId = response.interactionId
-                                                            )
-                                                            val approval = guardianRuleResolver.pendingCombatApproval(
-                                                                narrated, attackIntent, response.ruleRequest, java.util.UUID.randomUUID().toString()
-                                                            )
-                                                            if (approval == null) {
-                                                                repository.save(narrated)
-                                                                state = narrated
-                                                                guardianError = "Não foi possível preparar o perfil mecânico deste alvo; nenhuma rolagem foi feita."
-                                                                guardianFlow = GuardianFlow.EXPLORATION
-                                                            } else {
-                                                                val awaiting = narrated.copy(campaign = narrated.campaign.copy(pendingCombatApproval = approval))
-                                                                repository.save(awaiting)
-                                                                state = awaiting
-                                                                pendingRule = guardianRuleResolver.requestForPendingApproval(approval)
-                                                                pendingAttackIntent = attackIntent
+                                                            is GuardianAttackFlowResult.AwaitingApproval -> {
+                                                                repository.save(outcome.state)
+                                                                state = outcome.state
+                                                                pendingRule = guardianRuleResolver.requestForPendingApproval(outcome.approval)
+                                                                pendingAttackIntent = outcome.intent
                                                                 lastResolution = null
                                                                 guardianError = null
                                                                 guardianFlow = GuardianFlow.ENCOUNTER_PROPOSED
@@ -478,30 +449,27 @@ class MainActivity : ComponentActivity() {
                                                         suggestedActions = response.suggestedActions
                                                         rewardFeedback = emptyList()
                                                     } else {
-                                                        val narrated = intentState.applyGuardianResponse(
-                                                            narration = response.narration,
-                                                            sceneTitle = response.sceneTitle,
-                                                            sceneDescription = response.sceneDescription,
-                                                            interactionId = response.interactionId
-                                                        )
-                                                        val next = runCatching {
-                                                            val withGrowth = response.growthEvidenceProposals.fold(narrated) { accumulated, proposal ->
-                                                                runCatching { actionResolver.resolve(accumulated, GameAction.RecordGrowthEvidenceProposal(proposal)).state }
-                                                                    .getOrElse { accumulated }
-                                                            }
-                                                            val withChanges = response.growthChangeProposals.fold(withGrowth) { accumulated, proposal ->
-                                                                runCatching { actionResolver.resolve(accumulated, GameAction.RecordGrowthChangeProposal(proposal)).state }
-                                                                    .getOrElse { accumulated }
-                                                            }
-                                                            actionResolver.resolve(withChanges, GameAction.ApplyCanonProposals(response.canonProposals)).state
-                                                        }.getOrElse { narrated }
-                                                        val requestError = response.ruleRequest?.let { guardianRuleResolver.validationError(next, it) }
+                                                        val proposedState = runCatching {
+                                                            val narrativeState = if (response.ruleRequest == null) {
+                                                                val withGrowth = response.growthEvidenceProposals.fold(intentState) { accumulated, proposal ->
+                                                                    runCatching { actionResolver.resolve(accumulated, GameAction.RecordGrowthEvidenceProposal(proposal)).state }
+                                                                        .getOrElse { accumulated }
+                                                                }
+                                                                response.growthChangeProposals.fold(withGrowth) { accumulated, proposal ->
+                                                                    runCatching { actionResolver.resolve(accumulated, GameAction.RecordGrowthChangeProposal(proposal)).state }
+                                                                        .getOrElse { accumulated }
+                                                                }
+                                                            } else intentState
+                                                            actionResolver.resolve(narrativeState, GameAction.ApplyCanonProposals(response.canonProposals)).state
+                                                        }.getOrElse { intentState }
+                                                        val requestError = response.ruleRequest?.let { guardianRuleResolver.validationError(proposedState, it) }
                                                         val rewardRequest = response.ruleRequest?.takeIf { it.type.equals("REWARD", ignoreCase = true) }
-                                                        var finalState = next
                                                         var rewardError: String? = null
                                                         var responseRewardFeedback = emptyList<FeedbackEntry>()
+                                                        var finalState = proposedState
+                                                        val awaitingMechanicalResolution = response.ruleRequest != null && rewardRequest == null
                                                         if (requestError == null && rewardRequest != null) {
-                                                            runCatching { guardianRuleResolver.resolve(next, rewardRequest) }
+                                                            runCatching { guardianRuleResolver.resolve(proposedState, rewardRequest) }
                                                                 .onSuccess { resolution ->
                                                                     finalState = resolution.state
                                                                     responseRewardFeedback = FeedbackMapper.mapAll(
@@ -510,6 +478,14 @@ class MainActivity : ComponentActivity() {
                                                                     )
                                                                 }
                                                                 .onFailure { rewardError = it.message ?: "Não foi possível aplicar a recompensa confirmada." }
+                                                        }
+                                                        if (!awaitingMechanicalResolution && requestError == null && rewardError == null) {
+                                                            finalState = finalState.applyGuardianResponse(
+                                                                narration = response.narration,
+                                                                sceneTitle = response.sceneTitle,
+                                                                sceneDescription = response.sceneDescription,
+                                                                interactionId = response.interactionId
+                                                            )
                                                         }
                                                         repository.save(finalState)
                                                         state = finalState

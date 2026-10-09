@@ -124,8 +124,10 @@ class ServerTest {
         val combat = branch(setOf("BEGIN_COMBAT"))
         assertEquals(listOf("type", "encounter"), combat.getAsJsonArray("required").map { it.asString })
         val encounter = combat.getAsJsonObject("properties").getAsJsonObject("encounter")
-        assertEquals("object", encounter.get("type").asString)
-        assertTrue(encounter.get("additionalProperties").asBoolean)
+        assertEquals(combatWireEncounterSchema(), encounter)
+        assertEquals(setOf("opponentsJson", "moraleLeaderId"), encounter.getAsJsonObject("properties").keySet())
+        assertEquals(setOf("opponentsJson"), encounter.getAsJsonArray("required").map { it.asString }.toSet())
+        assertFalse(encounter.get("additionalProperties").asBoolean)
         val reward = branch(setOf("REWARD"))
         assertEquals(listOf("type", "id", "status", "amountGp", "itemCatalogIds"), reward.getAsJsonArray("required").map { it.asString })
         assertEquals(setOf("type", "id", "status", "amountGp", "itemCatalogIds"), reward.getAsJsonObject("properties").keySet())
@@ -320,6 +322,50 @@ class ServerTest {
         assertEquals(3, normalized.getAsJsonObject("ruleRequest")
             .getAsJsonObject("encounter").getAsJsonArray("opponents")[0].asJsonObject
             .getAsJsonObject("stats").get("hp").asInt)
+    }
+
+    @Test
+    fun serializedEncounterIsExpandedAndValidatedBeforeReturningToTheApp() {
+        val response = validEncounterResponse()
+        val encounter = response.getAsJsonObject("ruleRequest").getAsJsonObject("encounter")
+        val profiles = encounter.remove("opponents")
+        encounter.addProperty("opponentsJson", profiles.toString())
+        encounter.addProperty("moraleLeaderId", "cultist-a")
+
+        val normalized = normalizeCombatProposal(response)
+        val expanded = normalized.getAsJsonObject("ruleRequest").getAsJsonObject("encounter")
+
+        assertEquals(setOf("opponents", "moraleLeaderId"), expanded.keySet())
+        assertEquals("cultist-a", expanded.get("moraleLeaderId").asString)
+        assertEquals(3, expanded.getAsJsonArray("opponents")[0].asJsonObject
+            .getAsJsonObject("stats").get("hp").asInt)
+    }
+
+    @Test
+    fun malformedSerializedEncounterIsRemovedWithoutLosingNarration() {
+        val response = JsonParser.parseString(
+            """{"narration":"A cena continua.","ruleRequest":{"type":"BEGIN_COMBAT","encounter":{"opponentsJson":"não é JSON"}}}"""
+        ).asJsonObject
+
+        val normalized = normalizeCombatProposal(response)
+
+        assertEquals("A cena continua.", normalized.get("narration").asString)
+        assertFalse(normalized.getAsJsonObject("ruleRequest").has("encounter"))
+    }
+
+    @Test
+    fun serializedEncounterWithInvalidCairnArmorIsRejectedAfterExpansion() {
+        val response = validEncounterResponse()
+        val encounter = response.getAsJsonObject("ruleRequest").getAsJsonObject("encounter")
+        val opponents = encounter.getAsJsonArray("opponents")
+        opponents[0].asJsonObject.getAsJsonObject("stats").addProperty("armor", 4)
+        encounter.remove("opponents")
+        encounter.addProperty("opponentsJson", opponents.toString())
+
+        val normalized = normalizeCombatProposal(response)
+
+        assertEquals("A cena continua.", normalized.get("narration").asString)
+        assertFalse(normalized.getAsJsonObject("ruleRequest").has("encounter"))
     }
 
     @Test
